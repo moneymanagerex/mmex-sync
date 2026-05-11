@@ -10,5 +10,4 @@ dist
 old/
 test-sequence.bat
 .vscode
-.vscode/
-test/*
+.vscode/launch.json
