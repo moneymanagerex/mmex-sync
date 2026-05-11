@@ -9,5 +9,4 @@ myproduction.bat
 dist
 old/
 test-sequence.bat
-.vscode
-.vscode/launch.json
+.vscode/
