@@ -4,9 +4,9 @@ import { EventSource } from 'eventsource';
 import { SYNC_CONFIG, SYNC_ORDER } from '../config/table_config.js';
 import { ProgressBarService } from './../utils/ProgressBarService.js';
 
-// TODO: invece di usare SYNC_CONFIG che contiene le colonne da sincronizzare
-// dobremmo chiamare la get Collection in modo da recuperare le colonne disponibili sul server
-// ovviamente vanno escluse le colonne tecniche lato PB (_is_deleted, _updated_at e ovviamente la pb_id) 
+// TODO: instead of using SYNC_CONFIG which contains columns to synchronize
+// we should call get Collection to retrieve available columns on the server
+// obviously technical PB side columns must be excluded (_is_deleted, _updated_at and obviously pb_id) 
 
 global.EventSource = EventSource;
 
@@ -32,9 +32,9 @@ export class PocketBaseService {
     }
 
     /**
-     * Recupera la lista completa, opzionalmente filtrata per data
-     * @param {string} collection - Nome della tabella/collezione
-     * @param {string|null} filter - Stringa di filtro (es. 'updated > "2023-01-01"')
+     * Retrieves the full list, optionally filtered by date
+     * @param {string} collection - Name of the table/collection
+     * @param {string|null} filter - Filter string (e.g. 'updated > "2023-01-01"')
      */
     async getFullList(collection, filter = null) {
         const options = {};
@@ -43,8 +43,8 @@ export class PocketBaseService {
             options.filter = filter;
         }
 
-        // Se non c'è filtro, options rimane un oggetto vuoto {} 
-        // e getFullList scaricherà tutto (comportamento --force)
+        // If no filter is present, options remains an empty object {} 
+        // and getFullList will download everything (--force behavior)
         return await this.client.collection(collection).getFullList(options);
     }
 
@@ -66,19 +66,19 @@ export class PocketBaseService {
     }
 
     /**
-         * Sottoscrizione Realtime ottimizzata
-         * @param {string|string[]} targets - Singola tabella, array di tabelle o null per tutte
-         * @param {function} callback - Funzione da eseguire al cambio dati
+         * Optimized Realtime subscription
+         * @param {string|string[]} targets - Single table, array of tables or null for all
+         * @param {function} callback - Function to execute on data change
          */
     async subscribe(targets = null, callback) {
-        // Se targets è null, usa tutto l'ordine di sincronizzazione
+        // If targets is null, use the entire sync order
         const collections = Array.isArray(targets)
             ? targets
             : (targets ? [targets] : SYNC_ORDER);
 
         for (const table of collections) {
             await this.client.collection(table).subscribe('*', (e) => {
-                // Arricchiamo l'evento con il nome della collezione per il Watcher
+                // Enrich the event with the collection name for the Watcher
                 callback({
                     collection: table,
                     action: e.action,
@@ -91,45 +91,45 @@ export class PocketBaseService {
     }
 
     /**
-     * Utility per rimuovere tutte le sottoscrizioni (importante per il cleanup)
+     * Utility to remove all subscriptions (important for cleanup)
      */
     async unsubscribeAll() {
         return await this.client.realtime.unsubscribe();
     }
 
     /**
-     * Svuota tutte le collezioni sul server rispettando l'ordine inverso delle dipendenze
+     * Clears all collections on the server respecting inverse dependency order
      */
     async clearRemoteServer() {
-        console.log("⚠️ ATTENZIONE: Pulizia server PocketBase avviata (Ordine Inverso)...");
+        console.log("⚠️ WARNING: PocketBase server cleanup started (Inverse Order)...");
 
-        // Invertiamo l'ordine: se SYNC_ORDER è [Valute, Account, Transazioni],
-        // reverseOrder diventerà [Transazioni, Account, Valute].
+        // Reverse the order: if SYNC_ORDER is [Currencies, Accounts, Transactions],
+        // reverseOrder will become [Transactions, Accounts, Currencies].
         const reverseOrder = [...SYNC_ORDER].reverse();
 
         for (const table of reverseOrder) {
             try {
-                // Prendiamo tutti i record della collezione
+                // Retrieve all records from the collection
                 const records = await this.client.collection(table).getFullList();
 
                 if (records.length > 0) {
                     const progress = new ProgressBarService(records.length)
-                    // console.log(`[Server] Eliminazione di ${records.length} record da: ${table}...`);
+                    // console.log(`[Server] Deleting ${records.length} records from: ${table}...`);
 
-                    // Cancellazione sequenziale per non sovraccaricare il server e rispettare i vincoli
+                    // Sequential deletion to avoid overloading the server and respect constraints
                     for (const record of records) {
-                        progress.update(`[Server] Pulizia di ${table}`);
+                        progress.update(`[Server] Cleaning ${table}`);
                         await this.client.collection(table).delete(record.id);
                     }
                 }
             } catch (err) {
-                // Se la collezione non esiste sul server, ignoriamo l'errore e procediamo
+                // If the collection doesn't exist on the server, ignore the error and proceed
                 if (err.status !== 404) {
-                    console.error(`❌ Errore durante la pulizia di ${table}:`, err.message);
+                    console.error(`❌ Error during cleanup of ${table}:`, err.message);
                 }
             }
         }
-        console.log("✅ Server PocketBase ripulito con successo.");
+        console.log("✅ PocketBase server cleared successfully.");
     }
 
 }

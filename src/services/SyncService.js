@@ -13,8 +13,8 @@ export class SyncService {
     }
 
     /**
-     * PUSH: Invia le modifiche locali al server
-     * Integra la logica di fallback: Update -> se fallisce -> Create
+     * PUSH: Sends local changes to the server
+     * Integrates fallback logic: Update -> if it fails -> Create
      */
     async pushTable(table) {
         const dirtyRecords = this.db.getDirtyRecords(table, this.options.force);
@@ -29,35 +29,35 @@ export class SyncService {
             let response;
 
             try {
-                // 1. Stato 2: Segnaliamo al DB che stiamo lavorando questo record
+                // 1. State 2: We signal to the DB that we are working on this record
                 // this.db.setPendingStatus(table, record.rowid);
 
                 if (pb_id) {
                     try {
-                        // Tenta l'aggiornamento
+                        // Attempts the update
                         response = await this.pb.update(table, pb_id, dataToSync);
                     } catch (err) {
-                        // Se l'update fallisce (es. 404), tenta la creazione
+                        // If update fails (e.g., 404), attempt creation
                         if (err.status === 404) {
-                            if (this.options.verbose) console.log(`[Push] Update fallito per ${pb_id}, provo a ricreare...`);
+                            if (this.options.verbose) console.log(`[Push] Update failed for ${pb_id}, trying to recreate...`);
                             response = await this.pb.create(table, dataToSync);
                         } else {
                             throw err;
                         }
                     }
                 } else {
-                    // Nuovo record mai visto dal server
+                    // New record never seen by the server
                     response = await this.pb.create(table, dataToSync);
                 }
 
-                // 2. Successo: Stato 0 e salvataggio dell'ID (nuovo o confermato)
+                // 2. Success: State 0 and ID saving (new or confirmed)
                 if (response.id != null) {
-                    // verifico se devo aggiroanere il pb_id o no
+                    // verify if I need to update the pb_id or not
                     if (pb_id != response.id) {
                         this.db.setSyncedStatus(table, record.rowid, response.id);
                     }
                 } else {
-                    console.log(`❌ Errore critico push su ${table} (rowid: ${record.rowid}): ID non ritornato.`);
+                    console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
                 }
 
             } catch (err) {
@@ -67,29 +67,29 @@ export class SyncService {
                     if (remoteRecord) {
                         response = await this.pb.update(table, remoteRecord.id, dataToSync);
                         if (response.id != null) {
-                            if (this.options.verbose) console.log(`[Push] Aggiornato ${table} (rowid: ${record.rowid}) con pb_id: ${response.id}`);
+                            if (this.options.verbose) console.log(`[Push] Updated ${table} (rowid: ${record.rowid}) with pb_id: ${response.id}`);
                             this.db.setSyncedStatus(table, record.rowid, response.id);
                         } else {
-                            // TODO: gestire al meglio
-                            console.log(`❌ Errore critico push su ${table} (rowid: ${record.rowid}): ID non ritornato.`);
+                            // TODO: handle better
+                            console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
                         }
                     }
                 } else {
-                    console.error(`❌ Errore critico push su ${table} (rowid: ${record.rowid}):`, err.message);
+                    console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}):`, err.message);
                 }
             }
         }
     }
 
     /**
-     * PULL: Applica le modifiche remote
+     * PULL: Applies remote changes
      */
     async pullTable(table) {
         let result = true;
         const lastSyncDate = this.options.force ? null : this.configMgr.config.lastSync;
         let filter = '';
         if (lastSyncDate) {
-            // TODO: lastSyncDate need to be 5 seconds befor to be sure to download all latest chagne
+            // TODO: lastSyncDate need to be 5 seconds before to be sure to download all latest changes
             filter = `updated > "${lastSyncDate.replace('T', ' ').split('.')[0]}"`;
         }
         try {
@@ -104,19 +104,19 @@ export class SyncService {
                     this.db.applyRemoteChanges(table, remote);
                 } catch (err) {
                     result = false;
-                    console.error(`\n❌ Errore applyRemoteChanges su ${table} (pb_id: ${remote.id}, pk: ${remote[this.db.schemas[table].pk]}):`, err.message);
+                    console.error(`\n❌ applyRemoteChanges error on ${table} (pb_id: ${remote.id}, pk: ${remote[this.db.schemas[table].pk]}):`, err.message);
                 }
             }
             this.db.resetUnfinishedOps(table);
         } catch (err) {
             result = false;
-            console.error(`❌ Errore pull su ${table}:`, err.message);
+            console.error(`❌ Pull error on ${table}:`, err.message);
         }
         return result;
     }
 
     /**
-     * DELETE: Sincronizza le cancellazioni locali verso il server
+     * DELETE: Synchronizes local deletions to the server
      */
     async syncDeletions() {
         const log = this.db.getDeletedLog();
@@ -126,9 +126,9 @@ export class SyncService {
             try {
                 await this.pb.delete(item.TABLE_NAME, item.PB_ID);
             } catch (err) {
-                // Se è 404 è già sparito, ignoriamo l'errore e puliamo il log
+                // If it's 404 it's already gone, ignore the error and clear the log
                 if (err.status !== 404) {
-                    console.error(`⚠️ Errore durante DELETE remota di ${item.PB_ID}:`, err.message);
+                    console.error(`⚠️ Error during remote DELETE of ${item.PB_ID}:`, err.message);
                 }
             }
         }
@@ -136,9 +136,9 @@ export class SyncService {
     }
 
     async runSyncCycle() {
-        const syncParam = this.options.sync; // Può essere true o una stringa "init,pull"
+        const syncParam = this.options.sync; // Can be true or a string "init,pull"
 
-        // Definiamo le operazioni disponibili
+        // Define available operations
         const ops = {
             init: false,
             push: false,
@@ -146,43 +146,43 @@ export class SyncService {
         };
 
         if (syncParam === true || syncParam === undefined) {
-            // Se --sync è senza argomenti, facciamo tutto
+            // If --sync has no arguments, do everything
             ops.init = ops.push = ops.pull = true;
         } else if (typeof syncParam === 'string') {
-            // Se --sync=init,pull, splittiamo e attiviamo solo quelle
+            // If --sync=init,pull, split and activate only those
             const requested = syncParam.split(',').map(s => s.trim().toLowerCase());
             ops.init = requested.includes('init');
             ops.push = requested.includes('push');
             ops.pull = requested.includes('pull');
         }
 
-        console.log(`🚀 Avvio Sincronizzazione: [${Object.keys(ops).filter(k => ops[k]).join(' + ')}]`);
+        console.log(`🚀 Starting Synchronization: [${Object.keys(ops).filter(k => ops[k]).join(' + ')}]`);
 
-        // 1. INIT: Rigenerazione schema, trigger e colonne
+        // 1. INIT: Schema, triggers, and columns regeneration
         if (ops.init) {
-            // fatto nel main. qui serve solo per referenza
+            // done in main. here only for reference
         }
 
-        // 2. PUSH: Invio modifiche locali (Stato 1 -> Stato 0/2)
+        // 2. PUSH: Local changes sending (State 1 -> State 0/2)
         if (ops.push) {
-            console.log("📤 Operazione: PUSH (Locale -> Remoto)");
+            console.log("📤 Operation: PUSH (Local -> Remote)");
             for (const table of SYNC_ORDER) {
                 await this.pushTable(table);
             }
         }
 
-        // 3. PULL: Ricezione modifiche remote (Filtro lastSync)
+        // 3. PULL: Remote changes receiving (lastSync filter)
         if (ops.pull) {
             let result = true;
-            console.log("📥 Operazione: PULL (Remoto -> Locale)");
-            // salvo subito l'ora in modo che la volta prossima riprendo da inizio invio e non ala fine
-            // dove magari un altro client ha inserito un record nel frattempo. 
+            console.log("📥 Operation: PULL (Remote -> Local)");
+            // save the time immediately so that next time I start from the beginning of sending and not the end
+            // where maybe another client inserted a record in the meantime. 
             const newSyncTime = new Date().toISOString();
             for (const table of SYNC_ORDER) {
                 result = result && await this.pullTable(table);
             }
 
-            // Salviamo il timestamp solo dopo un pull completato e senza errori
+            // Save the timestamp only after a completed pull without errors
             if (result) {
                 this.configMgr.save({
                     ...this.configMgr.config,
@@ -191,7 +191,7 @@ export class SyncService {
             }
         }
 
-        console.log("✅ Ciclo completato.");
+        console.log("✅ Cycle completed.");
     }
 
 }

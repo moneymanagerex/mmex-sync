@@ -9,7 +9,7 @@ import { showHelp } from './cli/help.js';
 import enquirer from 'enquirer';
 
 
-// 1. Parsing degli argomenti (utility interna o esterna)
+// 1. Argument parsing (internal or external utility)
 const args = process.argv.slice(2).reduce((acc, arg) => {
     const [key, value] = arg.split('=');
     const cleanKey = key.replace('--', '');
@@ -30,7 +30,7 @@ async function main() {
     }
 
     try {
-        // --- INIZIALIZZAZIONE CONFIGURAZIONE ---
+        // --- CONFIGURATION INITIALIZATION ---
         const configMgr = new ConfigManager(args);
         const config = await configMgr.getEffectiveConfig();
 
@@ -40,7 +40,7 @@ async function main() {
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
 
-        // --- INIZIALIZZAZIONE SERVIZI ---
+        // --- SERVICES INITIALIZATION ---
         const db = new DatabaseService(config.dbPath, args.verbose);
         db.connect(args.create);
 
@@ -54,7 +54,7 @@ async function main() {
             pb.setToken(config.token);
         }
 
-        // todo gestire refresh del token quando scade
+        // todo handle token refresh when expired
 
         const sync = new SyncService(db, pb, configMgr, args);
 
@@ -62,7 +62,7 @@ async function main() {
             const { confirm } = await enquirer.prompt({
                 type: 'confirm',
                 name: 'confirm',
-                message: 'Sei sicuro di voler svuotare TUTTI i dati sul server PocketBase?'
+                message: 'Are you sure you want to clear ALL data on the PocketBase server?'
             });
             if (confirm) await pb.clearRemoteServer();
         }
@@ -71,7 +71,7 @@ async function main() {
             const { confirm } = await enquirer.prompt({
                 type: 'confirm',
                 name: 'confirm',
-                message: 'Sei sicuro di voler rimuovere TUTTE le tabelle tecniche sul database locale?'
+                message: 'Are you sure you want to remove ALL technical tables on the local database?'
             });
             if (confirm) db.clearTechnicalSchema();
         }
@@ -80,21 +80,21 @@ async function main() {
             process.exit(0);
         }
 
-        // --- DETERMINAZIONE MODALITÀ ---
+        // --- MODE DETERMINATION ---
         let mode = args.watch ? 'watch' : (args.run ? 'run' : (args.sync ? 'sync' : config.defaultMode));
-        console.log(`🚀 MMEX-Sync | Profilo: ${configMgr.profile} | Modo: ${mode.toUpperCase()}`);
+        console.log(`🚀 MMEX-Sync | Profile: ${configMgr.profile} | Mode: ${mode.toUpperCase()}`);
 
         if ((mode === 'run' || mode === 'watch') && !fs.existsSync(config.mmexExe)) {
-            throw new Error(`Eseguibile MMEX non trovato al percorso: ${config.mmexExe}. Usa --exe per specificarlo.`);
+            throw new Error(`MMEX executable not found at path: ${config.mmexExe}. Use --exe to specify it.`);
         }
 
-        // 1. Init obbligatorio (Triggers & Columns) come nel vecchio core
+        // 1. Mandatory init (Triggers & Columns) as in the old core
         db.initSchema();
 
-        // --- ESECUZIONE LOGICA ---
+        // --- LOGIC EXECUTION ---
         switch (mode) {
             case 'watch':
-                // Ciclo iniziale -> Lancio MMEX (detached) -> Avvio Watcher
+                // Initial cycle -> Launch MMEX (detached) -> Start Watcher
                 await sync.runSyncCycle();
                 launchMMEX(config.mmexExe, config.dbPath, true);
                 const watcher = new WatcherService(db, pb, sync, config);
@@ -102,10 +102,10 @@ async function main() {
                 break;
 
             case 'run':
-                // Ciclo iniziale -> Lancio MMEX (attesa) -> Ciclo finale
+                // Initial cycle -> Launch MMEX (waiting) -> Final cycle
                 await sync.runSyncCycle();
                 await launchMMEX(config.mmexExe, config.dbPath, false);
-                console.log("📝 MMEX chiuso. Eseguo sincronizzazione finale...");
+                console.log("📝 MMEX closed. Executing final synchronization...");
                 await sync.runSyncCycle();
                 process.exit(0);
                 break;
@@ -113,23 +113,23 @@ async function main() {
             case 'sync':
             default:
                 // await sync.fullCycle();
-                // Esegue solo le parti richieste (es: --push --pull)
+                // Executes only requested parts (e.g., --push --pull)
                 await sync.runSyncCycle();
                 process.exit(0);
         }
 
     } catch (err) {
-        console.error(`\n❌ ERRORE CRITICO: ${err.message}`);
+        console.error(`\n❌ CRITICAL ERROR: ${err.message}`);
         if (args.verbose) console.error(err.stack);
         process.exit(1);
     }
 }
 
 /**
- * Helper per l'avvio di MMEX
+ * Helper for starting MMEX
  */
 function launchMMEX(exePath, dbPath, detached) {
-    console.log(`\n=== Avvio MMEX: ${exePath} ===`);
+    console.log(`\n=== Starting MMEX: ${exePath} ===`);
     const mmex = spawn(exePath, [dbPath], {
         detached: detached,
         stdio: detached ? 'ignore' : 'inherit'
@@ -145,5 +145,5 @@ function launchMMEX(exePath, dbPath, detached) {
     });
 }
 
-// Avvio applicazione
+// Application startup
 main();

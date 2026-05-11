@@ -36,11 +36,11 @@ export class DatabaseService {
     }
 
     /**
-     * Ripristina esattamente la tua logica di inizializzazione
+     * Restores your initialization logic exactly
      */
     initSchema() {
         this.db.transaction(() => {
-            // 1. Tabella log cancellazioni (come nel tuo sync_core)
+            // 1. Deletion log table (as in your sync_core)
             this.db.prepare(`
                 CREATE TABLE IF NOT EXISTS pb_DELETED_RECORDS_LOG (
                     TABLE_NAME TEXT,
@@ -70,8 +70,8 @@ export class DatabaseService {
     }
 
     /**
-     * TRIGGER ORIGINALI: manteniamo la logica dello stato '1' 
-     * e la prevenzione del loop (WHEN NEW.pb_is_dirty != 2)
+     * ORIGINAL TRIGGERS: we keep the state '1' logic
+     * and loop prevention (WHEN NEW.pb_is_dirty != 2)
      */
     _createTriggers(table) {
 
@@ -97,7 +97,7 @@ export class DatabaseService {
         `).run();
 
 
-        // Trigger Delete (Logica fedele al tuo sync_core)
+        // Delete Trigger (Logic faithful to your sync_core)
         this.db.prepare(`
             CREATE TRIGGER IF NOT EXISTS TRG_${table}_DELETE
             BEFORE DELETE ON ${table}
@@ -109,21 +109,21 @@ export class DatabaseService {
         `).run();
     }
 
-    // --- Metodi per il SyncService che rispettano lo stato a 3 livelli ---
+    // --- SyncService methods respecting the 3-level state ---
 
     /**
-     * Recupera i record da sincronizzare.
-     * @param {string} table - Nome della tabella
-     * @param {boolean} force - Se true, ignora il flag pb_is_dirty e restituisce tutto
+     * Retrieves records to be synchronized.
+     * @param {string} table - Table name
+     * @param {boolean} force - If true, ignores the pb_is_dirty flag and returns everything
      */
     getDirtyRecords(table, force = false) {
         const baseSelect = `SELECT *, ROWID as rowid FROM ${table}`;
         if (force) {
-            // Se forziamo il push, prendiamo tutti i record che hanno un pb_id 
-            // (o tutti se vogliamo popolare il server da zero)
+            // If we force push, we take all records that have a pb_id 
+            // (or all if we want to populate the server from scratch)
             return this.db.prepare(baseSelect).all();
         } else {
-            // Logica standard: solo quelli marcati localmente
+            // Standard logic: only those marked locally
             return this.db.prepare(`${baseSelect} WHERE pb_is_dirty = 1 OR pb_id = '' OR pb_id IS NULL`).all();
         }
     }
@@ -153,20 +153,20 @@ export class DatabaseService {
     }
 
     /**
-     * Applica i cambiamenti remoti al database locale.
-     * Gestisce l'upsert basandosi sul pb_id.
+     * Applies remote changes to the local database.
+     * Manages upsert based on pb_id.
      */
     applyRemoteChanges(table, remoteRecord) {
         const { id, _is_deleted, ...data } = remoteRecord;
         const pb_id = id;
         const is_deleted = _is_deleted != 0;
 
-        // Cerca se esiste già un record con questo pb_id
+        // Check if a record with this pb_id already exists
         const localRecord = this.db.prepare(`SELECT ROWID FROM ${table} WHERE pb_id = ?`).get(pb_id);
 
         this.db.transaction(() => {
             if (localRecord) {
-                // check to see if is deleted
+                // check to see if it is deleted
                 if (is_deleted) {
                     this.removeRecord(table, localRecord.rowid);
                 } else {
@@ -175,21 +175,21 @@ export class DatabaseService {
                     const setClause = keys.map(k => `${k} = ?`).join(', ');
                     const values = keys.map(k => data[k]);
 
-                    // Aggiungiamo lo stato 2 per bypassare i trigger locali
+                    // Add state 2 to bypass local triggers
                     this.db.prepare(`
                     UPDATE ${table} 
                     SET ${setClause}, pb_is_dirty = 2 
                     WHERE ROWID = ?
                 `).run(...values, localRecord.rowid);
 
-                    // Riportiamo a 0 (Sincronizzato)
+                    // Reset to 0 (Synchronized)
                     this.db.prepare(`UPDATE ${table} SET pb_is_dirty = 0 WHERE ROWID = ?`).run(localRecord.rowid);
 
                     if (this.verbose) console.log(`[DB] Updated ${table} (pb_id: ${pb_id})`);
                 }
             } else {
                 if (!is_deleted) {
-                    // se non è cancellato, inseriamo
+                    // if not deleted, insert
                     const keys = this.schemas[table].fields;
                     const pk = this.schemas[table].pk;
                     const columns = [pk, ...keys, 'pb_id', 'pb_is_dirty'].join(', ');
@@ -201,7 +201,7 @@ export class DatabaseService {
                         VALUES (${placeholders})
                      `).run(...values);
 
-                    // Riportiamo a 0
+                    // Reset to 0
                     this.db.prepare(`UPDATE ${table} SET pb_is_dirty = 0 WHERE ROWID = ?`).run(result.lastInsertRowid);
 
                     if (this.verbose) console.log(`[DB] Inserted ${table} (pb_id: ${pb_id})`);
@@ -223,60 +223,60 @@ export class DatabaseService {
     }
 
     /**
-     * Rimuove lo schema tecnico in modo sicuro (Ordine: Trigger -> Tabelle -> Colonne)
+     * Safely removes the technical schema (Order: Triggers -> Tables -> Columns)
      */
     clearTechnicalSchema() {
-        console.log("🧹 Avvio pulizia profonda del database locale...");
+        console.log("🧹 Starting deep cleanup of local database...");
 
         this.db.transaction(() => {
             for (const table of this.syncOrder) {
-                // 1. RIMOZIONE TRIGGER (Sempre per primi)
-                // Dobbiamo eliminare i trigger che "puntano" alle tabelle tecniche
+                // 1. TRIGGER REMOVAL (Always first)
+                // We must delete triggers that "point" to technical tables
                 this.db.prepare(`DROP TRIGGER IF EXISTS TRG_${table}_INSERT`).run();
                 this.db.prepare(`DROP TRIGGER IF EXISTS TRG_${table}_UPDATE`).run();
                 this.db.prepare(`DROP TRIGGER IF EXISTS TRG_${table}_DELETE`).run();
 
-                if (this.verbose) console.log(`[Clean] Trigger rimossi per: ${table}`);
+                if (this.verbose) console.log(`[Clean] Triggers removed for: ${table}`);
 
-                // 2. RIMOZIONE COLONNE
+                // 2. COLUMN REMOVAL
                 for (const column of this.schemas[table].techFields) {
                     this.db.prepare(`ALTER TABLE ${table} DROP COLUMN ${column}`).run();
-                    if (this.verbose) console.log(`[Clean] Colonna ${column} rimossa per: ${table}`);
+                    if (this.verbose) console.log(`[Clean] Column ${column} removed for: ${table}`);
                 }
 
                 /*
                 try {
-                    // Rimuoviamo le colonne pb_id e pb_is_dirty
+                    // Remove pb_id and pb_is_dirty columns
                     this.db.prepare(`ALTER TABLE ${table} DROP COLUMN pb_id`).run();
                     this.db.prepare(`ALTER TABLE ${table} DROP COLUMN pb_is_dirty`).run();
                     this.db.prepare(`ALTER TABLE ${table} DROP COLUMN pb_updated_at`).run();
                 } catch (e) {
-                    // Fallback: se la versione di SQLite non supporta DROP COLUMN, 
-                    // i dati rimarranno ma saranno inerti senza i trigger.
-                    console.log(`[Info] Nota: Colonne su ${table} non rimosse (SQLite < 3.35.0)`);
+                    // Fallback: if the SQLite version doesn't support DROP COLUMN, 
+                    // the data will remain but will be inert without the triggers.
+                    console.log(`[Info] Note: Columns on ${table} not removed (SQLite < 3.35.0)`);
                     if (this.verbose) console.log(`[Error] ${e}`);
                 }
 */
             }
 
-            // 3. RIMOZIONE TABELLE TECNICHE
-            // Ora che nessun trigger punta più a questa tabella, possiamo eliminarla
+            // 3. TECHNICAL TABLE REMOVAL
+            // Now that no more triggers point to this table, we can delete it
             this.db.prepare(`DROP TABLE IF EXISTS pb_DELETED_RECORDS_LOG`).run();
 
-            if (this.verbose) console.log(`[Clean] Tabelle tecniche rimosse.`);
+            if (this.verbose) console.log(`[Clean] Technical tables removed.`);
         })();
 
-        console.log("✅ Pulizia completata con successo.");
+        console.log("✅ Cleanup completed successfully.");
     }
 
     /**
-     * Crea un nuovo database MMEX partendo dallo schema SQL esterno
+     * Creates a new MMEX database starting from the external SQL schema
      */
     createEmptyDatabase() {
-        console.log(`🏗️  [Create] Creazione nuovo database in corso: ${this.dbPath}`);
+        console.log(`🏗️  [Create] Creating new database: ${this.dbPath}`);
 
-        // 1. Legge ed esegue il file table_v1.sql
-        // Il file deve trovarsi nella root del progetto o specifichiamo il path
+        // 1. Read and execute the table_v1.sql file
+        // The file must be in the project root or we specify the path
         let sqlSchemaPath = './assets/sql/tables_v1_for_sync.sql';
         if (!fs.existsSync(sqlSchemaPath)) {
             sqlSchemaPath = './tables_v1_for_sync.sql';
@@ -285,39 +285,39 @@ export class DatabaseService {
             }
         }
 
-        // Rimuove il file se esiste già per una creazione pulita (come nel tuo codice originale)
+        // Removes the file if it already exists for a clean creation (as in your original code)
         if (fs.existsSync(this.dbPath)) {
-            if (this.verbose) console.log("[Create] Rimozione file database esistente...");
+            if (this.verbose) console.log("[Create] Removing existing database file...");
             fs.unlinkSync(this.dbPath);
         }
 
         try {
-            // Apriamo una nuova connessione
+            // Open a new connection
             // this.db = new Database(this.dbPath, { verbose: this.verbose ? console.log : null });
             this.db = new Database(this.dbPath);
 
             const sqlSchema = fs.readFileSync(sqlSchemaPath, 'utf8');
 
-            // Eseguiamo tutto in una transazione per massime performance e sicurezza
+            // Execute everything in a transaction for maximum performance and safety
             this.db.transaction(() => {
                 this.db.exec(sqlSchema);
 
-                // 2. Imposta il PRAGMA user_version a 21 (fondamentale per compatibilità MMEX)
+                // 2. Set PRAGMA user_version to 21 (essential for MMEX compatibility)
                 this.db.pragma('user_version = 21');
 
-                if (this.verbose) console.log("[Create] Schema SQL applicato e user_version impostata a 21.");
+                if (this.verbose) console.log("[Create] SQL schema applied and user_version set to 21.");
 
             })();
 
-            // non serve. lo fara dopo
-            // 3. Inizializziamo subito i trigger e le colonne tecniche pb_id/pb_is_dirty
+            // not needed. will be done later
+            // 3. Immediately initialize triggers and technical columns pb_id/pb_is_dirty
             // this.initSchema();
 
-            console.log("✅ Database creato e pronto per la sincronizzazione.");
+            console.log("✅ Database created and ready for synchronization.");
             return this.db;
 
         } catch (err) {
-            console.error("❌ [Create] Errore critico durante la creazione del database:", err.message);
+            console.error("❌ [Create] Critical error during database creation:", err.message);
             if (this.verbose) console.log(err);
             if (this.db) this.db.close();
             throw err;

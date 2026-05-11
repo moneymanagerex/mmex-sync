@@ -3,65 +3,65 @@
 export function showHelp() {
   console.log(`
 ===========================================================
-🚀 MMEX-PocketBase Sync Tool | Manuale Utente
+🚀 MMEX-PocketBase Sync Tool | User Manual
 ===========================================================
 
-Utilizzo: mmex-sync [PARAMETRI] [MODALITÀ]
+Usage: mmex-sync [PARAMETERS] [MODE]
 
 -----------------------------------------------------------
-📂 GESTIONE PROFILI E CONFIGURAZIONE
+📂 PROFILE AND CONFIGURATION MANAGEMENT
 -----------------------------------------------------------
-  --profile=nome      Sceglie il profilo (es. 'casa', 'lavoro'). 
+  --profile=name      Selects the profile (e.g., 'home', 'work'). 
                       Default: 'default'
   --ignoreProfile     Ignore profile configuration and use default values
-  --listProfile       Mostra l'elenco dei profili disponibili
-  --db=percorso       Percorso del file .mmb di MoneyManagerEx
-  --url=indirizzo     URL dell'istanza PocketBase
-  --user=email        Email di login PocketBase
-  --pass=password     Password (non viene salvata, genera un token)
-  --setDefaultMode=X  Imposta la modalità di default per il profilo
-                      Valori: sync (default), run, watch
-  --exe=percorso      Percorso dell'eseguibile MMEX.exe
+  --listProfile       Shows the list of available profiles
+  --db=path           Path to the MoneyManagerEx .mmb file
+  --url=address       URL of the PocketBase instance
+  --user=email        PocketBase login email
+  --pass=password     Password (not saved, generates a token)
+  --setDefaultMode=X  Sets the default mode for the profile
+                      Values: sync (default), run, watch
+  --exe=path          Path to the MMEX.exe executable
                       Default: C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe					  
   --create            Delete and Recreates a new empty database
-  --verbose           Mostra log dettagliati di ogni operazione.
+  --verbose           Shows detailed logs of each operation.
 
 -----------------------------------------------------------
-🕹️ MODALITÀ DI SINCRONIZZAZIONE
+🕹️ SYNCHRONIZATION MODES
 -----------------------------------------------------------
-  --sync              Esegue il ciclo completo (Init + Push + Pull).
-  --sync=op1,op2      Esegue solo le operazioni specificate.
-                      Operazioni disponibili: init, push, pull
+  --sync              Executes the complete cycle (Init + Push + Pull).
+  --sync=op1,op2      Executes only specified operations.
+                      Available operations: init, push, pull
   --force             Ignore flag and timestamp and process all records
 
-  Esempi:
-    node index.js --sync=pull           (Scarica solo i dati remoti)
-    node index.js --sync=init           (Inizializza senza trasmettere nulla)
-    node index.js --sync --force        (Ciclo completo con invio e scarico totale)
+  Examples:
+    node index.js --sync=pull           (Download remote data only)
+    node index.js --sync=init           (Initialize without transmitting anything)
+    node index.js --sync --force        (Full cycle with total send and receive)
 
 -----------------------------------------------------------
-🕹️ MODALITÀ OPERATIVE
+🕹️ OPERATING MODES
 -----------------------------------------------------------
-  --run               1. Sync iniziale 
-                      2. Apre MMEX e attende la chiusura
-                      3. Sync finale
-  --watch             1. Sync iniziale
-                      2. Apre MMEX (detached)
-                      3. Monitora cambiamenti locali/remoti in tempo reale
+  --run               1. Initial Sync 
+                      2. Opens MMEX and waits for closure
+                      3. Final Sync
+  --watch             1. Initial Sync
+                      2. Opens MMEX (detached)
+                      3. Monitors local/remote changes in real-time
 
 -----------------------------------------------------------
-⚡ COMANDI DI FORZATURA E MANUTENZIONE
+⚡ FORCING AND MAINTENANCE COMMANDS
 -----------------------------------------------------------
 
 -----------------------------------------------------------
-🧹 PULIZIA (Attenzione!)
-   Questi comandi vengono eseguiti da soli. 
-   Altri parametri vengono ignorati.
+🧹 CLEANUP (Warning!)
+   These commands are executed alone. 
+   Other parameters are ignored.
 -----------------------------------------------------------
-  --clearDb           Rimuove colonne tecniche e trigger dal DB locale.
-  --clearServer       Rimuove tutti i dati dalle collezioni sul server.
+  --clearDb           Removes technical columns and triggers from the local DB.
+  --clearServer       Removes all data from the collections on the server.
 
-Esempio:
+Example:
   node index.js --profile=casa --watch --verbose
 ===========================================================
     `);

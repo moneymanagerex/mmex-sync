@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import enquirer from 'enquirer';
-import { protect, unprotect } from '../utils/dpapi.js'; // Supponendo di spostare dpapi in utils
+import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
 
@@ -17,39 +17,39 @@ export class ConfigManager {
     }
 
     /**
-     * Il metodo principale: risolve la configurazione seguendo la gerarchia
+     * The main method: resolves the configuration following the hierarchy
      */
     async getEffectiveConfig() {
-        // 1. Carica da file (se esiste)
+        // 1. Load from file (if it exists)
         if (!this.cliArgs.ignoreProfile) {
             this.config = this._loadFromFile();
         }
 
-        // Se l'utente passa --setDefaultMode, lo validiamo subito
+        // If the user passes --setDefaultMode, we validate it immediately
         if (this.cliArgs.setDefaultMode) {
             const validModes = ['sync', 'run', 'watch'];
             if (!validModes.includes(this.cliArgs.setDefaultMode)) {
-                throw new Error(`Modalità non valida. Scegli tra: ${validModes.join(', ')}`);
+                throw new Error(`Invalid mode. Choose from: ${validModes.join(', ')}`);
             }
         }
 
-        // 2. Definisci i parametri richiesti e risolvi l'origine
+        // 2. Define required parameters and resolve the origin
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbUser: this.cliArgs.user || this.config.pbUser,
-            pbPass: this.cliArgs.pass || null, // La password non si salva mai in chiaro
+            pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
             mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'sync'
         };
 
-        // 3. Se mancano dati, chiedi via Prompt
+        // 3. If data is missing, ask via Prompt
         const finalConfig = await this._ensureValues(schema);
 
-        // 4. Gestione Token e Password
+        // 4. Token and Password Management
         if (finalConfig.pbPass) {
-            // Se abbiamo una password (da CLI o Prompt), non la salviamo nel JSON
-            // ma la useremo per ottenere il token nel PbService.
+            // If we have a password (from CLI or Prompt), we don't save it in JSON
+            // but we will use it to obtain the token in PbService.
         } else if (this.config.encryptedToken) {
             finalConfig.token = unprotect(this.config.encryptedToken);
         }
@@ -60,11 +60,11 @@ export class ConfigManager {
     }
 
     /**
-     * Elenca i profili disponibili nella cartella di configurazione
+     * Lists available profiles in the configuration folder
      */
     listProfiles() {
         if (!fs.existsSync(this.configDir)) {
-            console.log("Nessun profilo trovato (cartella di configurazione non presente).");
+            console.log("No profiles found (configuration folder not present).");
             return;
         }
 
@@ -75,9 +75,9 @@ export class ConfigManager {
             .map(f => f.replace(suffix, ''));
 
         if (profiles.length === 0) {
-            console.log("Nessun profilo trovato.");
+            console.log("No profiles found.");
         } else {
-            console.log("\n=== PROFILI DISPONIBILI ===");
+            console.log("\n=== AVAILABLE PROFILES ===");
             profiles.forEach(p => console.log(` - ${p}`));
             console.log("===========================\n");
         }
@@ -88,7 +88,7 @@ export class ConfigManager {
             try {
                 return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
             } catch (e) {
-                console.error(`⚠️ Errore lettura profilo ${this.profile}:`, e.message);
+                console.error(`⚠️ Error reading profile ${this.profile}:`, e.message);
             }
         }
         return {};
@@ -97,14 +97,14 @@ export class ConfigManager {
     async _ensureValues(current) {
         const questions = [];
 
-        if (!current.dbPath) questions.push({ type: 'input', name: 'dbPath', message: 'Percorso database .mmb:' });
+        if (!current.dbPath) questions.push({ type: 'input', name: 'dbPath', message: '.mmb database path:' });
         if (!current.pbUrl) questions.push({ type: 'input', name: 'pbUrl', message: 'URL PocketBase:', initial: 'http://127.0.0.1:8090' });
         if (!current.pbUser) questions.push({ type: 'input', name: 'pbUser', message: 'Email PocketBase:' });
         if (!current.pbPass && !this.config.encryptedToken) {
             questions.push({ type: 'password', name: 'pbPass', message: 'Password PocketBase:' });
         }
         if (!current.mmexExe && !this.config.mmexExe) {
-            questions.push({ type: 'input', name: 'mmexExe', message: 'Percorso eseguibile MoneyManagerEx:', default: 'C:\Program Files\MoneyManagerEx\bin\mmex.exe' });
+            questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: 'C:\Program Files\MoneyManagerEx\bin\mmex.exe' });
         }
 
         if (questions.length > 0) {
@@ -116,7 +116,7 @@ export class ConfigManager {
     }
 
     /**
-     * Salva i dati persistenti (escluso password e token in chiaro)
+     * Saves persistent data (excluding password and clear-text token)
      */
     save(configData, token = null) {
         if (!fs.existsSync(this.configDir)) fs.mkdirSync(this.configDir, { recursive: true });
@@ -131,6 +131,6 @@ export class ConfigManager {
         };
 
         fs.writeFileSync(this.configPath, JSON.stringify(toSave, null, 2));
-        console.log(`✅ Configurazione salvata nel profilo: ${this.profile}`);
+        console.log(`✅ Configuration saved in profile: ${this.profile}`);
     }
 }

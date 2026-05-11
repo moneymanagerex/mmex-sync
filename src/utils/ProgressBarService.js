@@ -5,16 +5,16 @@ export class ProgressBarService {
         this.charIncomplete = "░";
         this.total = total || 0;
         this.current = 0;
-        this.lastPercent = -1; // Memorizza l'ultima percentuale disegnata
+        this.lastPercent = -1; // Stores the last drawn percentage
     }
 
     setTotal(total) {
         this.total = total;
-        this.lastPercent = -1; // Reset se cambia il totale
+        this.lastPercent = -1; // Reset if the total changes
     }
 
     /**
-     * Aggiorna la barra solo se la percentuale è cambiata
+     * Updates the bar only if the percentage has changed
      */
     update(label = "Processing", delta = 1) {
         this.current += delta;
@@ -22,8 +22,8 @@ export class ProgressBarService {
 
         const percentage = Math.floor((this.current / this.total) * 100);
 
-        // --- OTTIMIZZAZIONE ---
-        // Se la percentuale non è cambiata e non siamo alla fine, non fare nulla
+        // --- OPTIMIZATION ---
+        // If the percentage hasn't changed and we're not at the end, do nothing
         if (percentage === this.lastPercent && this.current < this.total) {
             return;
         }
