@@ -22,9 +22,6 @@
                 "--verbose",
                 "--profile=sample1",
                 "--force"
-                //                "--user=test.mmex@prudenzano.org",
-                //                "--pbUrl=https://mmex-sync.prudenzano.org",
-                //                "--pass=testami!"
             ]
         },
         {
