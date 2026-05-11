@@ -7,3 +7,5 @@ set_user_password_prod.bat
 myproduction.bat
 *.exe
 dist
+old/
+test-sequence.bat

@@ -2,7 +2,7 @@ import * as esbuild from 'esbuild';
 import path from 'path';
 
 await esbuild.build({
-    entryPoints: ['sync.js'],
+    entryPoints: ['src/index.js'],
     bundle: true,
     platform: 'node',
     target: 'node20',

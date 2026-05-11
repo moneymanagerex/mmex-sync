@@ -37,14 +37,17 @@ if (Test-Path -Path $SQLiteNode) {
     Write-Warning "better_sqlite3.node not found! Ensure better-sqlite3 is installed."
 }
 
+Write-Host "Copying distribution files..."
+Copy-Item -Path ".\assets\sql\tables_v1_for_sync.sql" -Destination "dist\tables_v1_for_sync.sql" -Force
+
 Write-Host "Build complete! mmex-sync.exe is ready in dist/"
 
-# Optional: Build MSI if WiX is installed
-if (Get-Command "candle" -ErrorAction SilentlyContinue) {
-    Write-Host "WiX Toolset found. Building MSI..."
-    candle installer.wxs -out dist\installer.wixobj
-    light dist\installer.wixobj -out dist\mmex-sync.msi
-    Write-Host "MSI created successfully!"
-} else {
-    Write-Host "WiX Toolset (candle/light) not found in PATH. Skipping MSI creation."
-}
+## Optional: Build MSI if WiX is installed
+#if (Get-Command "candle" -ErrorAction SilentlyContinue) {
+#    Write-Host "WiX Toolset found. Building MSI..."
+#    candle installer.wxs -out dist\installer.wixobj
+#    light dist\installer.wixobj -out dist\mmex-sync.msi
+#    Write-Host "MSI created successfully!"
+#} else {
+#    Write-Host "WiX Toolset (candle/light) not found in PATH. Skipping MSI creation."
+#}

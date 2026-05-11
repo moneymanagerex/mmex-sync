@@ -31,9 +31,6 @@ This Proof of Concept (POC) demonstrates a non-intrusive, "Offline-First" synchr
 
 ### Additional info file
 - [README_POCKETBASE.md](README_POCKETBASE.md): Pocketbase setup 
-- [task_list.md](task_list.md): task list for the POC
-
-
 
 
 ## Key Concepts
@@ -77,46 +74,74 @@ You can run the sync engine by providing configuration via command-line argument
 
 ### Command Line Parameters
 ```bash
-Options:
-  --db=<path>       Path to the local SQLite database (default: ./sample_db.mmb)
-  --url=<url>       PocketBase server URL (default: http://127.0.0.1:8090)
-  --user=<email>    PocketBase admin email
-  --pass=<password> PocketBase admin password
-  --config_file=<nome_file>  Name of the config file to store last sync timestamp (default: .lastsync)
+===========================================================
+🚀 MMEX-PocketBase Sync Tool | Manuale Utente
+===========================================================
 
-Commands (can be combined):
-  --init            Initialize technical columns and triggers in local DB
-  --push            Push local changes (dirty records) to PocketBase
-  --pull            Pull remote changes from PocketBase to local DB
-  --clearServer     Delete all records from PocketBase collections (respecting SYNC_ORDER)
-  --help            Show this help message
-  --forcepush       Push all records from local DB to PocketBase (not only dirty records)
-                    Include --push
-  --forcepull       Pull all record from Pocketbase to local db (not only newer records)
-                    Include --pull
-  --create          Create empty databse and all tables
-                    Include --init
-  --watch           Run the script in watch mode, monitoring the database file for changes
-                    Include --push and --pull
-  --verbose         Enable verbose logging
+Utilizzo: mmex-sync [PARAMETRI] [MODALITÀ]
 
-Notes:
-  - If no command (--init, --push, --pull) is provided, the script runs all three by default.
-  - The --clearServer command is executed before any other sync operation.
- 
+-----------------------------------------------------------
+📂 GESTIONE PROFILI E CONFIGURAZIONE
+-----------------------------------------------------------
+  --profile=nome      Sceglie il profilo (es. 'casa', 'lavoro'). 
+                      Default: 'default'
+  --ignoreProfile     Ignore profile configuration and use default values
+  --listProfile       Mostra l'elenco dei profili disponibili
+  --db=percorso       Percorso del file .mmb di MoneyManagerEx
+  --url=indirizzo     URL dell'istanza PocketBase
+  --user=email        Email di login PocketBase
+  --pass=password     Password (non viene salvata, genera un token)
+  --setDefaultMode=X  Imposta la modalità di default per il profilo
+                      Valori: sync (default), run, watch
+  --exe=percorso      Percorso dell'eseguibile MMEX.exe
+                      Default: C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe					  
+  --create            Delete and Recreates a new empty database
+  --verbose           Mostra log dettagliati di ogni operazione.
+
+-----------------------------------------------------------
+🕹️ MODALITÀ DI SINCRONIZZAZIONE
+-----------------------------------------------------------
+  --sync              Esegue il ciclo completo (Init + Push + Pull).
+  --sync=op1,op2      Esegue solo le operazioni specificate.
+                      Operazioni disponibili: init, push, pull
+  --force             Ignore flag and timestamp and process all records
+
+  Esempi:
+    node index.js --sync=pull           (Scarica solo i dati remoti)
+    node index.js --sync=init           (Inizializza senza trasmettere nulla)
+    node index.js --sync --force        (Ciclo completo con invio e scarico totale)
+
+-----------------------------------------------------------
+🕹️ MODALITÀ OPERATIVE
+-----------------------------------------------------------
+  --run               1. Sync iniziale 
+                      2. Apre MMEX e attende la chiusura
+                      3. Sync finale
+  --watch             1. Sync iniziale
+                      2. Apre MMEX (detached)
+                      3. Monitora cambiamenti locali/remoti in tempo reale
+
+-----------------------------------------------------------
+⚡ COMANDI DI FORZATURA E MANUTENZIONE
+-----------------------------------------------------------
+
+-----------------------------------------------------------
+🧹 PULIZIA (Attenzione!)
+   Questi comandi vengono eseguiti da soli. 
+   Altri parametri vengono ignorati.
+-----------------------------------------------------------
+  --clearDb           Rimuove colonne tecniche e trigger dal DB locale.
+  --clearServer       Rimuove tutti i dati dalle collezioni sul server.
+
+Esempio:
+  node index.js --profile=casa --watch --verbose
+=========================================================== 
 ```
 
 ### Using Command Line Arguments (Recommended)
 ```bash
-node sync.js --db="./my_database.mmb" --user="admin@example.com" --pass="YourPassword" --url="http://127.0.0.1:8090"
+node ./src/index.js --db="./my_database.mmb" --user="admin@example.com" --pass="YourPassword" --url="http://127.0.0.1:8090"
 ```
-
-### Using Environment Variables
-Alternatively, you can set environment variables before running the script:
-- `DB_PATH`: Path to your `.mmb` file.
-- `PB_USER`: PocketBase admin email.
-- `PB_PASS`: PocketBase admin password.
-- `PB_URL`: PocketBase instance URL.
 
 ### Synchronization Flow
 1. **Initialization:** On the first run, the script automatically adds the necessary columns and installs the SQLite triggers.
@@ -124,61 +149,27 @@ Alternatively, you can set environment variables before running the script:
 3. **Pull Phase:** The script fetches records updated since the last local sync and merges them into SQLite.
 
 
-## Project Structure
-Root
-- `sync_core.js`: The main logic for the Sync Engine.
-- `table_v1.sql`: The SQL schema for the Sync Engine.
-- `table_v1_for_sync.sql`: The SQL schema for the Sync Engine without default records.
-- `config/table_config.js` configure table and fields 
-
-tests
-- `db_sample_1`: sample database 1
-- `db_sample_2`: sample database 2
-- `mytest_core.bat`: The test script for the Sync Engine.
-
 
 ## 🧪 Quick Start: Testing the Sync (Step-by-Step)
 
-### 1. Configure Credentials
-Create a file named `set_user_passwd.bat` in the root project folder with your PocketBase user and password:
-```bat
-set PB_USER=your_user
-set PB_PASS=your_password
-```
+### First run
+You can simply run `mmex-sync` command, the default profile. On first start program ask for all relevent parameter and store in default profile.
 
-### 2. Initialize the databases
-Run `clean_test.bat` to have two empty databases, on db1 as sample empy db from money manager ex, on db2 a modified copy only with structure (not with defulet transaction), ad remove all data from pocketbase instance.
-```bash
-clean_test.bat
-```
-
-### 3. Sync the databases
-on db_sample_1 older run `mytest_core.bat`. This add new column and table (--init), push from local to remote (--push), pull from remote to local (--pull)
-```bash
-db_sample_1\mytest_core.bat
-```
-or if you prefer
-```bash
-db_sample_1\mytest_core.bat --init
-db_sample_1\mytest_core.bat --push
-db_sample_1\mytest_core.bat --pull
-```
-
-On db_sample_2 do the same 
-```bash
-db_sample_2\mytest_core.bat
-```
 
 ### 4. Play with MMEX
-- open MMEX for db1 and add a transaction
-- run `mytest_core.bat` for both databases
-- see result with check on MMEX db1 and db2
-
-### 5. Validate synchronization (optional)
-Check with `myverify.bat` to validate thate db are idntical (structure and content)
+For example you can run the script in run mode:
 ```bash
-myverify.bat
+mmex-sync --run
 ```
+
+or watch mode:
+```bash
+mmex-sync --watch
+```
+
 
 ## Conclusion
 This architecture proves that MMEX can be modernized with cloud capabilities while remaining a stable, offline-first desktop software. It respects the existing codebase and provides a modular path forward for the community.
+
+
+

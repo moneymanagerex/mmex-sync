@@ -9,7 +9,8 @@ Write-Host "Inizio creazione archivio: $ZipName"
 # Array dei file strettamente necessari per il pacchetto portable
 $FilesToZip = @(
     "dist\mmex-sync.exe",
-    "dist\better_sqlite3.node"
+    "dist\better_sqlite3.node",
+    "dist\tables_v1_for_sync.sql"
 )
 
 # Verifica che i file esistano prima di procedere

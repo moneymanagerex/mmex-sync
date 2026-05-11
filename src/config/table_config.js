@@ -20,8 +20,8 @@ export const SYNC_CONFIG = {
     'TAGLINK_V1': { pk: 'TAGLINKID', fields: ['REFTYPE', 'REFID', 'TAGID'] },
     'TRANSLINK_V1': { pk: 'TRANSLINKID', fields: ['CHECKINGACCOUNTID', 'LINKTYPE', 'LINKRECORDID'] },
     'SHAREINFO_V1': { pk: 'SHAREINFOID', fields: ['CHECKINGACCOUNTID', 'SHARENUMBER', 'SHAREPRICE', 'SHARECOMMISSION', 'SHARELOT'] },
-// pocketbase does not suppoert > 5000 char
-//    'REPORT_V1': { pk: 'REPORTID', fields: ['REPORTNAME', 'GROUPNAME', 'ACTIVE', 'SQLCONTENT', 'LUACONTENT', 'TEMPLATECONTENT', 'DESCRIPTION'] },
+    // pocketbase does not suppoert > 5000 char
+    //    'REPORT_V1': { pk: 'REPORTID', fields: ['REPORTNAME', 'GROUPNAME', 'ACTIVE', 'SQLCONTENT', 'LUACONTENT', 'TEMPLATECONTENT', 'DESCRIPTION'] },
     'CUSTOMFIELD_V1': { pk: 'FIELDID', fields: ['REFTYPE', 'DESCRIPTION', 'TYPE', 'PROPERTIES'] },
     'CUSTOMFIELDDATA_V1': { pk: 'FIELDATADID', fields: ['FIELDID', 'REFID', 'CONTENT'] }
 };
@@ -33,7 +33,7 @@ export const SYNC_ORDER = [
     'CURRENCYFORMATS_V1',
     'TAG_V1',
     'BUDGETYEAR_V1',
-//    'REPORT_V1',
+    //    'REPORT_V1',
     'CUSTOMFIELD_V1',
 
     // Level 2: Primary master data (depend on Level 1)
