@@ -21,8 +21,6 @@ export class DatabaseService {
             this.db = new Database(this.dbPath);
         }
 
-        // this.db.pragma('journal_mode = WAL');
-
         // TODO: remove PK from fields (because we have pk in separatd fields.)
         this.schemas = {};
         for (const table of this.syncOrder) {

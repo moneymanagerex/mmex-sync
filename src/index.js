@@ -7,6 +7,7 @@ import { WatcherService } from './services/WatcherService.js';
 import { spawn } from 'child_process';
 import { showHelp } from './cli/help.js';
 import enquirer from 'enquirer';
+import path from 'path';
 
 
 // 1. Argument parsing (internal or external utility)
@@ -34,6 +35,9 @@ async function main() {
         const configMgr = new ConfigManager(args);
         const config = await configMgr.getEffectiveConfig();
 
+        // get full path of db
+        config.dbPath = path.resolve(config.dbPath);
+
         // show all relevant parametert from configuration
         console.log("Path DB: " + config.dbPath);
         console.log("URL: " + config.pbUrl);
@@ -42,6 +46,7 @@ async function main() {
 
         // --- SERVICES INITIALIZATION ---
         const db = new DatabaseService(config.dbPath, args.verbose);
+
         db.connect(args.create);
 
         const pb = new PocketBaseService(config.pbUrl);

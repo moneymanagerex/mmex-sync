@@ -10,3 +10,6 @@ dist
 old/
 test-sequence.bat
 .vscode/
+*.shm
+*.wal
+*.bak
