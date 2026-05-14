@@ -16,6 +16,14 @@ export class ConfigManager {
         this.config = {};
     }
 
+    updateConfig(configData) {
+        this.config = configData;
+        if (this.config.token) {
+            this.config.encryptedToken = protect(this.config.token);
+        }
+        this.save(this.config);
+    }
+
     /**
      * The main method: resolves the configuration following the hierarchy
      */
@@ -131,6 +139,9 @@ export class ConfigManager {
             lastSync: configData.lastSync,
             encryptedToken: token ? protect(token) : this.config.encryptedToken
         };
+        console.log("toSave:");
+        console.log("  Token: " + toSave.token);
+        console.log("  Encrypted: " + toSave.encryptedToken);
 
         fs.writeFileSync(this.configPath, JSON.stringify(toSave, null, 2));
         console.log(`✅ Configuration saved in profile: ${this.profile}`);

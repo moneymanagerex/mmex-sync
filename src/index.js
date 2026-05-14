@@ -60,7 +60,7 @@ async function main() {
             pb.invalidateToken();
             await pb.authenticate(config.pbUser, config.pbPass);
             config.token = pb.getToken();
-            configMgr.save(config, config.token);
+            configMgr.updateConfig(config);
         } else {
             pb.setToken(config.token);
         }
