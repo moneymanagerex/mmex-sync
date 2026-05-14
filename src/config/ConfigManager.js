@@ -139,9 +139,9 @@ export class ConfigManager {
             lastSync: configData.lastSync,
             encryptedToken: token ? protect(token) : this.config.encryptedToken
         };
-        console.log("toSave:");
-        console.log("  Token: " + toSave.token);
-        console.log("  Encrypted: " + toSave.encryptedToken);
+        //        console.log("toSave:");
+        //        console.log("  Token: " + toSave.token);
+        //        console.log("  Encrypted: " + toSave.encryptedToken);
 
         fs.writeFileSync(this.configPath, JSON.stringify(toSave, null, 2));
         console.log(`✅ Configuration saved in profile: ${this.profile}`);
