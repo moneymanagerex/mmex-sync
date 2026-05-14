@@ -59,7 +59,8 @@ async function main() {
         if (config.pbPass || !config.token) { // password is supplied invalidate any token
             pb.invalidateToken();
             await pb.authenticate(config.pbUser, config.pbPass);
-            configMgr.save(config, pb.getToken());
+            config.token = pb.getToken();
+            configMgr.save(config, config.token);
         } else {
             pb.setToken(config.token);
         }
