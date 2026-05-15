@@ -8,9 +8,11 @@ export class WatcherService {
         this.pb = pbService;
         this.sync = syncService;
         this.config = config;
-        
+
         this.isSyncing = false;
         this.debounceTimer = null;
+        this.ignoreNextLocalChange = false;
+        this.fileWatcher = null;
     }
 
     /**
@@ -20,46 +22,72 @@ export class WatcherService {
         console.log("👀 Watcher started: monitoring changes...");
 
         // 1. Local Watch (Chokidar on the SQLite file)
-        const fileWatcher = chokidar.watch(this.config.dbPath, {
+        this.fileWatcher = chokidar.watch(this.config.dbPath, {
             persistent: true,
-            awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 100 }
+            usePolling: true,
+            interval: 5000,
+            awaitWriteFinish: { stabilityThreshold: 5000, pollInterval: 500 }
         });
 
-        fileWatcher.on('change', () => {
+        this.fileWatcher.on('change', () => {
+            if (this.ignoreNextLocalChange) {
+                this.ignoreNextLocalChange = false;
+                return;
+            }
+            if (this.isSyncing) return;
+
             console.log("📝 Local change detected (MMEX).");
             this._triggerSync('local');
         });
 
-		try {
-			await this.pb.subscribe(null, (e) => {
-				console.log(`🌐 Remote change: ${e.collection} [${e.action}]`);
-				this._triggerSync('remote');
-			});
-		} catch (err) {
-			console.error("❌ Realtime error:", err.message);
-		}
+        try {
+            await this.pb.subscribe(null, (e) => {
+                console.log(`🌐 Remote change: ${e.collection} [${e.action}]`);
+                this._triggerSync('remote', 5000);
+            });
+        } catch (err) {
+            console.error("❌ Realtime error:", err.message);
+        }
+    }
+
+    /**
+     * Stops monitoring
+     */
+    async stop() {
+        if (this.fileWatcher) {
+            await this.fileWatcher.close();
+            console.log("🛑 Local watcher stopped.");
+        }
+        try {
+            await this.pb.unsubscribeAll();
+            console.log("🛑 Remote watcher unsubscribed.");
+        } catch (err) {
+            console.error("❌ Error during unsubscribe:", err.message);
+        }
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
     }
 
     /**
      * Trigger orchestrator with debounce
      * Avoids launching overlapping synchronizations
      */
-    _triggerSync(source) {
+    _triggerSync(source, delay = 2000) {
         if (this.isSyncing) return;
 
         if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
         this.debounceTimer = setTimeout(async () => {
             this.isSyncing = true;
+            this.ignoreNextLocalChange = true;
             try {
                 // We execute the cycle defined in SyncService
                 // SyncService will use state 2 (Pending) to handle conflicts
-                await this.sync.fullCycle();
+                await this.sync.runSyncCycle();
             } catch (err) {
                 console.error(`❌ Error during automatic sync (${source}):`, err.message);
             } finally {
                 this.isSyncing = false;
             }
-        }, 1500); // Wait 1.5 seconds of silence before acting
+        }, delay); // Wait 'delay' milliseconds of silence before acting
     }
 }

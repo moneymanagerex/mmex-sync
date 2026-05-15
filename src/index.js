@@ -105,11 +105,17 @@ async function main() {
         // --- LOGIC EXECUTION ---
         switch (mode) {
             case 'watch':
-                // Initial cycle -> Launch MMEX (detached) -> Start Watcher
+                // Initial cycle -> Start Watcher -> Launch MMEX (waiting) -> Stop Watcher -> Final cycle
                 await sync.runSyncCycle();
-                launchMMEX(config.mmexExe, config.dbPath, true);
                 const watcher = new WatcherService(db, pb, sync, config);
                 await watcher.start();
+
+                await launchMMEX(config.mmexExe, config.dbPath, false);
+
+                console.log("📝 MMEX closed. Stopping watcher and executing final synchronization...");
+                await watcher.stop();
+                await sync.runSyncCycle();
+                process.exit(0);
                 break;
 
             case 'run':
