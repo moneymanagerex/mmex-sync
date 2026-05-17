@@ -68,9 +68,6 @@ export class ConfigManager {
         return finalConfig;
     }
 
-    /**
-     * Lists available profiles in the configuration folder
-     */
     listProfiles() {
         if (!fs.existsSync(this.configDir)) {
             console.log("No profiles found (configuration folder not present).");
@@ -89,6 +86,36 @@ export class ConfigManager {
             console.log("\n=== AVAILABLE PROFILES ===");
             profiles.forEach(p => console.log(` - ${p}`));
             console.log("===========================\n");
+        }
+    }
+
+    /**
+     * Shows the content of the specified profile or the current profile
+     */
+    showProfile(targetProfile) {
+        const profileToLoad = (typeof targetProfile === 'string' && targetProfile.length > 0) ? targetProfile : this.profile;
+        const configPath = path.join(this.configDir, `${profileToLoad}.${CONFIG_FILE_EXTENSION}`);
+        if (!fs.existsSync(configPath)) {
+            console.log(`Profile '${profileToLoad}' not found.`);
+            return;
+        }
+
+        try {
+            const content = fs.readFileSync(configPath, 'utf8');
+            const parsed = JSON.parse(content);
+            const tokenStatus = parsed.encryptedToken ? 'present' : 'not present';
+            
+            console.log(`\n=== PROFILE: ${profileToLoad} ===`);
+            console.log(`* DB Path = ${parsed.dbPath || ''}`);
+            console.log(`* URL = ${parsed.pbUrl || ''}`);
+            console.log(`* User = ${parsed.pbUser || ''}`);
+            console.log(`* exe = ${parsed.mmexExe || ''}`);
+            console.log(`* defaultMode = ${parsed.defaultMode || ''}`);
+            console.log(`* lastSync = ${parsed.lastSync || ''}`);
+            console.log(`* token = ${tokenStatus}`);
+            console.log("===========================\n");
+        } catch (e) {
+            console.error(`⚠️ Error reading profile ${profileToLoad}:`, e.message);
         }
     }
 

@@ -30,6 +30,13 @@ async function main() {
         process.exit(0);
     }
 
+    if (args.showProfile) {
+        const configMgr = new ConfigManager(args);
+        const profileName = typeof args.showProfile === 'string' ? args.showProfile : undefined;
+        configMgr.showProfile(profileName);
+        process.exit(0);
+    }
+
     try {
         // --- CONFIGURATION INITIALIZATION ---
         const configMgr = new ConfigManager(args);
