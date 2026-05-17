@@ -15,6 +15,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
                       Default: 'default'
   --ignoreProfile     Ignore profile configuration and use default values
   --listProfile       Shows the list of available profiles
+  --showProfile[=name] Shows profile information (content of profile)
   --db=path           Path to the MoneyManagerEx .mmb file
   --url=address       URL of the PocketBase instance
   --user=email        PocketBase login email

@@ -33,14 +33,6 @@ export class ConfigManager {
             this.config = this._loadFromFile();
         }
 
-        // If the user passes --setDefaultMode, we validate it immediately
-        if (this.cliArgs.setDefaultMode) {
-            const validModes = ['sync', 'run', 'watch'];
-            if (!validModes.includes(this.cliArgs.setDefaultMode)) {
-                throw new Error(`Invalid mode. Choose from: ${validModes.join(', ')}`);
-            }
-        }
-
         // 2. Define required parameters and resolve the origin
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
@@ -68,9 +60,6 @@ export class ConfigManager {
         return finalConfig;
     }
 
-    /**
-     * Lists available profiles in the configuration folder
-     */
     listProfiles() {
         if (!fs.existsSync(this.configDir)) {
             console.log("No profiles found (configuration folder not present).");
@@ -90,6 +79,62 @@ export class ConfigManager {
             profiles.forEach(p => console.log(` - ${p}`));
             console.log("===========================\n");
         }
+    }
+
+    /**
+     * Shows the content of the specified profile or the current profile
+     */
+    showProfile(targetProfile) {
+        const profileToLoad = (typeof targetProfile === 'string' && targetProfile.length > 0) ? targetProfile : this.profile;
+        const configPath = path.join(this.configDir, `${profileToLoad}.${CONFIG_FILE_EXTENSION}`);
+        if (!fs.existsSync(configPath)) {
+            console.log(`Profile '${profileToLoad}' not found.`);
+            return;
+        }
+
+        try {
+            const content = fs.readFileSync(configPath, 'utf8');
+            const parsed = JSON.parse(content);
+            const tokenStatus = parsed.encryptedToken ? 'present' : 'not present';
+            
+            console.log(`\n=== PROFILE: ${profileToLoad} ===`);
+            console.log(`* DB Path = ${parsed.dbPath || ''}`);
+            console.log(`* URL = ${parsed.pbUrl || ''}`);
+            console.log(`* User = ${parsed.pbUser || ''}`);
+            console.log(`* exe = ${parsed.mmexExe || ''}`);
+            console.log(`* defaultMode = ${parsed.defaultMode || ''}`);
+            console.log(`* lastSync = ${parsed.lastSync || ''}`);
+            console.log(`* token = ${tokenStatus}`);
+            console.log("===========================\n");
+        } catch (e) {
+            console.error(`⚠️ Error reading profile ${profileToLoad}:`, e.message);
+        }
+    }
+
+    /**
+     * Updates the default mode in the profile and saves it
+     */
+    setDefaultMode(mode) {
+        if (typeof mode !== 'string') {
+            console.error(`❌ Please specify a mode, e.g. --setDefaultMode=watch`);
+            return false;
+        }
+
+        const validModes = ['sync', 'run', 'watch'];
+        if (!validModes.includes(mode)) {
+            console.error(`❌ Invalid mode '${mode}'. Choose from: ${validModes.join(', ')}`);
+            return false;
+        }
+
+        this.config = this._loadFromFile();
+        if (Object.keys(this.config).length === 0) {
+            console.error(`❌ Profile '${this.profile}' not found or empty. Cannot set default mode.`);
+            return false;
+        }
+
+        this.config.defaultMode = mode;
+        this.save(this.config);
+        return true;
     }
 
     _loadFromFile() {
