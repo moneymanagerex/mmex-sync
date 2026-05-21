@@ -1,0 +1,27 @@
+name: Run Tests on Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+      - stable
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm' # Ottimizza i tempi memorizzando la cache di node_modules
+
+      - name: Install dependencies
+        run: npm ci # Usa 'npm ci' invece di 'npm install' perché è ideale per la CI (è più veloce e rigoroso)
+
+      - name: Run Jest tests
+        run: npm test
