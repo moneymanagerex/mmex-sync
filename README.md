@@ -6,6 +6,11 @@
 ![Money Manager Ex Sync - Record-Level Safe Sync Banner](assets/images/mmex-sync-banner.png)
 
 
+## References
+- [how to contribute](CONTRIB.md)
+- [Setup pocketbase server](README_POCKETBASE.md)
+- [Disclaimer](DISCLAIMER.md)
+
 ## 🎯 Overview
 
 This project demonstrates a non-intrusive, **"Offline-First"** synchronization system for Money Manager Ex (MMEX). It enables seamless multi-device sync (Windows ↔ Cloud ↔ Android) without requiring any modifications to the core MMEX desktop source code.
