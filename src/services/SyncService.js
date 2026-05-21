@@ -75,7 +75,6 @@ export class SyncService {
                             if (this.options.verbose) console.log(`[Push] Updated ${table} (rowid: ${record.rowid}) with pb_id: ${response.id}`);
                             this.db.setSyncedStatus(table, record.rowid, response.id);
                         } else {
-                            // TODO: handle better
                             console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
                         }
                     }
