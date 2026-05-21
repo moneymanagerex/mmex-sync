@@ -1,5 +1,8 @@
 @echo off
 call set_user_passwd.bat
+mkdir samples\db_sample_1
+mkdir samples\db_sample_2
+
 del samples\db_sample_1\sample_db1.mmb
 del samples\db_sample_2\sample_db2.mmb
 

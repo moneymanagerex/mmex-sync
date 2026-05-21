@@ -37,6 +37,7 @@ export class ConfigManager {
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
+            pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
             mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
@@ -96,10 +97,11 @@ export class ConfigManager {
             const content = fs.readFileSync(configPath, 'utf8');
             const parsed = JSON.parse(content);
             const tokenStatus = parsed.encryptedToken ? 'present' : 'not present';
-            
+
             console.log(`\n=== PROFILE: ${profileToLoad} ===`);
             console.log(`* DB Path = ${parsed.dbPath || ''}`);
             console.log(`* URL = ${parsed.pbUrl || ''}`);
+            console.log(`* Auth Collection = ${parsed.pbAuthCollection || 'unknown'}`);
             console.log(`* User = ${parsed.pbUser || ''}`);
             console.log(`* exe = ${parsed.mmexExe || ''}`);
             console.log(`* defaultMode = ${parsed.defaultMode || ''}`);
@@ -178,6 +180,7 @@ export class ConfigManager {
         const toSave = {
             dbPath: configData.dbPath,
             pbUrl: configData.pbUrl,
+            pbAuthCollection: configData.pbAuthCollection,
             pbUser: configData.pbUser,
             mmexExe: configData.mmexExe,
             defaultMode: configData.defaultMode,

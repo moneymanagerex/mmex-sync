@@ -91,11 +91,12 @@ export class SyncService {
      */
     async pullTable(table) {
         let result = true;
-        const lastSyncDate = this.options.force ? null : this.configMgr.config.lastSync;
+        const lastSyncDate = this.options.force ? null :
+            (new Date(new Date(this.configMgr.config.lastSync).getTime() - 5000).toISOString());
+
         let filter = '';
         if (lastSyncDate) {
-            // TODO: lastSyncDate need to be 5 seconds before to be sure to download all latest changes
-            filter = `updated > "${lastSyncDate.replace('T', ' ').split('.')[0]}"`;
+            filter = `_updated_at > "${lastSyncDate.replace('T', ' ').split('.')[0]}"`;
         }
         try {
             const remoteRecords = await this.pb.getFullList(table, filter);

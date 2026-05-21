@@ -1,28 +1,9 @@
 [
   {
     "id": "pb_ACCOUNTLIST_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "ACCOUNTLIST_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "relation134319853",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid",
-		"presentable":false,
-		"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -340,12 +321,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text539602407",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -369,32 +365,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_ACCOUNTLIST_V1` ON `ACCOUNTLIST_V1` ( _userid, `ACCOUNTID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_ACCOUNTLIST_V1` ON `ACCOUNTLIST_V1` (  `ACCOUNTID`)"
     ],
     "system": false
   },
   {
     "id": "pb_ASSETS_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "ASSETS_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -573,12 +552,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -602,32 +596,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_ASSETS_V1` ON `ASSETS_V1` ( _userid, `ASSETID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_ASSETS_V1` ON `ASSETS_V1` (  `ASSETID`)"
     ],
     "system": false
   },
   {
     "id": "pb_ATTACHMENT_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "ATTACHMENT_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -720,12 +697,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -749,34 +741,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_ATTACHMENT_V1` ON `ATTACHMENT_V1` ( _userid, `ATTACHMENTID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_ATTACHMENT_V1` ON `ATTACHMENT_V1` (  `ATTACHMENTID`)"
     ],
     "system": false
   },
   {
     "id": "pb_BILLSDEPOSITS_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "BILLSDEPOSITS_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid",
-"presentable":false,
-"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -868,7 +841,7 @@
         "name": "TRANSAMOUNT",
         "onlyInt": false,
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "number"
       },
@@ -1031,12 +1004,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -1060,32 +1048,14 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_BILLSDEPOSITS_V1` ON `BILLSDEPOSITS_V1` ( _userid, `BDID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_BILLSDEPOSITS_V1` ON `BILLSDEPOSITS_V1` (  `BDID`)"
     ],
     "system": false
   },
   {
-    "id": "pb_BUDGETSPLITTRANSACTIONS_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "BUDGETSPLITTRANSACTIONS_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -1174,12 +1144,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -1203,32 +1188,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_BUDGETSPLITTRANSACTIONS_V1` ON `BUDGETSPLITTRANSACTIONS_V1` ( _userid, `SPLITTRANSID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_BUDGETSPLITTRANSACTIONS_V1` ON `BUDGETSPLITTRANSACTIONS_V1` (  `SPLITTRANSID`)"
     ],
     "system": false
   },
   {
     "id": "pb_BUDGETTABLE_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "BUDGETTABLE_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -1307,7 +1275,7 @@
         "name": "AMOUNT",
         "onlyInt": false,
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "number"
       },
@@ -1345,12 +1313,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -1374,32 +1357,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_BUDGETTABLE_V1` ON `BUDGETTABLE_V1` ( _userid, `BUDGETENTRYID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_BUDGETTABLE_V1` ON `BUDGETTABLE_V1` (  `BUDGETENTRYID`)"
     ],
     "system": false
   },
   {
     "id": "pb_BUDGETYEAR_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "BUDGETYEAR_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -1449,12 +1415,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -1478,32 +1459,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_BUDGETYEAR_V1` ON `BUDGETYEAR_V1` ( _userid, `BUDGETYEARID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_BUDGETYEAR_V1` ON `BUDGETYEAR_V1` (  `BUDGETYEARID`)"
     ],
     "system": false
   },
   {
     "id": "pbc_3133989299",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "CATEGORY_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -1579,12 +1543,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -1608,32 +1587,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pbc_3133989299` ON `CATEGORY_V1` ( _userid, `CATEGID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pbc_3133989299` ON `CATEGORY_V1` (  `CATEGID`)"
     ],
     "system": false
   },
   {
     "id": "pb_CHECKINGACCOUNT_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "CHECKINGACCOUNT_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -1725,7 +1687,7 @@
         "name": "TRANSAMOUNT",
         "onlyInt": false,
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "number"
       },
@@ -1877,12 +1839,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -1906,32 +1883,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_CHECKINGACCOUNT_V1` ON `CHECKINGACCOUNT_V1` ( _userid, `TRANSID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_CHECKINGACCOUNT_V1` ON `CHECKINGACCOUNT_V1` (  `TRANSID`)"
     ],
     "system": false
   },
   {
     "id": "pb_CURRENCYFORMATS_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "CURRENCYFORMATS_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -2117,7 +2077,7 @@
         "pattern": "",
         "presentable": false,
         "primaryKey": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "text"
       },
@@ -2127,12 +2087,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -2156,32 +2131,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_CURRENCYFORMATS_V1` ON `CURRENCYFORMATS_V1` ( _userid, `CURRENCYID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_CURRENCYFORMATS_V1` ON `CURRENCYFORMATS_V1` (  `CURRENCYID`)"
     ],
     "system": false
   },
   {
     "id": "pb_CURRENCYHISTORY_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "CURRENCYHISTORY_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -2270,12 +2228,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -2299,32 +2272,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_CURRENCYHISTORY_V1` ON `CURRENCYHISTORY_V1` ( _userid, `CURRHISTID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_CURRENCYHISTORY_V1` ON `CURRENCYHISTORY_V1` (  `CURRHISTID`)"
     ],
     "system": false
   },
   {
     "id": "pb_CUSTOMFIELDDATA_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "CUSTOMFIELDDATA_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -2400,12 +2356,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -2429,32 +2400,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_CUSTOMFIELDDATA_V1` ON `CUSTOMFIELDDATA_V1` ( _userid, `FIELDATADID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_CUSTOMFIELDDATA_V1` ON `CUSTOMFIELDDATA_V1` (  `FIELDATADID`)"
     ],
     "system": false
   },
   {
     "id": "pb_CUSTOMFIELD_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "CUSTOMFIELD_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -2549,12 +2503,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -2578,32 +2547,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_CUSTOMFIELD_V1` ON `CUSTOMFIELD_V1` ( _userid, `FIELDID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_CUSTOMFIELD_V1` ON `CUSTOMFIELD_V1` (  `FIELDID`)"
     ],
     "system": false
   },
   {
     "id": "pb_INFOTABLE_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "INFOTABLE_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -2658,7 +2610,7 @@
         "pattern": "",
         "presentable": false,
         "primaryKey": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "text"
       },
@@ -2668,12 +2620,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -2697,32 +2664,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_INFOTABLE_V1` ON `INFOTABLE_V1` ( _userid, `INFOID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_INFOTABLE_V1` ON `INFOTABLE_V1` (  `INFOID`)"
     ],
     "system": false
   },
   {
     "id": "pb_PAYEE_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "PAYEE_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -2858,12 +2808,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -2887,32 +2852,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_PAYEE_V1` ON `PAYEE_V1` ( _userid, `PAYEEID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_PAYEE_V1` ON `PAYEE_V1` (  `PAYEEID`)"
     ],
     "system": false
   },
   {
     "id": "pb_REPORT_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "REPORT_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3050,12 +2998,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3079,32 +3042,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_REPORT_V1` ON `REPORT_V1` ( _userid, `REPORTID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_REPORT_V1` ON `REPORT_V1` (  `REPORTID`)"
     ],
     "system": false
   },
   {
     "id": "pb_SHAREINFO_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "SHAREINFO_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3206,12 +3152,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3235,32 +3196,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_SHAREINFO_V1` ON `SHAREINFO_V1` ( _userid, `SHAREINFOID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_SHAREINFO_V1` ON `SHAREINFO_V1` (  `SHAREINFOID`)"
     ],
     "system": false
   },
   {
     "id": "pb_SPLITTRANS_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "SPLITTRANSACTIONS_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3349,12 +3293,27 @@
         "id": "number4245145851",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3378,32 +3337,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_SPLITTRANS_V1` ON `SPLITTRANSACTIONS_V1` ( _userid, `SPLITTRANSID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_SPLITTRANS_V1` ON `SPLITTRANSACTIONS_V1` (  `SPLITTRANSID`)"
     ],
     "system": false
   },
   {
     "id": "pb_STOCKHISTORY_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "STOCKHISTORY_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3494,12 +3436,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3523,32 +3480,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_STOCKHISTORY_V1` ON `STOCKHISTORY_V1` ( _userid, `HISTID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_STOCKHISTORY_V1` ON `STOCKHISTORY_V1` (  `HISTID`)"
     ],
     "system": false
   },
   {
     "id": "pb_STOCK_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "STOCK_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3721,12 +3661,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3750,32 +3705,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_STOCK_V1` ON `STOCK_V1` ( _userid, `STOCKID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_STOCK_V1` ON `STOCK_V1` (  `STOCKID`)"
     ],
     "system": false
   },
   {
     "id": "pb_TAGLINK_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "TAGLINK_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3851,12 +3789,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3880,32 +3833,16 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_TAGLINK_V1` ON `TAGLINK_V1` ( _userid, `TAGLINKID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_TAGLINK_V1` ON `TAGLINK_V1` (  `TAGLINKID`)",
+      "CREATE UNIQUE INDEX `idx_8cvv1pvauu` ON `TAGLINK_V1` (\n  `REFTYPE`,\n  `REFID`,\n  `TAGID`\n)"
     ],
     "system": false
   },
   {
     "id": "pb_TAG_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "TAG_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -3968,12 +3905,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -3997,32 +3949,15 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_TAG_V1` ON `TAG_V1` ( _userid, `TAGID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_TAG_V1` ON `TAG_V1` (  `TAGID`)"
     ],
     "system": false
   },
   {
     "id": "pb_TRANSLINK_V1",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "TRANSLINK_V1",
     "type": "base",
     "fields": [
-      {
-        "cascadeDelete": false,
-        "collectionId": "_pb_users_auth_",
-        "help": "",
-        "hidden": false,
-        "id": "_userid",
-        "maxSelect": 0,
-        "minSelect": 0,
-        "name":"_userid","presentable":false,"required":false,
-        "system": false,
-        "type": "relation"
-      },
       {
         "autogeneratePattern": "[a-z0-9]{15}",
         "help": "",
@@ -4098,12 +4033,27 @@
         "id": "pb_is_deleted",
         "max": null,
         "min": null,
-        "name": "is_deleted",
+        "name": "_is_deleted",
         "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
         "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "pb_updated_at",
+        "max": 0,
+        "min": 0,
+        "name": "_updated_at",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
@@ -4127,17 +4077,12 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_pk_pb_TRANSLINK_V1` ON `TRANSLINK_V1` ( _userid, `TRANSLINKID`)"
+      "CREATE UNIQUE INDEX `idx_pk_pb_TRANSLINK_V1` ON `TRANSLINK_V1` (  `TRANSLINKID`)"
     ],
     "system": false
   },
   {
     "id": "pbc_4285667772",
-    "listRule": null,
-    "viewRule": null,
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
     "name": "dbInfo",
     "type": "base",
     "fields": [

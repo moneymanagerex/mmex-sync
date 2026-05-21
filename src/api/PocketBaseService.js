@@ -16,7 +16,20 @@ export class PocketBaseService {
     }
 
     async authenticate(email, password) {
-        return await this.client.collection('users').authWithPassword(email, password);
+        try {
+            const authData = await this.client.collection('users').authWithPassword(email, password);
+            this.authCollection = 'users';
+            return authData;
+        } catch (error) {
+            console.log(`⚠️ Authenticating with 'users' failed, trying '_superusers' fallback...`);
+            try {
+                const fallbackAuthData = await this.client.collection('_superusers').authWithPassword(email, password);
+                this.authCollection = '_superusers';
+                return fallbackAuthData;
+            } catch (fallbackError) {
+                throw fallbackError;
+            }
+        }
     }
 
     getToken() {
@@ -42,6 +55,8 @@ export class PocketBaseService {
         if (filter) {
             options.filter = filter;
         }
+
+        options.sort = "_updated_at";
 
         // If no filter is present, options remains an empty object {} 
         // and getFullList will download everything (--force behavior)
