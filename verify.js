@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { SYNC_CONFIG, SYNC_ORDER } from './config/table_config.js';
+import { SYNC_CONFIG, SYNC_ORDER } from './src/config/table_config.js';
 
 
 

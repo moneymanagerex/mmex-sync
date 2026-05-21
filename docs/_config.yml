@@ -1,0 +1,108 @@
+remote_theme: mmistakes/minimal-mistakes
+# theme: minimal-mistakes-jekyll
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-include-cache
+  - jekyll-paginate
+  - jekyll-sitemap
+  - jekyll-gist
+#  - jekyll-feed
+  - jemoji
+
+# Name of website
+title: SyncEngine for Money Manager Ex
+email: wolfsolver69@gmail.com
+description: Sidecar Sync Engine for Money Manager Ex.
+
+#twitter_username: moneymanagerex
+github_username: wolfsolver
+minimal_mistakes_skin: dirt
+#search: true
+#lunr:
+#  search_within_pages: true
+#  search_full_content: true
+
+repository: "wolfsolver/money_manager_ex_sync_poc"
+
+markdown: kramdown
+
+# Outputting
+permalink: /:categories/:title/
+paginate: 5 # amount of posts to show
+paginate_path: /page:num/
+# timezone: # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+#include:
+#  - _pages
+
+logo: /images/icon.png
+
+author:
+  name   : "WolfSolver"
+#  avatar :
+#  bio    : "My awesome biography constrained to a sentence or two goes here."
+  links:
+    - label: "Android Website"
+      icon: "fas fa-fw fa-link"
+      url: "https://android.moneymanagerex.org/"
+    - label: "Money Manager Ex Website"
+      icon: "fas fa-fw fa-link"
+      url: "https://moneymanagerex.org/"
+#    - label: "Email"
+#      icon: "fas fa-fw fa-envelope-square"
+#      url: "mailto:android@moneymanagerex.org"
+#    - label: "Forum"
+#      icon: "fab fa-fw fa-solid fa-comments"
+#      url: "https://forum.moneymanagerex.org/viewforum.php?f=20&sid=e28426f96579a43121b1127cd887e186"
+    - label: "GitHub"
+      icon: "fab fa-fw fa-github"
+      url: "https://github.com/wolfsolver/money_manager_ex_sync_poc"
+
+footer:
+  links:
+    - label: "Website"
+      icon: "fas fa-fw fa-link"
+      url: "https://android.moneymanagerex.org/"
+    - label: "Main Website"
+      icon: "fas fa-fw fa-link"
+      url: "https://moneymanagerex.org/"
+#    - label: "Twitter"
+#      icon: "fab fa-fw fa-twitter-square"
+#      url: "https://x.com/MoneyManagerEx"
+    - label: "GitHub"
+      icon: "fab fa-fw fa-github"
+      url: "https://github.com/wolfsolver/money_manager_ex_sync_poc"
+    - label: "Privacy Policy"
+      icon: "fa-solid fa-shield-halved"
+      url: "/privacy_agreement"
+
+defaults:
+  # _posts
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: single
+      author_profile: true
+      read_time: true
+      comments: true
+      share: true
+      related: true
+  # _pages
+  - scope:
+      path: "_pages"
+      type: pages
+    values:
+      layout: single
+      author_profile: true
+
+category_archive:
+  type: liquid
+  path: /categories/
+tag_archive:
+  type: liquid
+  path: /tags/
+
+atom_feed:
+  hide: true

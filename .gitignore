@@ -1,6 +1,16 @@
 node_modules/
 .env
 .DS_Store
-set_user_passwd.bat
 *.sqbpro
 sync_data/
+set_user_password_prod.bat
+myproduction.bat
+*.exe
+dist
+old/
+test-sequence.bat
+.vscode/
+*.shm
+*.wal
+*.bak
+samples/

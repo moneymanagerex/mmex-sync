@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" Name="MMEX Sync" Language="1033" Version="1.0.0.0" Manufacturer="MMEX Sync" UpgradeCode="A1B2C3D4-E5F6-4A5B-8C9D-E0F1A2B3C4D5">
+        <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="ProductFeature" Title="MMEX Sync" Level="1">
+            <ComponentGroupRef Id="ProductComponents" />
+            <ComponentRef Id="ApplicationShortcut" />
+        </Feature>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLFOLDER" Name="MMEX-Sync" />
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="MMEX Sync"/>
+            </Directory>
+        </Directory>
+
+        <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+            <Component Id="MainExecutable" Guid="*">
+                <File Id="MMEXSyncExe" Source="dist\mmex-sync.exe" KeyPath="yes" />
+            </Component>
+            <Component Id="BetterSqlite" Guid="*">
+                <File Id="BetterSqliteNode" Source="dist\better_sqlite3.node" KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+
+        <DirectoryRef Id="ApplicationProgramsFolder">
+            <Component Id="ApplicationShortcut" Guid="B2C3D4E5-F6A7-4B8C-9D0E-F1A2B3C4D5E6">
+                <Shortcut Id="ApplicationStartMenuShortcut" 
+                          Name="MMEX Sync" 
+                          Description="Sincronizza Money Manager Ex"
+                          Target="[#MMEXSyncExe]"
+                          WorkingDirectory="INSTALLFOLDER" />
+                <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\MMEX-Sync" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+    </Product>
+</Wix>

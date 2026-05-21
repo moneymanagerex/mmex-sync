@@ -1,1 +1,1 @@
-node .\verify.js --db1=db_sample_1\sample_db.mmb --db2=db_sample_2\sample_db.mmb  %*
+node .\verify.js --db1=samples\db_sample_1\sample_db1.mmb --db2=samples\db_sample_2\sample_db2.mmb %*
