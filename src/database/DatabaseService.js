@@ -21,7 +21,6 @@ export class DatabaseService {
             this.db = new Database(this.dbPath);
         }
 
-        // TODO: remove PK from fields (because we have pk in separatd fields.)
         this.schemas = {};
         for (const table of this.syncOrder) {
             const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();

@@ -69,17 +69,30 @@ async function main() {
 
         const pb = new PocketBaseService(config.pbUrl);
 
-        if (config.pbPass || !config.token) { // password is supplied invalidate any token
+        if (config.pbPass) { // password is supplied invalidate any token
+            console.log("🔑 Authenticating with password...");
             pb.invalidateToken();
             await pb.authenticate(config.pbUser, config.pbPass);
             config.token = pb.getToken();
             config.pbAuthCollection = pb.authCollection;
             configMgr.updateConfig(config);
-        } else {
+        } else if (config.token) {
             pb.setToken(config.token);
+            pb.authCollection = config.pbAuthCollection;
+            try {
+                await pb.refreshToken(); // Esegue l'authRefresh() interno
+                // Salva il nuovo token generato dal server PocketBase
+                config.token = pb.getToken();
+                await configMgr.updateConfig(config);
+            } catch (refreshErr) {
+                console.warn("⚠️ Token refresh failed on server. Clearing saved token.");
+                config.token = null;
+                await configMgr.updateConfig(config);
+                throw new Error("Session expired on server. Please run again providing your password.");
+            }
+        } else {
+            throw new Error("No authentication method found. Please provide a password.");
         }
-
-        // todo handle token refresh when expired
 
         const sync = new SyncService(db, pb, configMgr, args);
 

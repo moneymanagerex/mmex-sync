@@ -1,12 +1,20 @@
+# Dependency directories
 node_modules/
-.env
+
+# Test coverage
+coverage/
+
+# Build outputs
+dist/
+sea-prep.blob
+
+# OS generated files
 .DS_Store
+Thumbs.db
+
+#other
+.env
 *.sqbpro
-sync_data/
-set_user_password_prod.bat
-myproduction.bat
-*.exe
-dist
 old/
 test-sequence.bat
 .vscode/
@@ -14,3 +22,8 @@ test-sequence.bat
 *.wal
 *.bak
 samples/
+
+# Test coverage
+coverage/
+
+

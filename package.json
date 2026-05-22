@@ -1,15 +1,24 @@
 {
   "name": "mmex-sync",
-  "version": "1.0.0",
+  "version": "0.1.4",
   "description": "A non-intrusive, \"Offline-First\" synchronization system for Money Manager Ex (MMEX) with PocketBase as backend.",
-  "main": "sync.js",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "prebuild:windows": "npm run test",
+    "build:windows": "powershell -ExecutionPolicy Bypass -File ./build.ps1",
+    "prebuild:linux": "npm run test",
+    "build:linux": "bash ./build_linux.sh"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "bin": {
+    "mmex-sync": "./src/index.js"
+  },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
     "chokidar": "^5.0.0",
@@ -19,6 +28,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.0",
+    "jest": "^30.4.2",
     "rcedit": "^5.0.2"
   }
 }
