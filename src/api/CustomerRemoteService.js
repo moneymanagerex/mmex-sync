@@ -1,5 +1,11 @@
 import { RemoteService } from './RemoteService.js';
 
+/* 
+   This is a sample class for direct connect to remote REST services without PocketBase SDK. It can be used as a template for custom implementations or for direct REST API connections. It is registered in the RemoteServiceFactory under the type 'customer'.
+   need to be tested with a real REST API and may require adjustments based on the specific API structure and authentication methods used by the target service. The subscribe() method is not implemented as it depends on the capabilities of the remote service (e.g., WebSockets, Server-Sent Events, etc.) and would need to be customized accordingly.
+*/
+
+
 const buildHeaders = (token) => {
     const headers = {
         'Content-Type': 'application/json'
