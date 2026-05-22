@@ -58,8 +58,8 @@ async function main() {
 
         // show all relevant parametert from configuration
         console.log("Path DB: " + config.dbPath);
-        console.log("URL: " + config.pbUrl);
         console.log("Server Type: " + (config.serverType || 'pocketbase'));
+        console.log("URL: " + config.pbUrl);
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
 
