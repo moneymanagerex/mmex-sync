@@ -44,6 +44,14 @@ export class PocketBaseService {
         this.client.authStore.clear();
     }
 
+    isTokenValid() {
+        return this.client.authStore.isValid;
+    }
+
+    async refreshToken() {
+        return await this.client.collection(this.authCollection).authRefresh();
+    }
+
     /**
      * Retrieves the full list, optionally filtered by date
      * @param {string} collection - Name of the table/collection

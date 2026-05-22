@@ -78,26 +78,17 @@ async function main() {
             configMgr.updateConfig(config);
         } else if (config.token) {
             pb.setToken(config.token);
-            if (pb.isTokenValid()) { // Verifica se il token non è strutturalmente scaduto
-                try {
-                    console.log("🔄 Token found. Attempting refresh...");
-                    await pb.refreshToken(); // Esegue l'authRefresh() interno
-
-                    // Salva il nuovo token generato dal server PocketBase
-                    config.token = pb.getToken();
-                    await configMgr.updateConfig(config);
-                    console.log("✅ Token refreshed successfully.");
-                } catch (refreshErr) {
-                    console.warn("⚠️ Token refresh failed on server. Clearing saved token.");
-                    config.token = null;
-                    await configMgr.updateConfig(config);
-                    throw new Error("Session expired on server. Please run again providing your password.");
-                }
-            } else {
-                console.warn("⚠️ Token is expired.");
+            pb.authCollection = config.pbAuthCollection;
+            try {
+                await pb.refreshToken(); // Esegue l'authRefresh() interno
+                // Salva il nuovo token generato dal server PocketBase
+                config.token = pb.getToken();
+                await configMgr.updateConfig(config);
+            } catch (refreshErr) {
+                console.warn("⚠️ Token refresh failed on server. Clearing saved token.");
                 config.token = null;
                 await configMgr.updateConfig(config);
-                throw new Error("Saved session expired. Please run again providing your password.");
+                throw new Error("Session expired on server. Please run again providing your password.");
             }
         } else {
             throw new Error("No authentication method found. Please provide a password.");
