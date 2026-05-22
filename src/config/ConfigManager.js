@@ -40,7 +40,7 @@ export class ConfigManager {
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
-            mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
+            mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'sync',
             lastSync: this.config.lastSync || null
         };
