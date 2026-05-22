@@ -3,6 +3,7 @@ import PocketBase from 'pocketbase';
 import { EventSource } from 'eventsource';
 import { SYNC_CONFIG, SYNC_ORDER } from '../config/table_config.js';
 import { ProgressBarService } from './../utils/ProgressBarService.js';
+import { RemoteService } from './RemoteService.js';
 
 // TODO: instead of using SYNC_CONFIG which contains columns to synchronize
 // we should call get Collection to retrieve available columns on the server
@@ -10,8 +11,9 @@ import { ProgressBarService } from './../utils/ProgressBarService.js';
 
 global.EventSource = EventSource;
 
-export class PocketBaseService {
+export class PocketBaseService extends RemoteService {
     constructor(url) {
+        super(url);
         this.client = new PocketBase(url);
     }
 

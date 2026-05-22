@@ -6,6 +6,7 @@ import enquirer from 'enquirer';
 import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
+const DEFAULT_SERVER_TYPE = 'pocketbase';
 
 export class ConfigManager {
     constructor(cliArgs) {
@@ -14,6 +15,11 @@ export class ConfigManager {
         this.profile = cliArgs.profile || 'default';
         this.configPath = path.join(this.configDir, `${this.profile}.${CONFIG_FILE_EXTENSION}`);
         this.config = {};
+        this.serverType = typeof cliArgs.serverType === 'string'
+            ? cliArgs.serverType.toLowerCase()
+            : cliArgs.serverType === true
+                ? DEFAULT_SERVER_TYPE
+                : undefined;
     }
 
     updateConfig(configData) {
@@ -36,13 +42,13 @@ export class ConfigManager {
         // 2. Define required parameters and resolve the origin
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
+            serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
             mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
-            defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'sync',
-            lastSync: this.config.lastSync || null
+            defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'sync',            serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,            lastSync: this.config.lastSync || null
         };
 
         // 3. If data is missing, ask via Prompt
@@ -103,6 +109,7 @@ export class ConfigManager {
             console.log(`* URL = ${parsed.pbUrl || ''}`);
             console.log(`* Auth Collection = ${parsed.pbAuthCollection || 'unknown'}`);
             console.log(`* User = ${parsed.pbUser || ''}`);
+            console.log(`* Server Type = ${parsed.serverType || DEFAULT_SERVER_TYPE}`);
             console.log(`* exe = ${parsed.mmexExe || ''}`);
             console.log(`* defaultMode = ${parsed.defaultMode || ''}`);
             console.log(`* lastSync = ${parsed.lastSync || ''}`);
@@ -184,6 +191,7 @@ export class ConfigManager {
             pbUser: configData.pbUser,
             mmexExe: configData.mmexExe,
             defaultMode: configData.defaultMode,
+            serverType: configData.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             lastSync: configData.lastSync,
             encryptedToken: token ? protect(token) : this.config.encryptedToken
         };
