@@ -6,6 +6,7 @@ import enquirer from 'enquirer';
 import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
+const DEFAULT_SERVER_TYPE = 'pocketbase';
 
 export class ConfigManager {
     constructor(cliArgs) {
@@ -14,6 +15,11 @@ export class ConfigManager {
         this.profile = cliArgs.profile || 'default';
         this.configPath = path.join(this.configDir, `${this.profile}.${CONFIG_FILE_EXTENSION}`);
         this.config = {};
+        this.serverType = typeof cliArgs.serverType === 'string'
+            ? cliArgs.serverType.toLowerCase()
+            : cliArgs.serverType === true
+                ? DEFAULT_SERVER_TYPE
+                : undefined;
     }
 
     updateConfig(configData) {
@@ -36,6 +42,7 @@ export class ConfigManager {
         // 2. Define required parameters and resolve the origin
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
+            serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
@@ -100,6 +107,7 @@ export class ConfigManager {
 
             console.log(`\n=== PROFILE: ${profileToLoad} ===`);
             console.log(`* DB Path = ${parsed.dbPath || ''}`);
+            console.log(`* Server Type = ${parsed.serverType || DEFAULT_SERVER_TYPE}`);
             console.log(`* URL = ${parsed.pbUrl || ''}`);
             console.log(`* Auth Collection = ${parsed.pbAuthCollection || 'unknown'}`);
             console.log(`* User = ${parsed.pbUser || ''}`);
@@ -179,6 +187,7 @@ export class ConfigManager {
 
         const toSave = {
             dbPath: configData.dbPath,
+            serverType: configData.serverType,
             pbUrl: configData.pbUrl,
             pbAuthCollection: configData.pbAuthCollection,
             pbUser: configData.pbUser,

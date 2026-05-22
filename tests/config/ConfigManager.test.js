@@ -90,7 +90,24 @@ describe('ConfigManager', () => {
             expect(enquirer.prompt).not.toHaveBeenCalled();
             expect(finalConfig.dbPath).toBe('/test/db.mmb');
             expect(finalConfig.token).toBe('token123'); // decrypted
+            expect(finalConfig.serverType).toBe('pocketbase');
             expect(fs.writeFileSync).toHaveBeenCalled();
+        });
+
+        test('defaults serverType to pocketbase when not specified', async () => {
+            const configManager = new ConfigManager({});
+            fs.existsSync.mockReturnValue(false);
+            enquirer.prompt.mockResolvedValue({
+                dbPath: '/prompt/db.mmb',
+                pbUrl: 'http://prompt',
+                pbUser: 'prompt@user.com',
+                pbPass: 'secret',
+                mmexExe: 'C:\prompt.exe'
+            });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(finalConfig.serverType).toBe('pocketbase');
         });
 
         test('asks for missing values via enquirer if they are not in the config', async () => {
@@ -116,7 +133,8 @@ describe('ConfigManager', () => {
             const cliArgs = {
                 db: '/cli/db.mmb',
                 url: 'http://cli',
-                user: 'cli@user.com'
+                user: 'cli@user.com',
+                serverType: 'customer'
             };
             const configManager = new ConfigManager(cliArgs);
             
@@ -124,6 +142,7 @@ describe('ConfigManager', () => {
                 dbPath: '/test/db.mmb',
                 pbUrl: 'http://test',
                 pbUser: 'user@test.com',
+                serverType: 'pocketbase',
                 encryptedToken: 'encrypted_token123'
             };
 
@@ -136,6 +155,7 @@ describe('ConfigManager', () => {
             expect(finalConfig.dbPath).toBe('/cli/db.mmb');
             expect(finalConfig.pbUrl).toBe('http://cli');
             expect(finalConfig.pbUser).toBe('cli@user.com');
+            expect(finalConfig.serverType).toBe('customer');
         });
     });
 

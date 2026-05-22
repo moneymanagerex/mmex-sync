@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { ConfigManager } from './config/ConfigManager.js';
 import { DatabaseService } from './database/DatabaseService.js';
-import { PocketBaseService } from './api/PocketBaseService.js';
+import { RemoteServiceFactory } from './api/RemoteServiceFactory.js';
 import { SyncService } from './services/SyncService.js';
 import { WatcherService } from './services/WatcherService.js';
 import { spawn } from 'child_process';
@@ -58,6 +58,7 @@ async function main() {
 
         // show all relevant parametert from configuration
         console.log("Path DB: " + config.dbPath);
+        console.log("Server Type: " + (config.serverType || 'pocketbase'));
         console.log("URL: " + config.pbUrl);
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
@@ -67,22 +68,22 @@ async function main() {
 
         db.connect(args.create);
 
-        const pb = new PocketBaseService(config.pbUrl);
+        const remoteService = RemoteServiceFactory.create(config.serverType, config.pbUrl);
 
         if (config.pbPass) { // password is supplied invalidate any token
             console.log("🔑 Authenticating with password...");
-            pb.invalidateToken();
-            await pb.authenticate(config.pbUser, config.pbPass);
-            config.token = pb.getToken();
-            config.pbAuthCollection = pb.authCollection;
+            remoteService.invalidateToken();
+            await remoteService.authenticate(config.pbUser, config.pbPass);
+            config.token = remoteService.getToken();
+            config.pbAuthCollection = remoteService.authCollection;
             configMgr.updateConfig(config);
         } else if (config.token) {
-            pb.setToken(config.token);
-            pb.authCollection = config.pbAuthCollection;
+            remoteService.setToken(config.token);
+            remoteService.authCollection = config.pbAuthCollection;
             try {
-                await pb.refreshToken(); // Esegue l'authRefresh() interno
-                // Salva il nuovo token generato dal server PocketBase
-                config.token = pb.getToken();
+                await remoteService.refreshToken(); // Esegue l'authRefresh() interno
+                // Salva il nuovo token generato dal server
+                config.token = remoteService.getToken();
                 await configMgr.updateConfig(config);
             } catch (refreshErr) {
                 console.warn("⚠️ Token refresh failed on server. Clearing saved token.");
@@ -94,15 +95,15 @@ async function main() {
             throw new Error("No authentication method found. Please provide a password.");
         }
 
-        const sync = new SyncService(db, pb, configMgr, args);
+        const sync = new SyncService(db, remoteService, configMgr, args);
 
         if (args.clearServer) {
             const { confirm } = await enquirer.prompt({
                 type: 'confirm',
                 name: 'confirm',
-                message: 'Are you sure you want to clear ALL data on the PocketBase server?'
+                message: 'Are you sure you want to clear ALL data on the remote server?'
             });
-            if (confirm) await pb.clearRemoteServer();
+            if (confirm) await remoteService.clearRemoteServer();
         }
 
         if (args.clearDb) {
@@ -134,7 +135,7 @@ async function main() {
             case 'watch':
                 // Initial cycle -> Start Watcher -> Launch MMEX (waiting) -> Stop Watcher -> Final cycle
                 await sync.runSyncCycle();
-                const watcher = new WatcherService(db, pb, sync, config);
+                const watcher = new WatcherService(db, remoteService, sync, config);
                 await watcher.start();
 
                 await launchMMEX(config.mmexExe, config.dbPath, false);

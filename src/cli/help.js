@@ -23,7 +23,8 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --setDefaultMode=X  Sets the default mode for the profile
                       Values: sync (default), run, watch
   --exe=path          Path to the MMEX.exe executable
-                      Default: C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe					  
+                      Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
+  --serverType=name   Remote server type to use. Default: pocketbase
   --create            Delete and Recreates a new empty database
   --verbose           Shows detailed logs of each operation.
 
