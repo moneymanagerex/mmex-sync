@@ -3,6 +3,9 @@
 > [!WARNING]
 > This is a **Proof of Concept (POC)**, not production-ready software. It is still under active development and may not work perfectly in all edge cases.
 
+[![pages-build-deployment](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment)
+
+
 ![Money Manager Ex Sync - Record-Level Safe Sync Banner](assets/images/mmex-sync-banner.png)
 
 
