@@ -13,6 +13,7 @@
 - [how to contribute](CONTRIB.md)
 - [Setup pocketbase server](README_POCKETBASE.md)
 - [Disclaimer](DISCLAIMER.md)
+- [First Run](docs/startup.md)
 
 ## 🎯 Overview
 
@@ -84,12 +85,12 @@ MMEX Path: C:\Program Files\MoneyManagerEx\bin\mmex.exe
 🏗️  [Create] Creazione nuovo database in corso: test.mmb
 ✅ Database creato e pronto per la sincronizzazione.
 ```
-### 1. Normal run
+### 1. Normal run (Default Mode)
 After first launch, you can run the program with:
 ```bash
 C:\> mmex-sync 
 ```
-to perform a simple pull and push cycle.
+which executes the default mode (`--run`): initial sync → launch MMEX → final sync.
 
 ### 2. Daily Workflow Modes
 
@@ -175,7 +176,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --user=email        PocketBase login email
   --pass=password     Password (not saved, generates a token)
   --setDefaultMode=X  Sets the default mode for the profile
-                      Values: sync (default), run, watch
+                      Values: sync, run (default), watch
   --exe=path          Path to the MMEX.exe executable
                       Default: C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe					  
   --create            Delete and Recreates a new empty database
