@@ -11,9 +11,8 @@ Before you begin, ensure you have the following installed on your system:
 - **npm** (Bundled with Node.js)
 - **Git**
 
-### OS-Specific Dependencies (Required for compiling the executable):
-- **Windows:** PowerShell (to run `build.ps1`)
-- **Linux:** Bash (to run `build_linux.sh`)
+### Specific Dependencies (Required for compiling the executable):
+- PowerShell (to run `build.ps1`)
 
 ---
 
@@ -25,7 +24,7 @@ Follow these steps to clone the repository and install all required dependencies
 Open your terminal and clone the project using Git:
 
 ```bash
-git clone https://github.com/wolfsolver/mmex-sync.git
+git clone https://github.com/moneymanagerex/mmex-sync.git
 cd mmex-sync
 
 ```
@@ -39,7 +38,7 @@ npm install
 
 ```
 
-> ⚠️ **Note for Windows Users:** While installing `better-sqlite3`, Node.js might need to compile native C++ components. If you encounter compilation errors, ensure you have the Windows Build Tools installed (`npm install --global windows-build-tools` from an administrative terminal, or via Visual Studio Build Tools).
+> ⚠️ **Note on Windows:** While installing `better-sqlite3`, Node.js might need to compile native C++ components. If you encounter compilation errors, ensure you have the Windows Build Tools installed (`npm install --global windows-build-tools` from an administrative terminal, or via Visual Studio Build Tools).
 
 ---
 
@@ -82,7 +81,7 @@ The build process bundles the JavaScript files (using `esbuild`), generates the 
 
 The build commands **automatically** run the test suite beforehand. If any test fails, the build process will abort immediately to prevent generating a broken executable.
 
-### Build on Windows
+### Build for Windows
 
 Generates the final executable file at `dist\\mmex-sync.exe`:
 
@@ -91,7 +90,7 @@ npm run build:windows
 
 ```
 
-### Build on Linux
+### Build for Linux
 
 Generates the native executable for Linux environments:
 
