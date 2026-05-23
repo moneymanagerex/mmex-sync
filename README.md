@@ -57,7 +57,7 @@ If you don't want to manage your own infrastructure, you can request access to t
 ### 2. Self-Hosted Server (Private & Control)
 For maximum privacy and control over your financial data, you can easily deploy your own PocketBase instance on any cloud provider, VPS, or home server (e.g., Raspberry Pi, Docker, etc.).
 * Download PocketBase from the official website.
-* Deploy the required collections schema (see the `schema/` folder in this repository).
+* Deploy the required collections schema (see the `pb_schema_selfhost.json` file).
 * Use your custom URL during the first setup (e.g., `http://your-vps-ip:8090`).
 
 
