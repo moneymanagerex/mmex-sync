@@ -124,7 +124,8 @@ async function main() {
         console.log(`🚀 MMEX-Sync | Profile: ${configMgr.profile} | Mode: ${mode.toUpperCase()}`);
 
         if ((mode === 'run' || mode === 'watch') && !fs.existsSync(config.mmexExe)) {
-            throw new Error(`MMEX executable not found at path: ${config.mmexExe}. Use --exe to specify it.`);
+            console.warn(`⚠️ MMEX executable not found at path: ${config.mmexExe}. Switching to sync mode.`);
+            mode = 'sync';
         }
 
         // 1. Mandatory init (Triggers & Columns) as in the old core
