@@ -1,10 +1,10 @@
 ---
 layout: default
-title: MMEX Sync Engine
+title: MMEX Sync
 description: Sidecar modernization for Money Manager Ex. Multi-device cloud synchronization without modifying the original desktop source code.
 ---
 
-# MMEX Sync Engine (Sidecar Architecture)
+# MMEX Sync (Sidecar Architecture)
 
 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
   <img src="https://img.shields.io/badge/Stage-POC-yellow?style=for-the-badge" alt="POC Stage">
