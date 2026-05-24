@@ -7,10 +7,17 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
-    "prebuild:windows": "npm run test",
-    "build:windows": "powershell -ExecutionPolicy Bypass -File ./build.ps1",
-    "prebuild:linux": "npm run test",
-    "build:linux": "bash ./build_linux.sh"
+    
+    "prebuild": "npm run test",
+    
+    "build:win": "node build.js --os=win", 
+    "build:linux": "node build.js --os=linux",
+    
+    "package:win": "node package-dist.js --os=win",
+    "package:linux": "node package-dist.js --os=linux",
+    
+    "release:win": "npm run build:win && npm run package:win",
+    "release:linux": "npm run build:linux && npm run package:linux"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +36,7 @@
   "devDependencies": {
     "esbuild": "^0.28.0",
     "jest": "^30.4.2",
-    "rcedit": "^5.0.2"
+    "rcedit": "^5.0.2",
+    "archiver": "^7.0.1"
   }
 }
