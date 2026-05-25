@@ -3,9 +3,11 @@ import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
 
+// 1. Configurazione Iniziale e Target OS
 const args = process.argv.slice(2);
 const osArg = args.find(arg => arg.startsWith('--os='));
-const targetOS = osArg ? osArg.split('=')[1] : (process.platform === 'win32' ? 'win' : 'linux');
+// Rileva l'OS di destinazione ('linux', 'win' o 'mac')
+const targetOS = osArg ? osArg.split('=')[1] : (process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux');
 
 const isTargetWindows = targetOS === 'win';
 const exeExtension = isTargetWindows ? '.exe' : '';
@@ -13,23 +15,30 @@ const binaryName = `mmex-sync${exeExtension}`;
 const distFolder = path.join('dist', targetOS);
 
 async function main() {
-    console.log(`\n🚀 Avvio build per target: ${targetOS.toUpperCase()}`);
+    console.log(`\n🚀 AVVIO BUILD CROSS-PLATFORM CON PKG -> Target: ${targetOS.toUpperCase()}`);
 
+    // Crea la cartella di destinazione (es. dist/linux/ o dist/win/)
     if (!fs.existsSync(distFolder)) {
         fs.mkdirSync(distFolder, { recursive: true });
     }
 
-    console.log("1. Bundling con esbuild...");
+    // --------------------------------------------------------------------------
+    // PASSO 1: BUNDLING CON ESBUILD (Uniamo tutto il tuo JS in un unico file)
+    // --------------------------------------------------------------------------
+    console.log("\n📦 Passo 1: Compilazione del codice sorgente con esbuild...");
+    const bundlePath = path.join(distFolder, 'bundle.js');
+
     await esbuild.build({
         entryPoints: ['src/index.js'],
         bundle: true,
         platform: 'node',
-        target: 'node20',
-        outfile: path.join(distFolder, 'bundle.js'),
+        target: 'node18', // Scegliamo un target stabile supportato da pkg
+        outfile: bundlePath,
         format: 'cjs',
         plugins: [{
             name: 'alias-bindings',
             setup(build) {
+                // Configurazione per fare in modo che il modulo nativo SQLite cerchi il file .node ACCANTO all'eseguibile finalizzato
                 build.onResolve({ filter: /^bindings$/ }, args => {
                     return { path: args.path, namespace: 'bindings-alias' }
                 });
@@ -51,50 +60,66 @@ async function main() {
         }]
     });
 
-    console.log("2. Generazione SEA blob...");
-    execSync('node --experimental-sea-config sea-config.json', { stdio: 'inherit' });
+    // --------------------------------------------------------------------------
+    // PASSO 2: COMPILAZIONE CON PKG (Creazione dell'eseguibile autonomo)
+    // --------------------------------------------------------------------------
+    console.log("\n🛠️ Passo 2: Compilazione del binario nativo con PKG...");
+    
+    // Mappiamo i target di pkg: node18-linux, node18-win, node18-macos
+    const pkgTarget = targetOS === 'win' ? 'node18-win-x64' : targetOS === 'mac' ? 'node18-macos-x64' : 'node18-linux-x64';
+    const outputPath = path.join(distFolder, binaryName);
 
-    console.log(`3. Copia del binario base di Node.js...`);
-    const destExecutable = path.join(distFolder, binaryName);
-    fs.copyFileSync(process.execPath, destExecutable);
+    try {
+        // Lanciamo pkg passandogli il bundle creato da esbuild
+ 		execSync(`npx pkg "${bundlePath}" --target ${pkgTarget} --output "${outputPath}"`, { stdio: 'inherit' });		
+        console.log(`✅ Binario nativo autoinstallante creato con successo da pkg!`);
+    } catch (err) {
+        console.error("❌ Errore durante la compilazione con pkg:", err.message);
+        throw err;
+    }
 
-    // Gestione Icona (Solo se il target è Windows e siamo fisicamente su Windows)
+    // --------------------------------------------------------------------------
+    // PASSO 3: GESTIONE ICONA (Solo Windows)
+    // --------------------------------------------------------------------------
     if (isTargetWindows && process.platform === 'win32') {
         const iconPath = path.join('assets', 'icons', 'icon.ico');
         const rceditPath = path.join('node_modules', 'rcedit', 'bin', 'rcedit-x64.exe');
         if (fs.existsSync(iconPath) && fs.existsSync(rceditPath)) {
-            console.log("4. Applicazione icona personalizzata (Windows)...");
-            execSync(`"${rceditPath}" "${destExecutable}" --set-icon "${iconPath}"`, { stdio: 'inherit' });
+            console.log("\n🎨 Passo 3: Applicazione icona personalizzata (Windows)...");
+            execSync(`"${rceditPath}" "${outputPath}" --set-icon "${iconPath}"`, { stdio: 'inherit' });
         }
     }
 
-    console.log("5. Injection del blob con postject...");
-    const buffer = fs.readFileSync(destExecutable);
-    const match = buffer.toString('utf8').match(/NODE_SEA_FUSE_[a-f0-9]+/);
-    const sentinel = match ? match[0] : "NODE_SEA_FUSE_f1422af715635223";
-    
-    execSync(`npx postject "${destExecutable}" NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse ${sentinel}`, { stdio: 'inherit' });
-
-    console.log("6. Copia del modulo nativo better_sqlite3.node...");
+    // --------------------------------------------------------------------------
+    // PASSO 4 & 5: COPIA DEL MODULO NATIVO SQLITE E FILE ASSETS
+    // --------------------------------------------------------------------------
+    console.log("\n📂 Passo 4: Copia del modulo nativo SQLITE (.node) accanto all'eseguibile...");
     const sqliteNodeSrc = path.join('node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
     const sqliteNodeDest = path.join(distFolder, 'better_sqlite3.node');
     if (fs.existsSync(sqliteNodeSrc)) {
         fs.copyFileSync(sqliteNodeSrc, sqliteNodeDest);
+        console.log("✅ better_sqlite3.node pronto.");
     } else {
         console.warn(`⚠️ ATTENZIONE: better_sqlite3.node non trovato in ${sqliteNodeSrc}!`);
     }
 
-    console.log("7. Copia file SQL...");
+    console.log("📋 Passo 5: Copia dei file SQL di configurazione iniziale...");
     const sqlSrc = path.join('assets', 'sql', 'tables_v1_for_sync.sql');
     const sqlDest = path.join(distFolder, 'tables_v1_for_sync.sql');
     if (fs.existsSync(sqlSrc)) {
         fs.copyFileSync(sqlSrc, sqlDest);
+        console.log("✅ File SQL pronto.");
     }
 
-    console.log(`🎉 Build ${targetOS.toUpperCase()} completata con successo!\n`);
+    // Pulizia file temporaneo del bundle (opzionale, ma lascia la cartella pulita)
+    try {
+        if (fs.existsSync(bundlePath)) fs.unlinkSync(bundlePath);
+    } catch (e) {}
+
+    console.log(`\n🎉 PROCESSO COMPLETATO! L'applicazione è pronta in: ${outputPath}\n`);
 }
 
 main().catch(err => {
-    console.error(err);
+    console.error("❌ Errore bloccante durante la build:", err);
     process.exit(1);
 });
