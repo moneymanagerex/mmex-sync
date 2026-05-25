@@ -64,14 +64,14 @@ async function main() {
     // PASSO 2: COMPILAZIONE CON PKG (Creazione dell'eseguibile autonomo)
     // --------------------------------------------------------------------------
     console.log("\n🛠️ Passo 2: Compilazione del binario nativo con PKG...");
-    
+
     // Mappiamo i target di pkg: node18-linux, node18-win, node18-macos
     const pkgTarget = targetOS === 'win' ? 'node18-win-x64' : targetOS === 'mac' ? 'node18-macos-x64' : 'node18-linux-x64';
     const outputPath = path.join(distFolder, binaryName);
 
     try {
         // Lanciamo pkg passandogli il bundle creato da esbuild
- 		execSync(`npx pkg "${bundlePath}" --target ${pkgTarget} --output "${outputPath}"`, { stdio: 'inherit' });		
+        execSync(`npx pkg "${bundlePath}" --target ${pkgTarget} --output "${outputPath}"`, { stdio: 'inherit' });
         console.log(`✅ Binario nativo autoinstallante creato con successo da pkg!`);
     } catch (err) {
         console.error("❌ Errore durante la compilazione con pkg:", err.message);
@@ -82,12 +82,13 @@ async function main() {
     // PASSO 3: GESTIONE ICONA (Solo Windows)
     // --------------------------------------------------------------------------
     if (isTargetWindows && process.platform === 'win32') {
-        const iconPath = path.join('assets', 'icons', 'icon.ico');
+        console.log("\n🎨 Passo 3: [SALTATO] Evito l'uso di rcedit per non corrompere il binario pkg...");
+        /* const iconPath = path.join('assets', 'icons', 'icon.ico');
         const rceditPath = path.join('node_modules', 'rcedit', 'bin', 'rcedit-x64.exe');
         if (fs.existsSync(iconPath) && fs.existsSync(rceditPath)) {
-            console.log("\n🎨 Passo 3: Applicazione icona personalizzata (Windows)...");
             execSync(`"${rceditPath}" "${outputPath}" --set-icon "${iconPath}"`, { stdio: 'inherit' });
         }
+        */
     }
 
     // --------------------------------------------------------------------------
@@ -114,7 +115,7 @@ async function main() {
     // Pulizia file temporaneo del bundle (opzionale, ma lascia la cartella pulita)
     try {
         if (fs.existsSync(bundlePath)) fs.unlinkSync(bundlePath);
-    } catch (e) {}
+    } catch (e) { }
 
     console.log(`\n🎉 PROCESSO COMPLETATO! L'applicazione è pronta in: ${outputPath}\n`);
 }
