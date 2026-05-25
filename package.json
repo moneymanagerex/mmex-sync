@@ -1,6 +1,6 @@
 {
   "name": "mmex-sync",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A non-intrusive, \"Offline-First\" synchronization system for Money Manager Ex (MMEX) with PocketBase as backend.",
   "main": "src/index.js",
   "scripts": {
