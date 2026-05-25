@@ -6,6 +6,7 @@ import enquirer from 'enquirer';
 import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
+const DEFAULT_SERVER_TYPE = 'pocketbase';
 
 export class ConfigManager {
     constructor(cliArgs) {
@@ -14,6 +15,11 @@ export class ConfigManager {
         this.profile = cliArgs.profile || 'default';
         this.configPath = path.join(this.configDir, `${this.profile}.${CONFIG_FILE_EXTENSION}`);
         this.config = {};
+        this.serverType = typeof cliArgs.serverType === 'string'
+            ? cliArgs.serverType.toLowerCase()
+            : cliArgs.serverType === true
+                ? DEFAULT_SERVER_TYPE
+                : undefined;
     }
 
     updateConfig(configData) {
@@ -36,12 +42,13 @@ export class ConfigManager {
         // 2. Define required parameters and resolve the origin
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
+            serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
-            mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
-            defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'sync',
+            mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
+            defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
             lastSync: this.config.lastSync || null
         };
 
@@ -100,6 +107,7 @@ export class ConfigManager {
 
             console.log(`\n=== PROFILE: ${profileToLoad} ===`);
             console.log(`* DB Path = ${parsed.dbPath || ''}`);
+            console.log(`* Server Type = ${parsed.serverType || DEFAULT_SERVER_TYPE}`);
             console.log(`* URL = ${parsed.pbUrl || ''}`);
             console.log(`* Auth Collection = ${parsed.pbAuthCollection || 'unknown'}`);
             console.log(`* User = ${parsed.pbUser || ''}`);
@@ -160,15 +168,58 @@ export class ConfigManager {
             questions.push({ type: 'password', name: 'pbPass', message: 'Password PocketBase:' });
         }
         if (!current.mmexExe && !this.config.mmexExe) {
-            questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: 'C:\Program Files\MoneyManagerEx\bin\mmex.exe' });
+            const foundPaths = this._searchMMEXExecutable();
+            
+            if (foundPaths.length > 0) {
+                const choices = foundPaths.map(p => ({ name: p, value: p }));
+                choices.push({ name: 'Enter path manually...', value: 'MANUAL' });
+                
+                questions.push({
+                    type: 'select',
+                    name: 'mmexExe',
+                    message: 'Select MoneyManagerEx executable:',
+                    choices: choices
+                });
+            } else {
+                questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe' });
+            }
         }
 
         if (questions.length > 0) {
             const answers = await enquirer.prompt(questions);
+            
+            // If user selected "Enter path manually", prompt for manual input
+            if (answers.mmexExe === 'MANUAL') {
+                const { manualPath } = await enquirer.prompt({
+                    type: 'input',
+                    name: 'manualPath',
+                    message: 'Enter MoneyManagerEx executable path:',
+                    default: 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe'
+                });
+                answers.mmexExe = manualPath;
+            }
+            
             return { ...current, ...answers };
         }
 
         return current;
+    }
+
+    _searchMMEXExecutable() {
+        const commonPaths = [
+            'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
+            'C:\\Program Files (x86)\\Money Manager Ex\\bin\\mmex.exe',
+            'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
+            'C:\\Program Files (x86)\\MoneyManagerEx\\bin\\mmex.exe'
+        ];
+
+        return commonPaths.filter(p => {
+            try {
+                return fs.existsSync(p);
+            } catch (e) {
+                return false;
+            }
+        });
     }
 
     /**
@@ -179,6 +230,7 @@ export class ConfigManager {
 
         const toSave = {
             dbPath: configData.dbPath,
+            serverType: configData.serverType,
             pbUrl: configData.pbUrl,
             pbAuthCollection: configData.pbAuthCollection,
             pbUser: configData.pbUser,

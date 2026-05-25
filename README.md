@@ -3,6 +3,9 @@
 > [!WARNING]
 > This is a **Proof of Concept (POC)**, not production-ready software. It is still under active development and may not work perfectly in all edge cases.
 
+[![pages-build-deployment](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment)
+
+
 ![Money Manager Ex Sync - Record-Level Safe Sync Banner](assets/images/mmex-sync-banner.png)
 
 
@@ -10,6 +13,7 @@
 - [how to contribute](CONTRIB.md)
 - [Setup pocketbase server](README_POCKETBASE.md)
 - [Disclaimer](DISCLAIMER.md)
+- [First Run](docs/startup.md)
 
 ## 🎯 Overview
 
@@ -54,7 +58,7 @@ If you don't want to manage your own infrastructure, you can request access to t
 ### 2. Self-Hosted Server (Private & Control)
 For maximum privacy and control over your financial data, you can easily deploy your own PocketBase instance on any cloud provider, VPS, or home server (e.g., Raspberry Pi, Docker, etc.).
 * Download PocketBase from the official website.
-* Deploy the required collections schema (see the `schema/` folder in this repository).
+* Deploy the required collections schema (see the `pb_schema_selfhost.json` file).
 * Use your custom URL during the first setup (e.g., `http://your-vps-ip:8090`).
 
 
@@ -81,12 +85,12 @@ MMEX Path: C:\Program Files\MoneyManagerEx\bin\mmex.exe
 🏗️  [Create] Creazione nuovo database in corso: test.mmb
 ✅ Database creato e pronto per la sincronizzazione.
 ```
-### 1. Normal run
+### 1. Normal run (Default Mode)
 After first launch, you can run the program with:
 ```bash
 C:\> mmex-sync 
 ```
-to perform a simple pull and push cycle.
+which executes the default mode (`--run`): initial sync → launch MMEX → final sync.
 
 ### 2. Daily Workflow Modes
 
@@ -172,7 +176,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --user=email        PocketBase login email
   --pass=password     Password (not saved, generates a token)
   --setDefaultMode=X  Sets the default mode for the profile
-                      Values: sync (default), run, watch
+                      Values: sync, run (default), watch
   --exe=path          Path to the MMEX.exe executable
                       Default: C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe					  
   --create            Delete and Recreates a new empty database
