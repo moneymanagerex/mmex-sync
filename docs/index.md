@@ -2,6 +2,7 @@
 layout: default
 title: MMEX Sync
 description: Sidecar modernization for Money Manager Ex. Multi-device cloud synchronization without modifying the original desktop source code.
+nav_order: 1
 ---
 
 # MMEX Sync (Sidecar Architecture)
