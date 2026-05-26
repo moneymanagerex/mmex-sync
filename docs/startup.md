@@ -1,3 +1,9 @@
+---
+layout: default
+title: Sync Setup Guide
+nav_order: 2
+---
+
 # Synchronization Setup Guide with MMEX Sync
 
 This guide explains the correct procedure to set up the new synchronization system based on **PocketBase**. 

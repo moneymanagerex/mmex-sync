@@ -4,6 +4,9 @@
 > This is a **Proof of Concept (POC)**, not production-ready software. It is still under active development and may not work perfectly in all edge cases.
 
 [![pages-build-deployment](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment)
+[![Run Tests on Pull Request](https://github.com/moneymanagerex/mmex-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/tests.yml)
+[![Create Production Release](https://github.com/moneymanagerex/mmex-sync/actions/workflows/release.yml/badge.svg?branch=stable)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/release.yml)
+![Service Status](https://img.shields.io/badge/dynamic/json?style=flat&label=Shared%20Server&query=%24.message&color=success&url=https%3A%2F%2Fmmex-sync.prudenzano.org%2Fapi%2Fhealth)
 
 
 ![Money Manager Ex Sync - Record-Level Safe Sync Banner](assets/images/mmex-sync-banner.png)

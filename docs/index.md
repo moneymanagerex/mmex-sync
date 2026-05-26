@@ -7,13 +7,14 @@ description: Sidecar modernization for Money Manager Ex. Multi-device cloud sync
 # MMEX Sync (Sidecar Architecture)
 
 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-  <img src="https://img.shields.io/badge/Stage-POC-yellow?style=for-the-badge" alt="POC Stage">
-  <img src="https://img.shields.io/badge/PocketBase-Active-brightgreen?style=for-the-badge" alt="PocketBase Status">
+  <img src="https://img.shields.io/badge/Stage-Pilot-yellow?style=for-the-badge" alt="Pilot Stage">
+  <img src="https://github.com/moneymanagerex/mmex-sync/actions/workflows/release.yml/badge.svg?branch=stable" alt="Production Release">
+  <img src="https://img.shields.io/badge/dynamic/json?style=flat&label=Shared%20Server%20Status&query=%24.message&color=success&url=https%3A%2F%2Fmmex-sync.prudenzano.org%2Fapi%2Fhealth" alt="Shared Server Status">
 </div>
 
 Welcome to the non-intrusive, **"Offline-First"** synchronization system for Money Manager Ex (MMEX). It enables seamless multi-device sync (Windows ↔ Cloud ↔ Android) without requiring any modifications to the core MMEX desktop C++ source code.
 
-![banner](images/mmex-sync-banner.png) {.center}
+![banner](images/mmex-sync-banner.png)
 
 ---
 
