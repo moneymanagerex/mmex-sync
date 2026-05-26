@@ -28,6 +28,9 @@ async function main() {
     console.log("\n📦 Passo 1: Compilazione del codice sorgente con esbuild...");
     const bundlePath = path.join(distFolder, 'bundle.js');
 
+    const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    const appVersion = packageJson.version || '0.0.1';
+
     await esbuild.build({
         entryPoints: ['src/index.js'],
         bundle: true,
@@ -35,6 +38,9 @@ async function main() {
         target: 'node18', // Scegliamo un target stabile supportato da pkg
         outfile: bundlePath,
         format: 'cjs',
+        define: {
+            '__APP_VERSION__': JSON.stringify(appVersion)
+        },
         plugins: [{
             name: 'alias-bindings',
             setup(build) {

@@ -24,6 +24,17 @@ async function main() {
         process.exit(0);
     }
 
+    if (args.version) {
+        try {
+            console.log(`mmex-sync v${__APP_VERSION__}`);
+        }
+        catch (err) {
+            // fail silently if __APP_VERSION__ is not defined (build time)
+            console.log(`unknow version`);
+        }
+        process.exit(0);
+    }
+
     if (args.listProfile) {
         const configMgr = new ConfigManager(args);
         configMgr.listProfiles();
