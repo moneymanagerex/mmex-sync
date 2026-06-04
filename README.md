@@ -9,6 +9,8 @@
 ![Service Status](https://img.shields.io/badge/dynamic/json?style=flat&label=Shared%20Server&query=%24.message&color=success&url=https%3A%2F%2Fmmex-sync.prudenzano.org%2Fapi%2Fhealth)
 
 
+[![GitHub Release](https://img.shields.io/github/v/release/moneymanagerex/mmex-sync?include_prereleases&label=github%20release)](https://github.com/moneymanagerex/mmex-sync/releases/latest)
+
 ![Money Manager Ex Sync - Record-Level Safe Sync Banner](assets/images/mmex-sync-banner.png)
 
 

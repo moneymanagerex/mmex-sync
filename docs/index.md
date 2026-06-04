@@ -13,6 +13,10 @@ nav_order: 1
   <img src="https://img.shields.io/badge/dynamic/json?style=flat&label=Shared%20Server%20Status&query=%24.message&color=success&url=https%3A%2F%2Fmmex-sync.prudenzano.org%2Fapi%2Fhealth" alt="Shared Server Status">
 </div>
 
+<div style="display: flex; gap: 10px; margin-bottom: 20px;">
+  <a href="https://github.com/moneymanagerex/mmex-sync/releases/latest"><img src="https://img.shields.io/github/v/release/moneymanagerex/mmex-sync?include_prereleases&label=github%20release" alt="GitHub Release"></a>
+</div>
+
 Welcome to the non-intrusive, **"Offline-First"** synchronization system for Money Manager Ex (MMEX). It enables seamless multi-device sync (Windows ↔ Cloud ↔ Android) without requiring any modifications to the core MMEX desktop C++ source code.
 
 ![banner](images/mmex-sync-banner.png)
