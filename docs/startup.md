@@ -29,9 +29,12 @@ If you regularly use MoneyManagerEx on Windows, follow these steps:
 3. **Configuration & Conversion:** The executable will prompt you for your login credentials (obtained in Step 1). The program will then automatically convert your standard database into a PocketBase-synchronized database.
 4. **Windows Setup Complete:** From this point forward, your Windows instance will communicate with PocketBase automatically and seamlessly.
    > ⚠️ **Important:** From this point onward, **do not launch the standard MMEX Windows application directly**, especially if you use scheduled transactions. If you open the standard MMEX without `MMEX Sync` and have "autopost" enabled, you will likely end up with duplicated scheduled transactions (as one will post on Windows and another from Android). Always use the `MMEX Sync` executable.
-5. **Android Setup:** * Open the app on your Android device.
+5. **Android Setup:** 
+   * Download and install the Android version specifically prepared for synchronization: `ammx-X.Y.Z-sync-release.apk` (where `X.Y.Z` is the version number), which can be downloaded from the official repository release page: [Latest Releases](https://github.com/moneymanagerex/android-money-manager-ex/releases/latest).
+   * Open the app on your Android device.
    * Initialize the application by choosing the option to download the remote database from PocketBase.
    * Enter your credentials. The device will download the data and will be ready for **offline** use, staying fully synced with Windows through the PocketBase server.
+
 
 ---
 
@@ -68,6 +71,5 @@ mmex-sync --clearServer --clearDB
 
 After running this command, your database will return to its standard, standalone format.
 
-* **Account Removal**: If you also want your account to be completely deleted from the online service, simply send an email request to the support team, and we will take care of it.
+* **Account/Data Management**: You can also use the self-service portal at [mmex-sync.prudenzano.org/selfservice/](https://mmex-sync.prudenzano.org/selfservice/) to export your data, clear your sync data from the server, or completely delete your account.
 
-```

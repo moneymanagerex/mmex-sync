@@ -60,11 +60,14 @@ See the synchronization engine in action below:
 The Sync Engine requires a PocketBase backend to coordinate data across devices. You have two options:
 
 1. **Community Shared Server (Easiest):** Request access to the unofficial test shared instance hosted at [mmex-sync.prudenzano.org](https://mmex-sync.prudenzano.org).
+   * **Control Panel:** A self-service portal is available at [mmex-sync.prudenzano.org/selfservice/](https://mmex-sync.prudenzano.org/selfservice/) where you can manage your sync data (export data, clear sync data, or completely delete your account).
 2. **Self-Hosted Server (Privacy & Control):** Deploy your own PocketBase instance on a VPS, Docker, or Raspberry Pi using the schemas available in the `pb_schema_selfhost.json` file.
 
 ---
 
 ## 🕹️ Quick Start Guide
+
+For a detailed step-by-step setup procedure (including Android synchronization), please refer to the [Sync Setup Guide](startup.md).
 
 ### First Setup
 On the first launch, the program will interactively guide you to configure your credentials and database path:

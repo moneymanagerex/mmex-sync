@@ -34,6 +34,14 @@ The Sync Engine operates as an external "Sidecar" process. It watches your SQLit
 **Demo Video between two Windows**
 [Demo Video between two Windows🤩](https://1drv.ms/v/c/6958bccc4c47c1d3/IQAfDCUauF7dQo2GL1r47SziAfLlgfXdpo8-8-ustZM9CMA?e=5mPJBo)
 
+### 📱 Android Sync App
+
+For Android synchronization, you **must use** the specific sync-enabled version of the application:
+* **File to use:** `ammx-X.Y.Z-sync-release.apk` (where `X.Y.Z` represents the version).
+* **Download:** Available on the official GitHub repository releases: 👉 **[Latest Releases](https://github.com/moneymanagerex/android-money-manager-ex/releases/latest)**.
+
+For detailed configuration instructions, refer to the [Sync Setup Guide (First Run)](docs/startup.md).
+
 ---
 
 ## ⚠️ IMPORTANT: DISCLAIMER & WARNING
@@ -54,6 +62,8 @@ The Sync Engine requires a PocketBase backend to coordinate data across devices.
 ### 1. Community Shared Server (Easiest)
 If you don't want to manage your own infrastructure, you can request access to the unofficial test shared instance hosted at:
 👉 **[mmex-sync.prudenzano.org](https://mmex-sync.prudenzano.org)**
+
+* **Self-Service Control Panel:** A portal is available at [mmex-sync.prudenzano.org/selfservice/](https://mmex-sync.prudenzano.org/selfservice/) where you can manage your sync data (export data, clear sync data, or completely delete your account).
 
 > [!NOTE]
 > Access to the shared server may require registration or approval. Please check the website for instructions on how to request your credentials.
