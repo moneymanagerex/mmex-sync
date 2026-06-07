@@ -4,7 +4,12 @@
 > This is a **Proof of Concept (POC)**, not production-ready software. It is still under active development and may not work perfectly in all edge cases.
 
 [![pages-build-deployment](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/pages/pages-build-deployment)
+[![Run Tests on Pull Request](https://github.com/moneymanagerex/mmex-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/tests.yml)
+[![Create Production Release](https://github.com/moneymanagerex/mmex-sync/actions/workflows/release.yml/badge.svg?branch=stable)](https://github.com/moneymanagerex/mmex-sync/actions/workflows/release.yml)
+![Service Status](https://img.shields.io/badge/dynamic/json?style=flat&label=Shared%20Server&query=%24.message&color=success&url=https%3A%2F%2Fmmex-sync.prudenzano.org%2Fapi%2Fhealth)
 
+
+[![GitHub Release](https://img.shields.io/github/v/release/moneymanagerex/mmex-sync?include_prereleases&label=github%20release)](https://github.com/moneymanagerex/mmex-sync/releases/latest)
 
 ![Money Manager Ex Sync - Record-Level Safe Sync Banner](assets/images/mmex-sync-banner.png)
 
@@ -31,6 +36,14 @@ The Sync Engine operates as an external "Sidecar" process. It watches your SQLit
 **Demo Video between two Windows**
 [Demo Video between two Windows🤩](https://1drv.ms/v/c/6958bccc4c47c1d3/IQAfDCUauF7dQo2GL1r47SziAfLlgfXdpo8-8-ustZM9CMA?e=5mPJBo)
 
+### 📱 Android Sync App
+
+For Android synchronization, you **must use** the specific sync-enabled version of the application:
+* **File to use:** `ammx-X.Y.Z-sync-release.apk` (where `X.Y.Z` represents the version).
+* **Download:** Available on the official GitHub repository releases: 👉 **[Latest Releases](https://github.com/moneymanagerex/android-money-manager-ex/releases/latest)**.
+
+For detailed configuration instructions, refer to the [Sync Setup Guide (First Run)](docs/startup.md).
+
 ---
 
 ## ⚠️ IMPORTANT: DISCLAIMER & WARNING
@@ -51,6 +64,8 @@ The Sync Engine requires a PocketBase backend to coordinate data across devices.
 ### 1. Community Shared Server (Easiest)
 If you don't want to manage your own infrastructure, you can request access to the unofficial test shared instance hosted at:
 👉 **[mmex-sync.prudenzano.org](https://mmex-sync.prudenzano.org)**
+
+* **Self-Service Control Panel:** A portal is available at [mmex-sync.prudenzano.org/selfservice/](https://mmex-sync.prudenzano.org/selfservice/) where you can manage your sync data (export data, clear sync data, or completely delete your account).
 
 > [!NOTE]
 > Access to the shared server may require registration or approval. Please check the website for instructions on how to request your credentials.

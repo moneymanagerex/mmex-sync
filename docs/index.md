@@ -2,18 +2,24 @@
 layout: default
 title: MMEX Sync
 description: Sidecar modernization for Money Manager Ex. Multi-device cloud synchronization without modifying the original desktop source code.
+nav_order: 1
 ---
 
 # MMEX Sync (Sidecar Architecture)
 
 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-  <img src="https://img.shields.io/badge/Stage-POC-yellow?style=for-the-badge" alt="POC Stage">
-  <img src="https://img.shields.io/badge/PocketBase-Active-brightgreen?style=for-the-badge" alt="PocketBase Status">
+  <img src="https://img.shields.io/badge/Stage-Pilot-yellow?style=for-the-badge" alt="Pilot Stage">
+  <img src="https://github.com/moneymanagerex/mmex-sync/actions/workflows/release.yml/badge.svg?branch=stable" alt="Production Release">
+  <img src="https://img.shields.io/badge/dynamic/json?style=flat&label=Shared%20Server%20Status&query=%24.message&color=success&url=https%3A%2F%2Fmmex-sync.prudenzano.org%2Fapi%2Fhealth" alt="Shared Server Status">
+</div>
+
+<div style="display: flex; gap: 10px; margin-bottom: 20px;">
+  <a href="https://github.com/moneymanagerex/mmex-sync/releases/latest"><img src="https://img.shields.io/github/v/release/moneymanagerex/mmex-sync?include_prereleases&label=github%20release" alt="GitHub Release"></a>
 </div>
 
 Welcome to the non-intrusive, **"Offline-First"** synchronization system for Money Manager Ex (MMEX). It enables seamless multi-device sync (Windows ↔ Cloud ↔ Android) without requiring any modifications to the core MMEX desktop C++ source code.
 
-![banner](images/mmex-sync-banner.png) {.center}
+![banner](images/mmex-sync-banner.png)
 
 ---
 
@@ -58,11 +64,14 @@ See the synchronization engine in action below:
 The Sync Engine requires a PocketBase backend to coordinate data across devices. You have two options:
 
 1. **Community Shared Server (Easiest):** Request access to the unofficial test shared instance hosted at [mmex-sync.prudenzano.org](https://mmex-sync.prudenzano.org).
+   * **Control Panel:** A self-service portal is available at [mmex-sync.prudenzano.org/selfservice/](https://mmex-sync.prudenzano.org/selfservice/) where you can manage your sync data (export data, clear sync data, or completely delete your account).
 2. **Self-Hosted Server (Privacy & Control):** Deploy your own PocketBase instance on a VPS, Docker, or Raspberry Pi using the schemas available in the `pb_schema_selfhost.json` file.
 
 ---
 
 ## 🕹️ Quick Start Guide
+
+For a detailed step-by-step setup procedure (including Android synchronization), please refer to the [Sync Setup Guide](startup.md).
 
 ### First Setup
 On the first launch, the program will interactively guide you to configure your credentials and database path:
