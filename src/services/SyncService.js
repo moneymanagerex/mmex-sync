@@ -68,7 +68,12 @@ export class SyncService {
             } catch (err) {
                 if (err && err.response && err.response.data && err.response.data._userid && err.response.data._userid.code == 'validation_not_unique') {
                     // serach for pk
-                    const remoteRecord = await this.pb.getByRowId(table, record.rowid);
+                    let remoteRecord;
+                    try {
+                        remoteRecord = await this.pb.getByRowId(table, record.rowid);
+                    } catch (err) {
+                        console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) not found and probabily unique conwtraint violation`, err.message);
+                    }
                     if (remoteRecord) {
                         response = await this.pb.update(table, remoteRecord.id, dataToSync);
                         if (response.id != null) {
