@@ -1,6 +1,6 @@
 {
   "name": "mmex-sync",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A non-intrusive, \"Offline-First\" synchronization system for Money Manager Ex (MMEX) with PocketBase as backend.",
   "main": "src/index.js",
   "type": "module",
@@ -24,9 +24,22 @@
     "pocketbase": "^0.26.8"
   },
   "devDependencies": {
+    "@yao-pkg/pkg": "^6.20.0",
     "archiver": "^7.0.1",
     "esbuild": "^0.28.0",
     "jest": "^30.4.2",
     "rcedit": "^5.0.2"
+  },
+  "pkg": {
+    "assets": [
+      "assets/icons/icon.ico",
+      "dist/app/tables_v1_for_sync.sql"
+    ],
+    "targets": [
+      "node24-win-x64",
+      "node24-linux-x64",
+      "node24-macos-x64"
+    ],
+    "outputPath": "dist/bin"
   }
 }

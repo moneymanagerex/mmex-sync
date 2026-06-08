@@ -2,7 +2,8 @@
 import fs from 'fs';
 import { DatabaseSync } from 'node:sqlite';
 import { SYNC_ORDER } from '../config/table_config.js';
-
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export class DatabaseService {
     constructor(dbPath, verbose = false) {
@@ -282,9 +283,12 @@ export class DatabaseService {
     createEmptyDatabase() {
         console.log(`🏗️  [Create] Creating new database: ${this.dbPath}`);
 
-        // 1. Read and execute the table_v1.sql file
-        // The file must be in the project root or we specify the path
-        let sqlSchemaPath = './assets/sql/tables_v1_for_sync.sql';
+        const currentDir = typeof __dirname !== 'undefined'
+            ? __dirname
+            : path.dirname(fileURLToPath(import.meta.url));
+
+        let sqlSchemaPath = path.join(currentDir, 'tables_v1_for_sync.sql');
+
         if (!fs.existsSync(sqlSchemaPath)) {
             sqlSchemaPath = './tables_v1_for_sync.sql';
             if (!fs.existsSync(sqlSchemaPath)) {
