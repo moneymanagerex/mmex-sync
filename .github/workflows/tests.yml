@@ -8,20 +8,21 @@ on:
 
 jobs:
   test:
+    name: Execute Automated Test Suite
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout del codice
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Configurazione Node.js (v22 LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm' # Ottimizza i tempi memorizzando la cache di node_modules
+          node-version: 22 # Aggiornato alla versione LTS stabile con pieno supporto a node:sqlite
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci # Usa 'npm ci' invece di 'npm install' perché è ideale per la CI (è più veloce e rigoroso)
+      - name: Installazione dipendenze (Rigorosa per CI)
+        run: npm ci
 
-      - name: Run Jest tests
+      - name: Esecuzione Test Suite (Jest)
         run: npm test

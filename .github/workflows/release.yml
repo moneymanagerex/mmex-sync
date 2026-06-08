@@ -6,13 +6,12 @@ on:
       - stable
 
 jobs:
-  build:
-    name: Build for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    
+  release:
+    name: Build, Test and Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout del codice
         uses: actions/checkout@v4
@@ -20,43 +19,15 @@ jobs:
       - name: Configurazione Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # Usiamo la versione LTS più recente e stabile per i runner
           cache: 'npm'
 
       - name: Installazione dipendenze
         run: npm ci
 
-      - name: Esecuzione Build e Packaging (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npm run release:win
-
-      - name: Esecuzione Build e Packaging (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: npm run release:linux
-
-      - name: Salvataggio Artefatto
-        uses: actions/upload-artifact@v4
-        with:
-          name: zip-${{ matrix.os }}
-          path: dist/output/*.zip
-          retention-days: 1
-
-  publish:
-    name: Publish GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
-    steps:
-      - name: Checkout del codice
-        uses: actions/checkout@v4
-
-      - name: Download di tutti gli artefatti
-        uses: actions/download-artifact@v4
-        with:
-          path: dist/output
-          merge-multiple: true
+      - name: Esecuzione Test e Creazione Pacchetto (npm run release)
+        run: npm run release
+        # Nota: npm run release esegue in automatico 'npm run test', 'build' e 'package' di seguito.
 
       - name: Estrazione versione da package.json
         id: get_version
@@ -64,13 +35,13 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Creazione GitHub Release
+      - name: Creazione e Pubblicazione GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           name: Release ${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
-          files: dist/output/*.zip
+          files: dist/release/*.zip # Punta alla nuova cartella concordata
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
