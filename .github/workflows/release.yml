@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     name: Build, Test and Publish Release
-    runs-on: windows-latest
+    runs-on: ubuntu-latest # 💡 Cambiato da windows-latest a ubuntu-latest per velocità e stabilità
     permissions:
       contents: write
 
@@ -19,7 +19,7 @@ jobs:
       - name: Configurazione Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # Usiamo la versione LTS più recente e stabile per i runner
+          node-version: 22
           cache: 'npm'
 
       - name: Installazione dipendenze
@@ -27,13 +27,13 @@ jobs:
 
       - name: Esecuzione Test e Creazione Pacchetto (npm run release)
         run: npm run release
-        # Nota: npm run release esegue in automatico 'npm run test', 'build' e 'package' di seguito.
 
       - name: Estrazione versione da package.json
         id: get_version
         shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          # 💡 Modificato il modo di leggere il package.json per essere nativo ESM 
+          VERSION=$(node -e "import fs from 'fs'; console.log(JSON.parse(fs.readFileSync('./package.json')).version);")
           echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
 
       - name: Creazione e Pubblicazione GitHub Release
@@ -43,6 +43,6 @@ jobs:
           name: Release ${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
-          files: dist/release/*.zip # Punta alla nuova cartella concordata
+          files: dist/release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
