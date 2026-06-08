@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     name: Build, Test and Publish Release
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: write
 
@@ -31,6 +31,7 @@ jobs:
 
       - name: Estrazione versione da package.json
         id: get_version
+        shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT

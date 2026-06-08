@@ -15,35 +15,30 @@ async function main() {
     const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
     const appVersion = packageJson.version || '0.0.1';
 
-    // 1. Compila modificando l'estensione in .cjs per aggirare il "type": "module"
+    // 1. Compila generando il file bundle.cjs
     await esbuild.build({
         entryPoints: ['src/index.js'],
         bundle: true,
         platform: 'node',
         target: 'node24',
-        outfile: path.join(appFolder, 'bundle.cjs'), // <-- CAMBIATO IN .cjs
+        outfile: path.join(appFolder, 'bundle.cjs'),
         format: 'cjs',
         define: {
             '__APP_VERSION__': JSON.stringify(appVersion)
+        },
+        logOverride: {
+            'empty-import-meta': 'silent'
         }
     });
     console.log("✅ dist/app/bundle.cjs creato.");
+    console.log("➡️ Pronto per la compilazione in eseguibile.");
 
-    // 2. Copia il file SQL delle tabelle in dist/app/
+    // 2. COPIA IL FILE SQL NELLA STESSA CARTELLA DEL BUNDLE
     const sqlSrc = path.join('assets', 'sql', 'tables_v1_for_sync.sql');
     if (fs.existsSync(sqlSrc)) {
         fs.copyFileSync(sqlSrc, path.join(appFolder, 'tables_v1_for_sync.sql'));
-        console.log("✅ Tabelle SQL copiate in dist/app/");
+        console.log("✅ Tabelle SQL copiate in dist/app/ (fianco a fianco con il bundle).");
     }
-
-    // 3. Genera il file di avvio che punta al file .cjs
-    const hybridContent =
-        `:; exec node app/bundle.cjs "$@"
-@echo off
-node app/bundle.cjs %*
-`;
-    fs.writeFileSync(path.join(distFolder, 'mmex-sync.cmd'), hybridContent, { mode: 0o755 });
-    console.log("✅ Launcher universale dist/mmex-sync.cmd generato con successo.");
 }
 
 main().catch(console.error);
