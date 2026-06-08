@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-// Mock fs
+// 1. Mock del modulo nativo 'fs'
 const mockExistsSync = jest.fn();
 const mockUnlinkSync = jest.fn();
 const mockReadFileSync = jest.fn();
@@ -13,35 +13,40 @@ jest.unstable_mockModule('fs', () => ({
     }
 }));
 
-// Mock better-sqlite3
+// 2. NUOVI MOCK: Mock per il modulo nativo 'node:sqlite'
 const mockRun = jest.fn();
 const mockAll = jest.fn();
-const mockGet = jest.fn();
 const mockPrepare = jest.fn();
 const mockExec = jest.fn();
-const mockPragma = jest.fn();
-const mockTransaction = jest.fn().mockImplementation((cb) => {
-    // Returns a function that executes the callback, mocking better-sqlite3 transaction() behavior
-    return (...args) => cb(...args); 
-});
 const mockClose = jest.fn();
 
-jest.unstable_mockModule('better-sqlite3', () => ({
-    default: jest.fn().mockImplementation(() => ({
-        prepare: mockPrepare,
-        exec: mockExec,
-        pragma: mockPragma,
-        transaction: mockTransaction,
-        close: mockClose
-    }))
+// Creiamo una funzione spy per tracciare il costruttore della classe
+const mockDatabaseConstructor = jest.fn();
+
+// Classe mock che imita DatabaseSync e notifica la spy quando viene istanziata
+class MockDatabaseSync {
+    constructor(path) {
+        mockDatabaseConstructor(path);
+        this.path = path;
+    }
+    prepare(query) { return mockPrepare(query); }
+    exec(query) { return mockExec(query); }
+    close() { return mockClose(); }
+}
+
+// Istruiamo Jest a intercettare l'import di 'node:sqlite'
+jest.unstable_mockModule('node:sqlite', () => ({
+    DatabaseSync: MockDatabaseSync
 }));
 
+// Mock della configurazione tabelle
 jest.unstable_mockModule('../../src/config/table_config.js', () => ({
     SYNC_ORDER: ['ACCOUNTLIST_V1']
 }));
 
+// 3. Import dinamici dei moduli mockati
 const fs = (await import('fs')).default;
-const Database = (await import('better-sqlite3')).default;
+const { DatabaseSync } = await import('node:sqlite');
 const { DatabaseService } = await import('../../src/database/DatabaseService.js');
 
 describe('DatabaseService', () => {
@@ -55,11 +60,10 @@ describe('DatabaseService', () => {
         consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => true);
         consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => true);
 
-        // Set the base mock for prepare() to return the run, all, get mocks
+        // Comportamento di default per il metodo prepare
         mockPrepare.mockReturnValue({
             run: mockRun,
-            all: mockAll,
-            get: mockGet
+            all: mockAll
         });
     });
 
@@ -70,8 +74,8 @@ describe('DatabaseService', () => {
     describe('connect()', () => {
         test('connects and analyzes schema via PRAGMA', () => {
             mockExistsSync.mockReturnValue(true);
-            
-            // Specific mock for PRAGMA table_info
+
+            // Mock specifico per catturare la lettura dello schema tramite PRAGMA info
             mockPrepare.mockImplementation((query) => {
                 return {
                     all: () => {
@@ -79,7 +83,7 @@ describe('DatabaseService', () => {
                             return [
                                 { name: 'ACCOUNTID', pk: 1 },
                                 { name: 'ACCOUNTNAME', pk: 0 },
-                                { name: 'pb_id', pk: 0 }, // technical field
+                                { name: 'pb_id', pk: 0 },
                             ];
                         }
                         return [];
@@ -89,7 +93,8 @@ describe('DatabaseService', () => {
 
             service.connect();
 
-            expect(Database).toHaveBeenCalledWith('/test/db.mmb');
+            // CORRETTO: Adesso verifichiamo la spy legata all'istanziazione della classe
+            expect(mockDatabaseConstructor).toHaveBeenCalledWith('/test/db.mmb');
             expect(service.schemas['ACCOUNTLIST_V1']).toBeDefined();
             expect(service.schemas['ACCOUNTLIST_V1'].pk).toBe('ACCOUNTID');
             expect(service.schemas['ACCOUNTLIST_V1'].fields).toContain('ACCOUNTNAME');
@@ -97,18 +102,14 @@ describe('DatabaseService', () => {
         });
 
         test('creates database if create = true', () => {
-            mockExistsSync.mockReturnValue(false); // fails first existsSync on sqlSchemaPath
-            // Override createEmptyDatabase for this test
-            const spyCreateEmpty = jest.spyOn(service, 'createEmptyDatabase').mockImplementation(() => {});
-            
-            // Mock for connect() when trying to read PRAGMA
+            mockExistsSync.mockReturnValue(false);
+            const spyCreateEmpty = jest.spyOn(service, 'createEmptyDatabase').mockImplementation(() => { });
+
             mockPrepare.mockImplementation(() => ({
                 all: () => [{ name: 'ACCOUNTID', pk: 1 }]
             }));
-            
-            // mock db creation
-            service.db = new Database('/test/db.mmb');
 
+            service.db = new DatabaseSync('/test/db.mmb');
             service.connect(true);
 
             expect(spyCreateEmpty).toHaveBeenCalled();
@@ -117,8 +118,7 @@ describe('DatabaseService', () => {
 
     describe('Sync Operations', () => {
         beforeEach(() => {
-            // Simulate connect without actually calling it, setting up service.db and service.schemas
-            service.db = new Database('/test/db.mmb');
+            service.db = new DatabaseSync('/test/db.mmb');
             service.schemas = {
                 'ACCOUNTLIST_V1': {
                     pk: 'ACCOUNTID',
@@ -126,7 +126,8 @@ describe('DatabaseService', () => {
                     techFields: ['pb_id', 'pb_is_dirty', 'pb_updated_at']
                 }
             };
-            mockPrepare.mockReturnValue({ run: mockRun, all: mockAll, get: mockGet });
+            // CORRETTO: Rimosso "get: mockGet" che causava il ReferenceError
+            mockPrepare.mockReturnValue({ run: mockRun, all: mockAll });
         });
 
         test('getDirtyRecords filters by pb_is_dirty or unassociated records', () => {
@@ -156,7 +157,6 @@ describe('DatabaseService', () => {
         });
 
         test('applyRemoteChanges (UPDATE) updates the record if already present', () => {
-            // Fake remote record
             const remoteRecord = {
                 id: 'pb_999',
                 _is_deleted: 0,
@@ -165,18 +165,16 @@ describe('DatabaseService', () => {
                 ACCOUNTNAME: 'Nuovo Nome'
             };
 
-            // Simulate that it already exists
-            mockGet.mockReturnValue({ ROWID: 10 });
+            // CORRETTO: node:sqlite usa .all() estraendo il primo elemento. Simuliamo che esista restituendo l'array.
+            mockAll.mockReturnValue([{ ROWID: 10 }]);
 
             service.applyRemoteChanges('ACCOUNTLIST_V1', remoteRecord);
 
-            // Transaction called
-            expect(mockTransaction).toHaveBeenCalled();
-            // Check update that should bypass triggers (pb_is_dirty=2)
+            expect(mockExec).toHaveBeenCalledWith('BEGIN TRANSACTION');
             expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE ACCOUNTLIST_V1'));
             expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('SET ACCOUNTNAME = ?, pb_is_dirty = 2'));
-            // reset to 0 executed
             expect(mockPrepare).toHaveBeenCalledWith('UPDATE ACCOUNTLIST_V1 SET pb_is_dirty = 0 WHERE ROWID = ?');
+            expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
 
         test('applyRemoteChanges (INSERT) creates record if not present', () => {
@@ -188,71 +186,78 @@ describe('DatabaseService', () => {
                 ACCOUNTNAME: 'Nome Inserito'
             };
 
-            // Simulate NOT present
-            mockGet.mockReturnValue(undefined);
-            mockRun.mockReturnValue({ lastInsertRowid: 20 }); // return value of insert run
+            // CORRETTO: Simuliamo che NON esista restituendo un array vuoto
+            mockAll.mockReturnValue([]);
+            mockRun.mockReturnValue({ lastInsertRowid: 20 });
 
             service.applyRemoteChanges('ACCOUNTLIST_V1', remoteRecord);
 
+            expect(mockExec).toHaveBeenCalledWith('BEGIN TRANSACTION');
             expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO ACCOUNTLIST_V1'));
-            // The reset to 0 must use the lastInsertRowid (20)
             expect(mockRun).toHaveBeenCalledWith(20);
+            expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
-        
+
         test('applyRemoteChanges (DELETE) deletes the record if marked deleted by the server', () => {
             const remoteRecord = {
                 id: 'pb_999',
                 _is_deleted: 1
             };
-            mockGet.mockReturnValue({ ROWID: 10, rowid: 10 });
+
+            // CORRETTO: Forniamo l'elemento dentro l'array per rispecchiare l'uso di .all()[0]
+            mockAll.mockReturnValue([{ ROWID: 10, rowid: 10 }]);
 
             service.applyRemoteChanges('ACCOUNTLIST_V1', remoteRecord);
-            
+
+            expect(mockExec).toHaveBeenCalledWith('BEGIN TRANSACTION');
             expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM ACCOUNTLIST_V1 WHERE ROWID = ?');
             expect(mockRun).toHaveBeenCalledWith(10);
+            expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
     });
 
     describe('DB Management / init / schema', () => {
         test('close', () => {
-            service.db = new Database('/test/db.mmb');
+            service.db = new DatabaseSync('/test/db.mmb');
             service.close();
             expect(mockClose).toHaveBeenCalled();
         });
 
         test('clearTechnicalSchema removes triggers and columns', () => {
-            service.db = new Database('/test/db.mmb');
+            service.db = new DatabaseSync('/test/db.mmb');
             service.schemas = {
                 'ACCOUNTLIST_V1': { techFields: ['pb_id'] }
             };
             mockPrepare.mockReturnValue({ run: mockRun });
-            
+
             service.clearTechnicalSchema();
-            
+
             expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('DROP TRIGGER IF EXISTS TRG_ACCOUNTLIST_V1_INSERT'));
             expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('DROP COLUMN pb_id'));
             expect(mockPrepare).toHaveBeenCalledWith('DROP TABLE IF EXISTS pb_DELETED_RECORDS_LOG');
         });
 
         test('createEmptyDatabase throws error if SQL files are not found', () => {
-            mockExistsSync.mockReturnValue(false); // fails /assets/sql/... and .sql
+            mockExistsSync.mockReturnValue(false);
             expect(() => {
                 service.createEmptyDatabase();
-            }).toThrow('File schema non trovato'); // keeping the original error message text from the code
+            }).toThrow('File schema non trovato');
         });
 
         test('createEmptyDatabase deletes old DB, executes SQL script and sets pragmas', () => {
             mockExistsSync
-                .mockReturnValueOnce(true) // sqlSchemaPath in root ./assets/sql
-                .mockReturnValueOnce(true); // dbPath already exists, so unlink
-                
+                .mockReturnValueOnce(true) // sqlSchemaPath
+                .mockReturnValueOnce(true); // dbPath
+
             mockReadFileSync.mockReturnValue('CREATE TABLE TEST;');
-            
+
             const result = service.createEmptyDatabase();
-            
+
             expect(mockUnlinkSync).toHaveBeenCalledWith('/test/db.mmb');
             expect(mockExec).toHaveBeenCalledWith('CREATE TABLE TEST;');
-            expect(mockPragma).toHaveBeenCalledWith('user_version = 21');
+
+            // CORRETTO: Verifica che il pragma venga impostato via exec() e non più via pragma()
+            expect(mockExec).toHaveBeenCalledWith('PRAGMA user_version = 21');
             expect(result).toBeDefined();
         });
     });

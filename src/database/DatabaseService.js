@@ -1,6 +1,6 @@
 // src/database/DatabaseService.js
 import fs from 'fs';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { SYNC_ORDER } from '../config/table_config.js';
 
 
@@ -18,7 +18,7 @@ export class DatabaseService {
             this.createEmptyDatabase();
         } else {
             // this.db = new Database(this.dbPath, { verbose: this.verbose ? console.log : null });
-            this.db = new Database(this.dbPath);
+            this.db = new DatabaseSync(this.dbPath);
         }
 
         this.schemas = {};
@@ -36,7 +36,7 @@ export class DatabaseService {
      * Restores your initialization logic exactly
      */
     initSchema() {
-        this.db.transaction(() => {
+        this.createTransaction(() => {
             // 1. Deletion log table (as in your sync_core)
             this.db.prepare(`
                 CREATE TABLE IF NOT EXISTS pb_DELETED_RECORDS_LOG (
@@ -167,10 +167,10 @@ export class DatabaseService {
         const is_deleted = _is_deleted != 0;
 
         // Check if a record with this pb_id already exists
-        let localRecord = this.db.prepare(`SELECT ROWID as ROWID FROM ${table} WHERE pb_id = ?`).get(pb_id);
+        let localRecord = this.db.prepare(`SELECT ROWID as ROWID FROM ${table} WHERE pb_id = ?`).all(pb_id)[0] || null;
         const localRecordPk = localRecord?.ROWID;
 
-        this.db.transaction(() => {
+        this.createTransaction(() => {
             if (localRecord) {
                 // check to see if it is deleted
                 if (is_deleted) {
@@ -235,7 +235,7 @@ export class DatabaseService {
     clearTechnicalSchema() {
         console.log("🧹 Starting deep cleanup of local database...");
 
-        this.db.transaction(() => {
+        this.createTransaction(() => {
             for (const table of this.syncOrder) {
                 // 1. TRIGGER REMOVAL (Always first)
                 // We must delete triggers that "point" to technical tables
@@ -301,16 +301,16 @@ export class DatabaseService {
         try {
             // Open a new connection
             // this.db = new Database(this.dbPath, { verbose: this.verbose ? console.log : null });
-            this.db = new Database(this.dbPath);
+            this.db = new DatabaseSync(this.dbPath);
 
             const sqlSchema = fs.readFileSync(sqlSchemaPath, 'utf8');
 
             // Execute everything in a transaction for maximum performance and safety
-            this.db.transaction(() => {
+            this.createTransaction(() => {
                 this.db.exec(sqlSchema);
 
                 // 2. Set PRAGMA user_version to 21 (essential for MMEX compatibility)
-                this.db.pragma('user_version = 21');
+                this.db.exec('PRAGMA user_version = 21');
 
                 if (this.verbose) console.log("[Create] SQL schema applied and user_version set to 21.");
 
@@ -331,5 +331,19 @@ export class DatabaseService {
         }
     }
 
+
+    createTransaction(fn) {
+        return (...args) => {
+            this.db.exec('BEGIN TRANSACTION');
+            try {
+                const result = fn(...args);
+                this.db.exec('COMMIT');
+                return result;
+            } catch (error) {
+                this.db.exec('ROLLBACK');
+                throw error;
+            }
+        };
+    }
 
 }

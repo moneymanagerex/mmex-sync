@@ -72,7 +72,7 @@ export class SyncService {
                     try {
                         remoteRecord = await this.pb.getByRowId(table, record.rowid);
                     } catch (err) {
-                        console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) not found and probabily unique conwtraint violation`, err.message);
+                        console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) not found and probabily unique constraint violation`, err.message);
                     }
                     if (remoteRecord) {
                         response = await this.pb.update(table, remoteRecord.id, dataToSync);

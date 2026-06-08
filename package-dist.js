@@ -3,49 +3,44 @@ import path from 'path';
 import archiver from 'archiver';
 
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const version = packageJson.version || '0.0.0';
+const version = packageJson.version || '0.0.1';
+const zipName = `mmex-sync-v${version}.zip`;
 
-const args = process.argv.slice(2);
-const osArg = args.find(arg => arg.startsWith('--os='));
-const targetOS = osArg ? osArg.split('=')[1] : (process.platform === 'win32' ? 'win' : 'linux');
+const sourceDir = path.join('dist');
+// Lo ZIP finale viene salvato dentro dist/release/
+const outDir = path.join('dist', 'release');
 
-const isTargetWindows = targetOS === 'win';
-const outputDir = path.join('dist', 'output');
-const srcFolder = path.join('dist', targetOS);
+async function createReleaseZip() {
+    console.log(`\n🤐 Creazione pacchetto ZIP universale: dist/release/${zipName}...`);
 
-if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-}
-
-const archiveName = path.join(outputDir, `mmex-sync.${version}.${targetOS}.zip`);
-
-console.log(`Inizio creazione archivio per ${targetOS.toUpperCase()}: ${archiveName}`);
-
-const filesToPack = [
-    path.join(srcFolder, isTargetWindows ? 'mmex-sync.exe' : 'mmex-sync'),
-    path.join(srcFolder, 'better_sqlite3.node'),
-    path.join(srcFolder, 'tables_v1_for_sync.sql')
-];
-
-for (const file of filesToPack) {
-    if (!fs.existsSync(file)) {
-        console.error(`❌ Errore: File non trovato: ${file}. Esegui prima la build per quel target.`);
-        process.exit(1);
+    if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true });
     }
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const stream = fs.createWriteStream(path.join(outDir, zipName));
+
+    return new Promise((resolve, reject) => {
+        stream.on('close', () => resolve());
+        archive.on('error', err => reject(err));
+        archive.pipe(stream);
+
+        // Include l'intera struttura di dist/ (il launcher e la cartella app/)
+        // ma ignora la cartella di output 'release' per evitare di inserire ricorsivamente lo zip dentro se stesso
+        archive.glob('**/*', {
+            cwd: sourceDir,
+            ignore: ['release/**']
+        });
+
+        archive.finalize();
+    });
 }
 
-const output = fs.createWriteStream(archiveName);
-const archive = archiver('zip', { zlib: { level: 9 } });
+if (!fs.existsSync(sourceDir)) {
+    console.error(`❌ Errore: la cartella ${sourceDir} non esiste. Lancia prima npm run build.`);
+    process.exit(1);
+}
 
-output.on('close', () => {
-    console.log(`✅ Archivio ${targetOS.toUpperCase()} creato con successo! (${archive.pointer()} bytes)`);
-});
-
-archive.on('error', (err) => { throw err; });
-archive.pipe(output);
-
-filesToPack.forEach(file => {
-    archive.file(file, { name: path.basename(file) });
-});
-
-archive.finalize();
+createReleaseZip()
+    .then(() => console.log(`\n🎉 RELEASE PRONTA! Generato: dist/release/${zipName}\n`))
+    .catch(console.error);
