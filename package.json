@@ -28,7 +28,7 @@
     "archiver": "^7.0.1",
     "esbuild": "^0.28.0",
     "jest": "^30.4.2",
-    "rcedit": "^5.0.2"
+    "resedit": "^3.0.2"
   },
   "pkg": {
     "assets": [

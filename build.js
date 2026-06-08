@@ -15,14 +15,14 @@ async function main() {
     const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
     const appVersion = packageJson.version || '0.0.1';
 
-    // 1. Compila generando il file bundle.cjs
+    // 1. Compila generando il file bundle.js
     await esbuild.build({
         entryPoints: ['src/index.js'],
         bundle: true,
         platform: 'node',
         target: 'node24',
-        outfile: path.join(appFolder, 'bundle.cjs'),
-        format: 'cjs',
+        format: 'esm',
+        outfile: path.join(appFolder, 'bundle.js'),
         define: {
             '__APP_VERSION__': JSON.stringify(appVersion)
         },
@@ -30,14 +30,14 @@ async function main() {
             'empty-import-meta': 'silent'
         }
     });
-    console.log("✅ dist/app/bundle.cjs creato.");
+    console.log("✅ dist/app/bundle.js creato.");
     console.log("➡️ Pronto per la compilazione in eseguibile.");
 
     // 2. COPIA IL FILE SQL NELLA STESSA CARTELLA DEL BUNDLE
     const sqlSrc = path.join('assets', 'sql', 'tables_v1_for_sync.sql');
     if (fs.existsSync(sqlSrc)) {
         fs.copyFileSync(sqlSrc, path.join(appFolder, 'tables_v1_for_sync.sql'));
-        console.log("✅ Tabelle SQL copiate in dist/app/ (fianco a fianco con il bundle).");
+        console.log("✅ Tabelle SQL copiate in " + appFolder);
     }
 }
 
