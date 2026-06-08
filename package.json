@@ -27,8 +27,7 @@
     "@yao-pkg/pkg": "^6.20.0",
     "archiver": "^7.0.1",
     "esbuild": "^0.28.0",
-    "jest": "^30.4.2",
-    "rcedit": "^5.0.2"
+    "jest": "^30.4.2"
   },
   "pkg": {
     "assets": [
