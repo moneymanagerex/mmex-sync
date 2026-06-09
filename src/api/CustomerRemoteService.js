@@ -82,6 +82,14 @@ export class CustomerRemoteService extends RemoteService {
         return await this._handleResponse(response);
     }
 
+    async getById(collection, id) {
+        const response = await fetch(`${this.url}/${collection}/${encodeURIComponent(id)}`, {
+            method: 'GET',
+            headers: buildHeaders(this.token)
+        });
+        return await this._handleResponse(response);
+    }
+
     async getRemoteRecordByUniqueKeys(collection, keys) {
         const query = new URLSearchParams();
         const searchParts = Object.entries(keys).map(([k, v]) => {
