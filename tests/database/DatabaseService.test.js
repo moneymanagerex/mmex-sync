@@ -214,6 +214,42 @@ describe('DatabaseService', () => {
             expect(mockRun).toHaveBeenCalledWith(10);
             expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
+
+        test('resolveTagLinkConflict deletes old record and inserts new synchronized record', () => {
+            service.schemas = {
+                ...service.schemas,
+                'TAGLINK_V1': {
+                    pk: 'TAGLINKID',
+                    fields: ['REFTYPE', 'REFID', 'TAGID'],
+                    techFields: ['pb_id', 'pb_is_dirty', 'pb_updated_at']
+                }
+            };
+
+            const remoteRecord = {
+                id: 'pb_taglink_123',
+                TAGLINKID: 123,
+                REFTYPE: 'Transaction',
+                REFID: 10,
+                TAGID: 5,
+                _updated_at: '2023-01-01T12:00:00Z'
+            };
+
+            mockRun.mockReturnValue({ lastInsertRowid: 50 });
+
+            service.resolveTagLinkConflict(45, remoteRecord);
+
+            expect(mockExec).toHaveBeenCalledWith('BEGIN TRANSACTION');
+            // Delete old record
+            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM TAGLINK_V1 WHERE ROWID = ?');
+            expect(mockRun).toHaveBeenCalledWith(45);
+
+            // Insert new record
+            expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO TAGLINK_V1'));
+            // Check mark synced
+            expect(mockPrepare).toHaveBeenCalledWith('UPDATE TAGLINK_V1 SET pb_is_dirty = 0 WHERE ROWID = ?');
+            expect(mockRun).toHaveBeenCalledWith(50);
+            expect(mockExec).toHaveBeenCalledWith('COMMIT');
+        });
     });
 
     describe('DB Management / init / schema', () => {

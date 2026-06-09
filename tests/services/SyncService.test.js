@@ -31,6 +31,7 @@ describe('SyncService', () => {
             applyRemoteChanges: jest.fn(),
             getDeletedLog: jest.fn(),
             clearDeletedLog: jest.fn(),
+            resolveTagLinkConflict: jest.fn(),
             schemas: {
                 'ACCOUNTLIST_V1': { pk: 'ACCOUNTID' }
             }
@@ -40,6 +41,7 @@ describe('SyncService', () => {
             update: jest.fn(),
             create: jest.fn(),
             getByRowId: jest.fn(),
+            getRemoteRecordByUniqueKeys: jest.fn(),
             getFullList: jest.fn(),
             delete: jest.fn()
         };
@@ -128,6 +130,23 @@ describe('SyncService', () => {
             expect(mockPbService.getByRowId).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1);
             expect(mockPbService.update).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_remote_123', expect.any(Object));
             expect(mockDbService.setSyncedStatus).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1, 'pb_remote_123');
+        });
+
+        test('handles validation_not_unique error for TAGLINK_V1 by querying remote unique keys and resolving conflict', async () => {
+            const record = { rowid: 1, REFTYPE: 'Transaction', REFID: 10, TAGID: 5 };
+            mockDbService.getDirtyRecords.mockReturnValue([record]);
+
+            const validationError = { response: { data: { REFTYPE: { code: 'validation_not_unique' } } } };
+            mockPbService.create.mockRejectedValueOnce(validationError);
+
+            const remoteRecord = { id: 'pb_taglink_123', TAGLINKID: 123, REFTYPE: 'Transaction', REFID: 10, TAGID: 5 };
+            mockPbService.getRemoteRecordByUniqueKeys.mockResolvedValueOnce(remoteRecord);
+
+            await syncService.pushTable('TAGLINK_V1');
+
+            expect(mockPbService.create).toHaveBeenCalled();
+            expect(mockPbService.getRemoteRecordByUniqueKeys).toHaveBeenCalledWith('TAGLINK_V1', { REFTYPE: 'Transaction', REFID: 10, TAGID: 5 });
+            expect(mockDbService.resolveTagLinkConflict).toHaveBeenCalledWith(1, remoteRecord);
         });
     });
 

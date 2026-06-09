@@ -218,6 +218,39 @@ export class DatabaseService {
         })();
     }
 
+    resolveTagLinkConflict(oldRowid, remoteRecord) {
+        this.createTransaction(() => {
+            // 1. Delete the old record
+            this.db.prepare(`DELETE FROM TAGLINK_V1 WHERE ROWID = ?`).run(oldRowid);
+
+            // 2. Insert the new record with remote TAGLINKID and pb_id
+            const table = 'TAGLINK_V1';
+            const keys = this.schemas[table].fields;
+            const pk = this.schemas[table].pk;
+            const columns = [pk, ...keys, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].join(', ');
+            const placeholders = ['?', ...keys.map(() => '?'), '?', '2', '?'].join(', ');
+            
+            const updatedAt = remoteRecord._updated_at || remoteRecord.updated || new Date().toISOString();
+            
+            const values = [
+                remoteRecord.TAGLINKID,
+                ...keys.map(k => remoteRecord[k]),
+                remoteRecord.id,
+                updatedAt
+            ];
+
+            const result = this.db.prepare(`
+                INSERT INTO TAGLINK_V1 (${columns}) 
+                VALUES (${placeholders})
+            `).run(...values);
+
+            const newRowId = result.lastInsertRowid;
+            
+            // 3. Mark as synchronized (pb_is_dirty = 0)
+            this.db.prepare(`UPDATE TAGLINK_V1 SET pb_is_dirty = 0 WHERE ROWID = ?`).run(newRowId);
+        })();
+    }
+
     getDeletedLog() {
         return this.db.prepare(`SELECT * FROM DELETED_LOG`).all();
     }
