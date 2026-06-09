@@ -37,6 +37,10 @@ export class RemoteService {
         throw new Error('RemoteService.getByRowId() must be implemented by subclass');
     }
 
+    async getRemoteRecordByUniqueKeys(collection, keys) {
+        throw new Error('RemoteService.getRemoteRecordByUniqueKeys() must be implemented by subclass');
+    }
+
     async create(collection, data) {
         throw new Error('RemoteService.create() must be implemented by subclass');
     }

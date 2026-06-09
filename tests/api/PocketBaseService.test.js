@@ -160,6 +160,15 @@ describe('PocketBaseService', () => {
             await service.delete('ACCOUNTLIST_V1', 'id123');
             expect(mockDelete).toHaveBeenCalledWith('id123');
         });
+
+        test('getRemoteRecordByUniqueKeys correctly builds search string and calls pocketbase client', async () => {
+            mockGetFirstListItem.mockResolvedValueOnce(PB_MOCK_SUCCESS_RECORD);
+
+            const result = await service.getRemoteRecordByUniqueKeys('ACCOUNTLIST_V1', { REFTYPE: 'Transaction', REFID: 1, TAGID: 5 });
+
+            expect(mockGetFirstListItem).toHaveBeenCalledWith('REFTYPE = "Transaction" && REFID = 1 && TAGID = 5');
+            expect(result).toEqual(PB_MOCK_SUCCESS_RECORD);
+        });
     });
 
     describe('Subscriptions', () => {
