@@ -172,6 +172,10 @@ You can manage different databases (e.g., "Home" vs "Work") using profiles:
 Simply run `mmex-sync`. On the first start, the program will interactively ask for your PocketBase URL, credentials, and database path, then store them in the `default` profile.
 
 ### Command Line Arguments
+
+> [!NOTE]
+> **Case-insensitivity:** All parameters are case-insensitive (e.g., `--CHECKFORUPDATE`, `--DB`, `--verbose` work interchangeably with their lowercase or camelCase equivalents). Values for parameters (such as passwords, profile names, or file paths) remain case-sensitive.
+
 ```bash
 ===========================================================
 🚀 MMEX-PocketBase Sync Tool | User Manual
@@ -193,7 +197,8 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --setDefaultMode=X  Sets the default mode for the profile
                       Values: sync, run (default), watch
   --exe=path          Path to the MMEX.exe executable
-                      Default: C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe					  
+                      Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
+  --serverType=name   Remote server type to use. Default: pocketbase
   --create            Delete and Recreates a new empty database
   --verbose           Shows detailed logs of each operation.
 
@@ -221,8 +226,10 @@ Usage: mmex-sync [PARAMETERS] [MODE]
                       3. Monitors local/remote changes in real-time
 
 -----------------------------------------------------------
-⚡ FORCING AND MAINTENANCE COMMANDS
+🆙 AUTO-UPDATE COMMANDS
 -----------------------------------------------------------
+  --checkForUpdate       Checks for newer versions on GitHub and suggests download.
+  --autoDownloadUpdate   Downloads and installs the latest compatible version.
 
 -----------------------------------------------------------
 🧹 CLEANUP (Warning!)
