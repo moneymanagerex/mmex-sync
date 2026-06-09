@@ -35,6 +35,21 @@ async function main() {
         process.exit(0);
     }
 
+    if (args.checkForUpdate || args.autoDownloadUpdate) {
+        try {
+            const { UpdateService } = await import('./services/UpdateService.js');
+            const updateService = new UpdateService(args);
+            if (args.checkForUpdate) {
+                await updateService.checkForUpdate();
+            } else {
+                await updateService.autoDownloadUpdate();
+            }
+        } catch (err) {
+            console.error(`❌ Error during update execution: ${err.message}`);
+        }
+        return;
+    }
+
     if (args.listProfile) {
         const configMgr = new ConfigManager(args);
         configMgr.listProfiles();
