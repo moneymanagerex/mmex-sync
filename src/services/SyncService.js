@@ -46,6 +46,18 @@ export class SyncService {
                         if (err.status === 404) {
                             if (this.options.verbose) console.log(`[Push] Update failed for ${pb_id}, trying to recreate...`);
                             response = await this.pb.create(table, dataToSync);
+                        } else if (err.status === 409 || (err.response && err.response.status === 409)) {
+                            if (this.options.verbose) console.log(`[Push] 409 Conflict for ${table} (rowid: ${record.rowid}), downloading remote record...`);
+                            const remoteRecord = await this.pb.getById(table, pb_id);
+                            if (remoteRecord) {
+                                this.db.applyRemoteChanges(table, remoteRecord);
+                                if (this.options.verbose) {
+                                    console.log(`[Push] Resolved 409 conflict: updated local database and cleared dirty flag for ${table} (rowid: ${record.rowid})`);
+                                }
+                            } else {
+                                console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}): Remote record not found for 409 conflict resolution.`);
+                            }
+                            continue;
                         } else {
                             throw err;
                         }
@@ -66,25 +78,52 @@ export class SyncService {
                 }
 
             } catch (err) {
-                if (err && err.response && err.response.data && err.response.data._userid && err.response.data._userid.code == 'validation_not_unique') {
-                    // serach for pk
-                    let remoteRecord;
-                    try {
-                        remoteRecord = await this.pb.getByRowId(table, record.rowid);
-                    } catch (err) {
-                        console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) not found and probabily unique constraint violation`, err.message);
-                    }
-                    if (remoteRecord) {
-                        response = await this.pb.update(table, remoteRecord.id, dataToSync);
-                        if (response.id != null) {
-                            if (this.options.verbose) console.log(`[Push] Updated ${table} (rowid: ${record.rowid}) with pb_id: ${response.id}`);
-                            this.db.setSyncedStatus(table, record.rowid, response.id);
+                let isUniqueValidationError = false;
+                if (err && err.response && err.response.data) {
+                    isUniqueValidationError = Object.values(err.response.data).some(
+                        fieldError => fieldError && fieldError.code === 'validation_not_unique'
+                    );
+                }
+
+                if (isUniqueValidationError) {
+                    if (table === 'TAGLINK_V1') {
+                        const { REFTYPE, REFID, TAGID } = record;
+                        let remoteRecord;
+                        try {
+                            remoteRecord = await this.pb.getRemoteRecordByUniqueKeys(table, { REFTYPE, REFID, TAGID });
+                        } catch (queryErr) {
+                            if (queryErr.status !== 404) {
+                                console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) taglink query failed:`, queryErr.message);
+                            }
+                        }
+                        if (remoteRecord) {
+                            this.db.resolveTagLinkConflict(record.rowid, remoteRecord);
+                            if (this.options.verbose) {
+                                console.log(`[Push] Resolved conflict for ${table} (rowid: ${record.rowid}) using remote TAGLINKID: ${remoteRecord.TAGLINKID}`);
+                            }
                         } else {
-                            console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
+                            console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) taglink not found on remote server.`);
+                        }
+                    } else {
+                        // search for pk
+                        let remoteRecord;
+                        try {
+                            remoteRecord = await this.pb.getByRowId(table, record.rowid);
+                        } catch (err) {
+                            console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) not found and probabily unique constraint violation`, err.message);
+                        }
+                        if (remoteRecord) {
+                            response = await this.pb.update(table, remoteRecord.id, dataToSync);
+                            if (response.id != null) {
+                                if (this.options.verbose) console.log(`[Push] Updated ${table} (rowid: ${record.rowid}) with pb_id: ${response.id}`);
+                                this.db.setSyncedStatus(table, record.rowid, response.id);
+                            } else {
+                                console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
+                            }
                         }
                     }
                 } else {
-                    console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}):`, err.message);
+                    console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}):`, err ? err.message : 'Unknown error');
                 }
             }
         }
@@ -110,9 +149,6 @@ export class SyncService {
 
             for (const remote of remoteRecords) {
                 progress.update(`[Pull] ${table}`);
-                if (remote.id === 'djpneq67vq27jqe') {
-                    console.log(`[Pull] Found record in ${table} (pb_id: ${remote.id})`);
-                }
                 try {
                     this.db.applyRemoteChanges(table, remote);
                 } catch (err) {

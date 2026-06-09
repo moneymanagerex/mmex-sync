@@ -11,12 +11,39 @@ import path from 'path';
 
 
 // 1. Argument parsing (internal or external utility)
-const args = process.argv.slice(2).reduce((acc, arg) => {
+const rawArgs = process.argv.slice(2).reduce((acc, arg) => {
     const [key, value] = arg.split('=');
     const cleanKey = key.replace('--', '');
     acc[cleanKey] = value !== undefined ? value : true;
     return acc;
 }, {});
+
+const args = new Proxy(rawArgs, {
+    get(target, prop) {
+        if (typeof prop === 'string') {
+            const lowerProp = prop.toLowerCase();
+            const foundKey = Object.keys(target).find(k => k.toLowerCase() === lowerProp);
+            if (foundKey !== undefined) {
+                return target[foundKey];
+            }
+        }
+        return target[prop];
+    },
+    has(target, prop) {
+        if (typeof prop === 'string') {
+            const lowerProp = prop.toLowerCase();
+            return Object.keys(target).some(k => k.toLowerCase() === lowerProp);
+        }
+        return prop in target;
+    },
+    ownKeys(target) {
+        return Reflect.ownKeys(target);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+        return Reflect.getOwnPropertyDescriptor(target, prop);
+    }
+});
+
 
 async function main() {
     if (args.help) {
@@ -33,6 +60,21 @@ async function main() {
             console.log(`unknow version`);
         }
         process.exit(0);
+    }
+
+    if (args.checkForUpdate || args.autoDownloadUpdate) {
+        try {
+            const { UpdateService } = await import('./services/UpdateService.js');
+            const updateService = new UpdateService(args);
+            if (args.checkForUpdate) {
+                await updateService.checkForUpdate();
+            } else {
+                await updateService.autoDownloadUpdate();
+            }
+        } catch (err) {
+            console.error(`❌ Error during update execution: ${err.message}`);
+        }
+        return;
     }
 
     if (args.listProfile) {

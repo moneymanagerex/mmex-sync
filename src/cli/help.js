@@ -56,6 +56,12 @@ Usage: mmex-sync [PARAMETERS] [MODE]
 -----------------------------------------------------------
 
 -----------------------------------------------------------
+🆙 AUTO-UPDATE COMMANDS
+-----------------------------------------------------------
+  --checkForUpdate       Checks for newer versions on GitHub and suggests download.
+  --autoDownloadUpdate   Downloads and installs the latest compatible version.
+
+-----------------------------------------------------------
 🧹 CLEANUP (Warning!)
    These commands are executed alone. 
    Other parameters are ignored.

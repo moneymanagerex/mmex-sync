@@ -31,6 +31,7 @@ describe('SyncService', () => {
             applyRemoteChanges: jest.fn(),
             getDeletedLog: jest.fn(),
             clearDeletedLog: jest.fn(),
+            resolveTagLinkConflict: jest.fn(),
             schemas: {
                 'ACCOUNTLIST_V1': { pk: 'ACCOUNTID' }
             }
@@ -40,6 +41,8 @@ describe('SyncService', () => {
             update: jest.fn(),
             create: jest.fn(),
             getByRowId: jest.fn(),
+            getById: jest.fn(),
+            getRemoteRecordByUniqueKeys: jest.fn(),
             getFullList: jest.fn(),
             delete: jest.fn()
         };
@@ -128,6 +131,58 @@ describe('SyncService', () => {
             expect(mockPbService.getByRowId).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1);
             expect(mockPbService.update).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_remote_123', expect.any(Object));
             expect(mockDbService.setSyncedStatus).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1, 'pb_remote_123');
+        });
+
+        test('handles validation_not_unique error for TAGLINK_V1 by querying remote unique keys and resolving conflict', async () => {
+            const record = { rowid: 1, REFTYPE: 'Transaction', REFID: 10, TAGID: 5 };
+            mockDbService.getDirtyRecords.mockReturnValue([record]);
+
+            const validationError = { response: { data: { REFTYPE: { code: 'validation_not_unique' } } } };
+            mockPbService.create.mockRejectedValueOnce(validationError);
+
+            const remoteRecord = { id: 'pb_taglink_123', TAGLINKID: 123, REFTYPE: 'Transaction', REFID: 10, TAGID: 5 };
+            mockPbService.getRemoteRecordByUniqueKeys.mockResolvedValueOnce(remoteRecord);
+
+            await syncService.pushTable('TAGLINK_V1');
+
+            expect(mockPbService.create).toHaveBeenCalled();
+            expect(mockPbService.getRemoteRecordByUniqueKeys).toHaveBeenCalledWith('TAGLINK_V1', { REFTYPE: 'Transaction', REFID: 10, TAGID: 5 });
+            expect(mockDbService.resolveTagLinkConflict).toHaveBeenCalledWith(1, remoteRecord);
+        });
+
+        test('handles 409 conflict during update by fetching remote record via getById and applying changes', async () => {
+            mockDbService.getDirtyRecords.mockReturnValue([{ rowid: 1, pb_id: 'pb_999', name: 'Test' }]);
+            
+            const error409 = new Error('Conflict');
+            error409.status = 409;
+            mockPbService.update.mockRejectedValueOnce(error409);
+            
+            const remoteRecord = { id: 'pb_999', name: 'Server Test', updated: '2023-01-01T12:00:00.000Z' };
+            mockPbService.getById.mockResolvedValueOnce(remoteRecord);
+
+            await syncService.pushTable('ACCOUNTLIST_V1');
+
+            expect(mockPbService.update).toHaveBeenCalled();
+            expect(mockPbService.getById).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_999');
+            expect(mockDbService.applyRemoteChanges).toHaveBeenCalledWith('ACCOUNTLIST_V1', remoteRecord);
+        });
+
+        test('does not handle 409 conflict during create (no pb_id) and logs critical error', async () => {
+            mockDbService.getDirtyRecords.mockReturnValue([{ rowid: 1, name: 'Test' }]);
+            
+            const error409 = new Error('Conflict');
+            error409.status = 409;
+            mockPbService.create.mockRejectedValueOnce(error409);
+
+            await syncService.pushTable('ACCOUNTLIST_V1');
+
+            expect(mockPbService.create).toHaveBeenCalled();
+            expect(mockPbService.getByRowId).not.toHaveBeenCalled();
+            expect(mockDbService.applyRemoteChanges).not.toHaveBeenCalled();
+            expect(consoleErrorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Critical push error on ACCOUNTLIST_V1'),
+                'Conflict'
+            );
         });
     });
 

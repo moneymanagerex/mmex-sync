@@ -82,6 +82,31 @@ export class CustomerRemoteService extends RemoteService {
         return await this._handleResponse(response);
     }
 
+    async getById(collection, id) {
+        const response = await fetch(`${this.url}/${collection}/${encodeURIComponent(id)}`, {
+            method: 'GET',
+            headers: buildHeaders(this.token)
+        });
+        return await this._handleResponse(response);
+    }
+
+    async getRemoteRecordByUniqueKeys(collection, keys) {
+        const query = new URLSearchParams();
+        const searchParts = Object.entries(keys).map(([k, v]) => {
+            if (typeof v === 'string') {
+                return `${k} = "${v}"`;
+            }
+            return `${k} = ${v}`;
+        });
+        query.set('filter', searchParts.join(' && '));
+        const response = await fetch(`${this.url}/${collection}?${query.toString()}`, {
+            method: 'GET',
+            headers: buildHeaders(this.token)
+        });
+        const list = await this._handleResponse(response);
+        return list && list.length > 0 ? list[0] : null;
+    }
+
     async create(collection, data) {
         const response = await fetch(`${this.url}/${collection}`, {
             method: 'POST',
