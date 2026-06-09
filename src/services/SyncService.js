@@ -46,6 +46,18 @@ export class SyncService {
                         if (err.status === 404) {
                             if (this.options.verbose) console.log(`[Push] Update failed for ${pb_id}, trying to recreate...`);
                             response = await this.pb.create(table, dataToSync);
+                        } else if (err.status === 409 || (err.response && err.response.status === 409)) {
+                            if (this.options.verbose) console.log(`[Push] 409 Conflict for ${table} (rowid: ${record.rowid}), downloading remote record...`);
+                            const remoteRecord = await this.pb.getById(table, pb_id);
+                            if (remoteRecord) {
+                                this.db.applyRemoteChanges(table, remoteRecord);
+                                if (this.options.verbose) {
+                                    console.log(`[Push] Resolved 409 conflict: updated local database and cleared dirty flag for ${table} (rowid: ${record.rowid})`);
+                                }
+                            } else {
+                                console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}): Remote record not found for 409 conflict resolution.`);
+                            }
+                            continue;
                         } else {
                             throw err;
                         }
