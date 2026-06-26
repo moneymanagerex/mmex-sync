@@ -71,14 +71,16 @@ The Sync Engine requires a PocketBase backend to coordinate data across devices.
 
 ## 🕹️ Quick Start Guide
 
-For a detailed step-by-step setup procedure (including Android synchronization), please refer to the [Sync Setup Guide](startup.md).
+For a detailed step-by-step setup procedure (including Android synchronization), please refer to the [Sync Setup Guide](startup.md). To keep your installation up to date, read the [Auto-Update Guide](update.md).
+
+> [!NOTE]
+> **Case-insensitivity:** All command-line parameters are case-insensitive (e.g., `--CHECKFORUPDATE`, `--DB`, `--verbose` work interchangeably). Parameter values (e.g., passwords or file paths) remain case-sensitive.
 
 ### First Setup
 On the first launch, the program will interactively guide you to configure your credentials and database path:
 
 ```bash
 mmex-sync
-
 ```
 
 ### Daily Workflow Modes
@@ -92,8 +94,14 @@ To set a default mode so you can run the tool by simply typing `mmex-sync`:
 
 ```bash
 mmex-sync --setDefaultMode=run  # Or watch
-
 ```
+
+### 🆙 Auto-Update Commands
+
+* **Check for Updates:** `mmex-sync --checkForUpdate`
+* **Download & Install Update:** `mmex-sync --autoDownloadUpdate`
+
+*For more details on the update mechanism, see the [Auto-Update Guide](update.md).*
 
 ### Manual Synchronization (Without interface)
 

@@ -110,6 +110,7 @@ async function main() {
         }
 
         // show all relevant parametert from configuration
+        console.log(`mmex-sync: v${__APP_VERSION__}`);
         console.log("Path DB: " + config.dbPath);
         console.log("Server Type: " + (config.serverType || 'pocketbase'));
         console.log("URL: " + config.pbUrl);

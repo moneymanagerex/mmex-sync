@@ -56,29 +56,32 @@ npm test
 
 ## 📦 Compilation & Packaging (Universal Build)
 
-The build process bundles the JavaScript source files into a single CommonJS file (`dist/app/bundle.cjs`) using `esbuild`, copies the required SQL assets, and generates a unified, hybrid launcher (`dist/mmex-sync.cmd`) that works out-of-the-box on Windows, Linux, and macOS.
+The build process compiles the JavaScript source files into an ES module bundle (`dist/app/bundle.js`) using `esbuild`, copies the required SQL assets, and compiles standalone native executables using `@yao-pkg/pkg`.
 
 ⚠️ **Note:** The build commands **automatically** run the test suite beforehand via a `prebuild` hook. If any test fails, the process will abort immediately.
 
-### 1. Build Local Assets (Development/Testing)
+### 1. Build Local Bundle (Development/Testing)
 
-Generates the complete and runnable application structure inside the `dist/` folder:
+Generates the bundled application code inside the `dist/app/` folder:
 
 ```bash
 npm run build
-
 ```
 
-Once built, you can immediately test the application locally by running `.\mmex-sync.cmd` (Windows) or `./mmex-sync.cmd` (Linux/macOS) directly inside the `dist/` directory.
+Once built, you can test the bundle locally using Node:
+```bash
+node dist/app/bundle.js [arguments]
+```
 
-### 2. Generate Release Package (Distribution)
+### 2. Generate Standalone Binaries (Distribution)
 
-Bundles the `dist/` directory assets into a single, universal, cross-platform `.zip` file inside `dist/release/`:
+Compiles the bundled application into standalone native executables for Windows, Linux, and macOS, placing them in `dist/bin/` and creating compressed `.zip` distribution packages in `dist/release/`:
 
 ```bash
 npm run release
-
 ```
+
+This script is a shortcut that executes `npm run build` followed by `npm run package`. The compiled zip release packages are generated in the `dist/release/` directory.
 
 ---
 

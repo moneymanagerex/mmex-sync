@@ -40,12 +40,12 @@ export class DatabaseService {
         this.createTransaction(() => {
             // 1. Deletion log table (as in your sync_core)
             this.db.prepare(`
-                CREATE TABLE IF NOT EXISTS pb_DELETED_RECORDS_LOG (
-                    TABLE_NAME TEXT,
-                    PB_ID TEXT,
-                    DELETED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `).run();
+                CREATE TABLE IF NOT EXISTS "pb_DELETED_RECORDS_LOG" (
+                    "table_name"   TEXT NOT NULL,
+                    "pb_id"        TEXT NOT NULL,
+                    "deleted_at"   TEXT DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%SZ', 'NOW')),
+                    PRIMARY KEY("table_name", "pb_id")
+                )`).run();
 
             for (const table of this.syncOrder) {
                 this._ensureTechnicalColumns(table);
@@ -229,9 +229,9 @@ export class DatabaseService {
             const pk = this.schemas[table].pk;
             const columns = [pk, ...keys, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].join(', ');
             const placeholders = ['?', ...keys.map(() => '?'), '?', '2', '?'].join(', ');
-            
+
             const updatedAt = remoteRecord._updated_at || remoteRecord.updated || new Date().toISOString();
-            
+
             const values = [
                 remoteRecord.TAGLINKID,
                 ...keys.map(k => remoteRecord[k]),
@@ -245,7 +245,7 @@ export class DatabaseService {
             `).run(...values);
 
             const newRowId = result.lastInsertRowid;
-            
+
             // 3. Mark as synchronized (pb_is_dirty = 0)
             this.db.prepare(`UPDATE TAGLINK_V1 SET pb_is_dirty = 0 WHERE ROWID = ?`).run(newRowId);
         })();
