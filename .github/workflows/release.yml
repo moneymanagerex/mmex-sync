@@ -19,7 +19,7 @@ jobs:
       - name: Configurazione Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'npm'
 
       - name: Installazione dipendenze
@@ -42,7 +42,7 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           name: Release ${{ steps.get_version.outputs.VERSION }}
           draft: false
-          prerelease: false
+          prerelease: true
           files: dist/release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

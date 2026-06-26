@@ -38,6 +38,32 @@ export class DatabaseService {
      */
     initSchema() {
         this.createTransaction(() => {
+            // Initialize Sync Version tracking using pb_sync_info
+            this.db.prepare(`
+                CREATE TABLE IF NOT EXISTS "pb_sync_info" (
+                    "KEY" TEXT PRIMARY KEY,
+                    "VAL" TEXT NOT NULL
+                )
+            `).run();
+
+            // Insert initial version 1 if not present
+            this.db.prepare(`
+                INSERT OR IGNORE INTO pb_sync_info (KEY, VAL) VALUES ('VERSION', '1')
+            `).run();
+
+            let res = this.db.prepare("SELECT VAL FROM pb_sync_info WHERE KEY = 'VERSION'").all()[0];
+            let currentVersion = res ? parseInt(res.VAL, 10) : 1;
+
+            // Run migrations
+            if (currentVersion < 2) {
+                console.log(`[Sync] Migrating database schema from version ${currentVersion} to 2...`);
+                for (const table of this.syncOrder) {
+                    this.db.prepare(`DROP TRIGGER IF EXISTS TRG_${table}_DELETE`).run();
+                }
+                this.db.prepare("UPDATE pb_sync_info SET VAL = '2' WHERE KEY = 'VERSION'").run();
+                console.log('[Sync] Database schema migrated to version 2.');
+            }
+
             // 1. Deletion log table (as in your sync_core)
             this.db.prepare(`
                 CREATE TABLE IF NOT EXISTS "pb_DELETED_RECORDS_LOG" (
@@ -106,7 +132,7 @@ export class DatabaseService {
             FOR EACH ROW
             WHEN OLD.pb_id IS NOT NULL
             BEGIN
-                INSERT INTO pb_DELETED_RECORDS_LOG (TABLE_NAME, PB_ID) VALUES ('${table}', OLD.pb_id);
+                INSERT OR IGNORE INTO pb_DELETED_RECORDS_LOG (TABLE_NAME, PB_ID) VALUES ('${table}', OLD.pb_id);
             END
         `).run();
     }
