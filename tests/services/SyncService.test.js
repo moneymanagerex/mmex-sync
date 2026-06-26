@@ -29,8 +29,9 @@ describe('SyncService', () => {
             setSyncedStatus: jest.fn(),
             resetUnfinishedOps: jest.fn(),
             applyRemoteChanges: jest.fn(),
-            getDeletedLog: jest.fn(),
+            getDeletedLog: jest.fn().mockReturnValue([]),
             clearDeletedLog: jest.fn(),
+            removeDeletedRecordLog: jest.fn(),
             resolveTagLinkConflict: jest.fn(),
             schemas: {
                 'ACCOUNTLIST_V1': { pk: 'ACCOUNTID' }
@@ -235,7 +236,7 @@ describe('SyncService', () => {
         test('exits if the log is empty', async () => {
             mockDbService.getDeletedLog.mockReturnValue([]);
             await syncService.syncDeletions();
-            expect(mockPbService.delete).not.toHaveBeenCalled();
+            expect(mockPbService.update).not.toHaveBeenCalled();
         });
 
         test('executes deletes on pb for each record in the log', async () => {
@@ -245,8 +246,8 @@ describe('SyncService', () => {
 
             await syncService.syncDeletions();
 
-            expect(mockPbService.delete).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_1');
-            expect(mockDbService.clearDeletedLog).toHaveBeenCalled();
+            expect(mockPbService.update).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_1', { _is_deleted: 1 });
+            expect(mockDbService.removeDeletedRecordLog).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_1');
         });
 
         test('ignores 404 errors (already deleted on server)', async () => {
@@ -256,12 +257,12 @@ describe('SyncService', () => {
             
             const error404 = new Error('Not found');
             error404.status = 404;
-            mockPbService.delete.mockRejectedValueOnce(error404);
+            mockPbService.update.mockRejectedValueOnce(error404);
 
             await syncService.syncDeletions();
 
             expect(consoleErrorSpy).not.toHaveBeenCalled(); // 404 error is silenced
-            expect(mockDbService.clearDeletedLog).toHaveBeenCalled();
+            expect(mockDbService.removeDeletedRecordLog).toHaveBeenCalledWith('ACCOUNTLIST_V1', 'pb_1');
         });
     });
 

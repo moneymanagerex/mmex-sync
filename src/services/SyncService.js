@@ -168,20 +168,25 @@ export class SyncService {
      * DELETE: Synchronizes local deletions to the server
      */
     async syncDeletions() {
-        const log = this.db.getDeletedLog();
+        const log = this.db.getDeletedLog() || [];
         if (log.length === 0) return;
 
         for (const item of log) {
+            const tableName = item.table_name || item.TABLE_NAME;
+            const pbId = item.pb_id || item.PB_ID;
+
             try {
-                await this.pb.delete(item.TABLE_NAME, item.PB_ID);
+                await this.pb.update(tableName, pbId, { _is_deleted: 1 });
+                this.db.removeDeletedRecordLog(tableName, pbId);
             } catch (err) {
-                // If it's 404 it's already gone, ignore the error and clear the log
-                if (err.status !== 404) {
-                    console.error(`⚠️ Error during remote DELETE of ${item.PB_ID}:`, err.message);
+                // If it's 404 it's already gone on server, we can remove it from local log
+                if (err.status === 404) {
+                    this.db.removeDeletedRecordLog(tableName, pbId);
+                } else {
+                    console.error(`⚠️ Error during remote soft-delete of ${pbId}:`, err.message);
                 }
             }
         }
-        this.db.clearDeletedLog();
     }
 
     async runSyncCycle() {
@@ -215,6 +220,11 @@ export class SyncService {
         // 2. PUSH: Local changes sending (State 1 -> State 0/2)
         if (ops.push) {
             console.log("📤 Operation: PUSH (Local -> Remote)");
+            
+            // Sync local deletions first
+            console.log("[Sync Deletions] Synchronizing local deletions to the server...");
+            await this.syncDeletions();
+
             for (const table of SYNC_ORDER) {
                 await this.pushTable(table);
             }

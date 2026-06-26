@@ -279,11 +279,15 @@ export class DatabaseService {
     }
 
     getDeletedLog() {
-        return this.db.prepare(`SELECT * FROM DELETED_LOG`).all();
+        return this.db.prepare(`SELECT * FROM pb_DELETED_RECORDS_LOG`).all();
+    }
+
+    removeDeletedRecordLog(tableName, pbId) {
+        this.db.prepare(`DELETE FROM pb_DELETED_RECORDS_LOG WHERE table_name = ? AND pb_id = ?`).run(tableName, pbId);
     }
 
     clearDeletedLog() {
-        this.db.prepare(`DELETE FROM DELETED_LOG`).run();
+        this.db.prepare(`DELETE FROM pb_DELETED_RECORDS_LOG`).run();
     }
 
     close() {
