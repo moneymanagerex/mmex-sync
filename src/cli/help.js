@@ -11,6 +11,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
 -----------------------------------------------------------
 📂 PROFILE AND CONFIGURATION MANAGEMENT
 -----------------------------------------------------------
+  --tui               Starts the interactive Terminal User Interface (TUI)
   --profile=name      Selects the profile (e.g., 'home', 'work'). 
                       Default: 'default'
   --ignoreProfile     Ignore profile configuration and use default values

@@ -62,6 +62,25 @@ async function main() {
         process.exit(0);
     }
 
+    if (args.tui) {
+        try {
+            const { TUI } = await import('./cli/tui.js');
+            const tui = new TUI(args);
+            const result = await tui.run();
+            if (!result) {
+                process.exit(0);
+            }
+            rawArgs.profile = result.profile;
+            if (result.action === 'run') rawArgs.run = true;
+            if (result.action === 'sync') rawArgs.sync = true;
+            if (result.action === 'watch') rawArgs.watch = true;
+            delete rawArgs.tui;
+        } catch (err) {
+            console.error(`❌ Error starting TUI: ${err.message}`);
+            process.exit(1);
+        }
+    }
+
     if (args.checkForUpdate || args.autoDownloadUpdate) {
         try {
             const { UpdateService } = await import('./services/UpdateService.js');
@@ -110,7 +129,8 @@ async function main() {
         }
 
         // show all relevant parametert from configuration
-        console.log(`mmex-sync: v${__APP_VERSION__}`);
+        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
+        console.log(`mmex-sync: v: ${appVersion}`);
         console.log("Path DB: " + config.dbPath);
         console.log("Server Type: " + (config.serverType || 'pocketbase'));
         console.log("URL: " + config.pbUrl);

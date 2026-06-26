@@ -179,4 +179,52 @@ describe('ConfigManager', () => {
             expect(fs.writeFileSync).toHaveBeenCalled();
         });
     });
+
+    describe('TUI helpers', () => {
+        test('getProfiles returns list of profile names', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockReturnValue(true);
+            fs.readdirSync.mockReturnValue([
+                'default.mmex-sync.json',
+                'custom.mmex-sync.json',
+                'other.txt'
+            ]);
+            
+            const profiles = config.getProfiles();
+            expect(profiles).toEqual(['default', 'custom']);
+        });
+
+        test('switchProfile switches profile name and loads from file', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockReturnValue(true);
+            fs.readFileSync.mockReturnValue(JSON.stringify({ dbPath: '/new-profile-db' }));
+            
+            config.switchProfile('work');
+            
+            expect(config.profile).toBe('work');
+            expect(config.configPath).toContain('work.mmex-sync.json');
+            expect(config.config.dbPath).toBe('/new-profile-db');
+        });
+
+        test('deleteProfile deletes configuration file if exists', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockReturnValue(true);
+            const unlinkSyncSpy = jest.fn();
+            fs.unlinkSync = unlinkSyncSpy;
+            
+            const result = config.deleteProfile('work');
+            
+            expect(result).toBe(true);
+            expect(unlinkSyncSpy).toHaveBeenCalled();
+        });
+
+        test('deleteProfile returns false if file does not exist', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockReturnValue(false);
+            
+            const result = config.deleteProfile('work');
+            
+            expect(result).toBe(false);
+        });
+    });
 });

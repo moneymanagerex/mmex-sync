@@ -18,6 +18,7 @@
   "author": "Wolfsolver",
   "license": "ISC",
   "dependencies": {
+    "@clack/prompts": "^1.6.0",
     "chokidar": "^5.0.0",
     "enquirer": "^2.4.1",
     "eventsource": "^4.1.0",

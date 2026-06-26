@@ -89,6 +89,32 @@ export class ConfigManager {
         }
     }
 
+    getProfiles() {
+        if (!fs.existsSync(this.configDir)) {
+            return [];
+        }
+        const files = fs.readdirSync(this.configDir);
+        const suffix = `.${CONFIG_FILE_EXTENSION}`;
+        return files
+            .filter(f => f.endsWith(suffix))
+            .map(f => f.replace(suffix, ''));
+    }
+
+    switchProfile(profileName) {
+        this.profile = profileName;
+        this.configPath = path.join(this.configDir, `${this.profile}.${CONFIG_FILE_EXTENSION}`);
+        this.config = this._loadFromFile();
+    }
+
+    deleteProfile(profileName) {
+        const filePath = path.join(this.configDir, `${profileName}.${CONFIG_FILE_EXTENSION}`);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Shows the content of the specified profile or the current profile
      */
