@@ -55,13 +55,14 @@ export class DatabaseService {
             let currentVersion = res ? parseInt(res.VAL, 10) : 1;
 
             // Run migrations
-            if (currentVersion < 2) {
-                console.log(`[Sync] Migrating database schema from version ${currentVersion} to 2...`);
+            const codeVersion = 3
+            if (currentVersion < codeVersion) {
+                console.log(`[Sync] Migrating database schema from version ${currentVersion} to ${codeVersion}...`);
                 for (const table of this.syncOrder) {
                     this.db.prepare(`DROP TRIGGER IF EXISTS TRG_${table}_DELETE`).run();
                 }
-                this.db.prepare("UPDATE pb_sync_info SET VAL = '2' WHERE KEY = 'VERSION'").run();
-                console.log('[Sync] Database schema migrated to version 2.');
+                this.db.prepare(`UPDATE pb_sync_info SET VAL = ${codeVersion} WHERE KEY = 'VERSION'`).run();
+                console.log(`[Sync] Database schema migrated to version ${codeVersion}.`);
             }
 
             // 1. Deletion log table (as in your sync_core)
@@ -132,7 +133,7 @@ export class DatabaseService {
             FOR EACH ROW
             WHEN OLD.pb_id IS NOT NULL
             BEGIN
-                INSERT OR IGNORE INTO pb_DELETED_RECORDS_LOG (TABLE_NAME, PB_ID) VALUES ('${table}', OLD.pb_id);
+                INSERT OR REPLACE INTO pb_DELETED_RECORDS_LOG (TABLE_NAME, PB_ID) VALUES ('${table}', OLD.pb_id);
             END
         `).run();
     }
