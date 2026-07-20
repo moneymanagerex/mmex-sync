@@ -122,6 +122,8 @@ export class SyncService {
                             }
                         }
                     }
+                } else if (err.status === 409 || (err.response && err.response.status === 409)) {
+                    console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}): LWW Conflict: The server has a more recent record. Run mmex-sync --sync=pull [--force] to download latest server record`);
                 } else {
                     console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}):`, err ? err.message : 'Unknown error');
                 }

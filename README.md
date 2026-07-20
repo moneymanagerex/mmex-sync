@@ -190,12 +190,13 @@ Usage: mmex-sync [PARAMETERS] [MODE]
                       Default: 'default'
   --ignoreProfile     Ignore profile configuration and use default values
   --listProfile       Shows the list of available profiles
+  --showProfile[=name] Shows profile information (content of profile)
   --db=path           Path to the MoneyManagerEx .mmb file
   --url=address       URL of the PocketBase instance
   --user=email        PocketBase login email
   --pass=password     Password (not saved, generates a token)
   --setDefaultMode=X  Sets the default mode for the profile
-                      Values: sync, run (default), watch
+                      Values: sync (default), run, watch
   --exe=path          Path to the MMEX.exe executable
                       Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
   --serverType=name   Remote server type to use. Default: pocketbase
@@ -211,9 +212,9 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --force             Ignore flag and timestamp and process all records
 
   Examples:
-    node index.js --sync=pull           (Download remote data only)
-    node index.js --sync=init           (Initialize without transmitting anything)
-    node index.js --sync --force        (Full cycle with total send and receive)
+    mmex-sync --sync=pull           (Download remote data only)
+    mmex-sync --sync=init           (Initialize without transmitting anything)
+    mmex-sync --sync --force        (Full cycle with total send and receive)
 
 -----------------------------------------------------------
 🕹️ OPERATING MODES
@@ -224,6 +225,10 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --watch             1. Initial Sync
                       2. Opens MMEX (detached)
                       3. Monitors local/remote changes in real-time
+
+-----------------------------------------------------------
+⚡ FORCING AND MAINTENANCE COMMANDS
+-----------------------------------------------------------
 
 -----------------------------------------------------------
 🆙 AUTO-UPDATE COMMANDS
@@ -240,7 +245,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --clearServer       Removes all data from the collections on the server.
 
 Example:
-  node index.js --profile=casa --watch --verbose
+  mmex-sync --profile=casa --watch --verbose
 ===========================================================
 ```
 

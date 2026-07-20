@@ -37,9 +37,9 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --force             Ignore flag and timestamp and process all records
 
   Examples:
-    node index.js --sync=pull           (Download remote data only)
-    node index.js --sync=init           (Initialize without transmitting anything)
-    node index.js --sync --force        (Full cycle with total send and receive)
+    mmex-sync --sync=pull           (Download remote data only)
+    mmex-sync --sync=init           (Initialize without transmitting anything)
+    mmex-sync --sync --force        (Full cycle with total send and receive)
 
 -----------------------------------------------------------
 🕹️ OPERATING MODES
@@ -70,7 +70,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --clearServer       Removes all data from the collections on the server.
 
 Example:
-  node index.js --profile=casa --watch --verbose
+  mmex-sync --profile=casa --watch --verbose
 ===========================================================
-    `);
+`);
 }
