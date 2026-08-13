@@ -156,6 +156,7 @@ export class SyncService {
                 } catch (err) {
                     result = false;
                     console.error(`\n❌ applyRemoteChanges error on ${table} (pb_id: ${remote.id}, pk: ${remote[this.db.schemas[table].pk]}):`, err.message);
+                    console.log("\n  remote record is", remote);
                 }
             }
             this.db.resetUnfinishedOps(table);
@@ -222,7 +223,7 @@ export class SyncService {
         // 2. PUSH: Local changes sending (State 1 -> State 0/2)
         if (ops.push) {
             console.log("📤 Operation: PUSH (Local -> Remote)");
-            
+
             // Sync local deletions first
             console.log("[Sync Deletions] Synchronizing local deletions to the server...");
             await this.syncDeletions();
