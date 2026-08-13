@@ -8,6 +8,12 @@ import { spawn } from 'child_process';
 import { showHelp } from './cli/help.js';
 import enquirer from 'enquirer';
 import path from 'path';
+import { waitForExit } from './utils/waitForExit.js';
+
+async function exitProgram(code = 0) {
+    await waitForExit({ noWait: args.nowait });
+    process.exit(code);
+}
 
 
 // 1. Argument parsing (internal or external utility)
@@ -199,7 +205,6 @@ async function main() {
                 console.log("📝 MMEX closed. Stopping watcher and executing final synchronization...");
                 await watcher.stop();
                 await sync.runSyncCycle();
-                process.exit(0);
                 break;
 
             case 'run':
@@ -208,7 +213,6 @@ async function main() {
                 await launchMMEX(config.mmexExe, config.dbPath, false);
                 console.log("📝 MMEX closed. Executing final synchronization...");
                 await sync.runSyncCycle();
-                process.exit(0);
                 break;
 
             case 'sync':
@@ -216,13 +220,15 @@ async function main() {
                 // await sync.fullCycle();
                 // Executes only requested parts (e.g., --push --pull)
                 await sync.runSyncCycle();
-                process.exit(0);
+                break;
         }
+
+        await exitProgram(0);
 
     } catch (err) {
         console.error(`\n❌ CRITICAL ERROR: ${err.message}`);
         if (args.verbose) console.error(err.stack);
-        process.exit(1);
+        await exitProgram(1);
     }
 }
 

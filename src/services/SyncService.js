@@ -122,6 +122,8 @@ export class SyncService {
                             }
                         }
                     }
+                } else if (err.status === 409 || (err.response && err.response.status === 409)) {
+                    console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}): LWW Conflict: The server has a more recent record. Run mmex-sync --sync=pull [--force] to download latest server record`);
                 } else {
                     console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}):`, err ? err.message : 'Unknown error');
                 }
@@ -154,6 +156,7 @@ export class SyncService {
                 } catch (err) {
                     result = false;
                     console.error(`\n❌ applyRemoteChanges error on ${table} (pb_id: ${remote.id}, pk: ${remote[this.db.schemas[table].pk]}):`, err.message);
+                    console.log("\n  remote record is", remote);
                 }
             }
             this.db.resetUnfinishedOps(table);
@@ -220,7 +223,7 @@ export class SyncService {
         // 2. PUSH: Local changes sending (State 1 -> State 0/2)
         if (ops.push) {
             console.log("📤 Operation: PUSH (Local -> Remote)");
-            
+
             // Sync local deletions first
             console.log("[Sync Deletions] Synchronizing local deletions to the server...");
             await this.syncDeletions();

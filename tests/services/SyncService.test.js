@@ -181,8 +181,7 @@ describe('SyncService', () => {
             expect(mockPbService.getByRowId).not.toHaveBeenCalled();
             expect(mockDbService.applyRemoteChanges).not.toHaveBeenCalled();
             expect(consoleErrorSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Critical push error on ACCOUNTLIST_V1'),
-                'Conflict'
+                expect.stringMatching(/Critical push error on ACCOUNTLIST_V1.*Conflict/)
             );
         });
     });

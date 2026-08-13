@@ -202,7 +202,7 @@ export class DatabaseService {
             if (localRecord) {
                 // check to see if it is deleted
                 if (is_deleted) {
-                    this.removeRecord(table, localRecord.rowid);
+                    this.removeRecord(table, localRecordPk);
                 } else {
                     // UPDATE 
                     const keys = this.schemas[table].fields;
