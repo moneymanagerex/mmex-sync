@@ -49,7 +49,8 @@ export class ConfigManager {
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
             mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
-            lastSync: this.config.lastSync || null
+            lastSync: this.config.lastSync || null,
+            isRunning: this.config.isRunning || false
         };
 
         // 3. If data is missing, ask via Prompt
@@ -114,6 +115,7 @@ export class ConfigManager {
             console.log(`* exe = ${parsed.mmexExe || ''}`);
             console.log(`* defaultMode = ${parsed.defaultMode || ''}`);
             console.log(`* lastSync = ${parsed.lastSync || ''}`);
+            console.log(`* isRunning = ${parsed.isRunning || false}`);
             console.log(`* token = ${tokenStatus}`);
             console.log("===========================\n");
         } catch (e) {
@@ -237,6 +239,7 @@ export class ConfigManager {
             mmexExe: configData.mmexExe,
             defaultMode: configData.defaultMode,
             lastSync: configData.lastSync,
+            isRunning: configData.isRunning ?? false,
             encryptedToken: token ? protect(token) : this.config.encryptedToken
         };
         //        console.log("toSave:");

@@ -10,10 +10,37 @@ import enquirer from 'enquirer';
 import path from 'path';
 import { waitForExit } from './utils/waitForExit.js';
 
+let configMgr = null;
+let config = null;
+let hasAcquiredRunning = false;
+let isExiting = false;
+
 async function exitProgram(code = 0) {
+    if (isExiting) return;
+    isExiting = true;
+
+    if (hasAcquiredRunning && configMgr && config) {
+        try {
+            config.isRunning = false;
+            configMgr.save(config);
+            hasAcquiredRunning = false;
+        } catch (err) {
+            console.error(`⚠️ Failed to reset isRunning flag on exit: ${err.message}`);
+        }
+    }
     await waitForExit({ noWait: args.nowait });
     process.exit(code);
 }
+
+process.on('SIGINT', async () => {
+    console.log('\nReceived SIGINT. Exiting...');
+    await exitProgram(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\nReceived SIGTERM. Exiting...');
+    await exitProgram(0);
+});
 
 
 // 1. Argument parsing (internal or external utility)
@@ -54,7 +81,7 @@ const args = new Proxy(rawArgs, {
 async function main() {
     if (args.help) {
         showHelp();
-        process.exit(0);
+        await exitProgram(0);
     }
 
     if (args.version) {
@@ -65,7 +92,7 @@ async function main() {
             // fail silently if __APP_VERSION__ is not defined (build time)
             console.log(`unknow version`);
         }
-        process.exit(0);
+        await exitProgram(0);
     }
 
     if (args.checkForUpdate || args.autoDownloadUpdate) {
@@ -84,28 +111,28 @@ async function main() {
     }
 
     if (args.listProfile) {
-        const configMgr = new ConfigManager(args);
-        configMgr.listProfiles();
-        process.exit(0);
+        const configMgrInstance = new ConfigManager(args);
+        configMgrInstance.listProfiles();
+        await exitProgram(0);
     }
 
     if (args.showProfile) {
-        const configMgr = new ConfigManager(args);
+        const configMgrInstance = new ConfigManager(args);
         const profileName = typeof args.showProfile === 'string' ? args.showProfile : undefined;
-        configMgr.showProfile(profileName);
-        process.exit(0);
+        configMgrInstance.showProfile(profileName);
+        await exitProgram(0);
     }
 
     if (args.setDefaultMode) {
-        const configMgr = new ConfigManager(args);
-        const success = configMgr.setDefaultMode(args.setDefaultMode);
-        process.exit(success ? 0 : 1);
+        const configMgrInstance = new ConfigManager(args);
+        const success = configMgrInstance.setDefaultMode(args.setDefaultMode);
+        await exitProgram(success ? 0 : 1);
     }
 
     try {
         // --- CONFIGURATION INITIALIZATION ---
-        const configMgr = new ConfigManager(args);
-        const config = await configMgr.getEffectiveConfig();
+        configMgr = new ConfigManager(args);
+        config = await configMgr.getEffectiveConfig();
 
         // get full path of db
         const newDbPath = path.resolve(config.dbPath);
@@ -124,7 +151,22 @@ async function main() {
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
 
+        if (config.isRunning) {
+            const { confirm } = await enquirer.prompt({
+                type: 'confirm',
+                name: 'confirm',
+                message: 'It seems another instance is running. Running two instances concurrently is dangerous. Are you sure you want to proceed?'
+            });
+            if (!confirm) {
+                await exitProgram(0);
+            }
+        }
+
         // --- SERVICES INITIALIZATION ---
+        config.isRunning = true;
+        hasAcquiredRunning = true;
+        configMgr.save(config);
+
         const db = new DatabaseService(config.dbPath, args.verbose);
 
         db.connect(args.create);
@@ -177,7 +219,7 @@ async function main() {
         }
 
         if (args.clearServer || args.clearDb) {
-            process.exit(0);
+            await exitProgram(0);
         }
 
         // --- MODE DETERMINATION ---
