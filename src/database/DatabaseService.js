@@ -1,7 +1,7 @@
 // src/database/DatabaseService.js
 import fs from 'fs';
 import { DatabaseSync } from 'node:sqlite';
-import { SYNC_ORDER } from '../config/table_config.js';
+import { SYNC_ORDER, FK_MAP } from '../config/table_config.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -245,36 +245,61 @@ export class DatabaseService {
         })();
     }
 
-    resolveTagLinkConflict(oldRowid, remoteRecord) {
+    replaceRecordAndReferences(table, oldRowId, remoteRecord) {
+        const pkFieldName = this.schemas[table].pk;
+        const oldRecord = this.db.prepare(`SELECT *, ROWID as rowid FROM ${table} WHERE ROWID = ?`).all(oldRowId)[0];
+        if (!oldRecord) return;
+
+        const oldPkValue = oldRecord[pkFieldName];
+        const newPkValue = remoteRecord[pkFieldName];
+
         this.createTransaction(() => {
-            // 1. Delete the old record
-            this.db.prepare(`DELETE FROM TAGLINK_V1 WHERE ROWID = ?`).run(oldRowid);
+            // 1. Delete the old local record
+            this.db.prepare(`DELETE FROM ${table} WHERE ROWID = ?`).run(oldRowId);
 
-            // 2. Insert the new record with remote TAGLINKID and pb_id
-            const table = 'TAGLINK_V1';
+            // il vecchio record deve essere marcato come da cancellare anche nel db distribuito.
+            // bisogna quindi creare il record nella tabella di cancellazione e non rium
+            // quindi non bisogna cancellare il record creato dal trigger
+            // if (oldRecord.pb_id) {
+            //    this.removeDeletedRecordLog(table, oldRecord.pb_id);
+            //}
+
+            // 2. Insert the remote record
             const keys = this.schemas[table].fields;
-            const pk = this.schemas[table].pk;
-            const columns = [pk, ...keys, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].join(', ');
+            const columns = [pkFieldName, ...keys, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].join(', ');
             const placeholders = ['?', ...keys.map(() => '?'), '?', '2', '?'].join(', ');
-
             const updatedAt = remoteRecord._updated_at || remoteRecord.updated || new Date().toISOString();
 
             const values = [
-                remoteRecord.TAGLINKID,
+                newPkValue,
                 ...keys.map(k => remoteRecord[k]),
                 remoteRecord.id,
                 updatedAt
             ];
 
             const result = this.db.prepare(`
-                INSERT INTO TAGLINK_V1 (${columns}) 
+                INSERT INTO ${table} (${columns}) 
                 VALUES (${placeholders})
             `).run(...values);
 
             const newRowId = result.lastInsertRowid;
 
-            // 3. Mark as synchronized (pb_is_dirty = 0)
-            this.db.prepare(`UPDATE TAGLINK_V1 SET pb_is_dirty = 0 WHERE ROWID = ?`).run(newRowId);
+            // Mark as synchronized (pb_is_dirty = 0)
+            this.db.prepare(`UPDATE ${table} SET pb_is_dirty = 0 WHERE ROWID = ?`).run(newRowId);
+
+            // 3. Update FK references in all dependent tables if PK changed
+            if (oldPkValue != null && newPkValue != null && oldPkValue !== newPkValue) {
+                const targetCols = FK_MAP[pkFieldName] || [pkFieldName];
+                for (const t of this.syncOrder) {
+                    const schema = this.schemas[t];
+                    if (!schema) continue;
+                    for (const col of schema.fields) {
+                        if (targetCols.includes(col)) {
+                            this.db.prepare(`UPDATE ${t} SET ${col} = ? WHERE ${col} = ?`).run(newPkValue, oldPkValue);
+                        }
+                    }
+                }
+            }
         })();
     }
 
@@ -311,7 +336,8 @@ export class DatabaseService {
                 if (this.verbose) console.log(`[Clean] Triggers removed for: ${table}`);
 
                 // 2. COLUMN REMOVAL
-                for (const column of this.schemas[table].techFields) {
+                const techFields = this.schemas[table]?.techFields || [];
+                for (const column of techFields) {
                     this.db.prepare(`ALTER TABLE ${table} DROP COLUMN ${column}`).run();
                     if (this.verbose) console.log(`[Clean] Column ${column} removed for: ${table}`);
                 }
@@ -351,10 +377,12 @@ export class DatabaseService {
             ? __dirname
             : path.dirname(fileURLToPath(import.meta.url));
 
-        let sqlSchemaPath = path.join(currentDir, 'tables_v1_for_sync.sql');
+        const table_file_name = 'table_V1_completo.sql';
+
+        let sqlSchemaPath = path.join(currentDir, table_file_name);
 
         if (!fs.existsSync(sqlSchemaPath)) {
-            sqlSchemaPath = './tables_v1_for_sync.sql';
+            sqlSchemaPath = './' + table_file_name;
             if (!fs.existsSync(sqlSchemaPath)) {
                 throw new Error(`File schema non trovato: ${sqlSchemaPath}`);
             }

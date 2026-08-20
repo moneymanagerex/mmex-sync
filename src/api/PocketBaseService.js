@@ -85,12 +85,20 @@ export class PocketBaseService extends RemoteService {
     async getRemoteRecordByUniqueKeys(collection, keys) {
         const searchParts = Object.entries(keys).map(([k, v]) => {
             if (typeof v === 'string') {
-                return `${k} = "${v}"`;
+                return `${k} = "${v.replace(/"/g, '\\"')}"`;
             }
             return `${k} = ${v}`;
         });
+        searchParts.push('_is_deleted = 0');
         const searchString = searchParts.join(' && ');
-        return await this.client.collection(collection).getFirstListItem(searchString);
+        try {
+            return await this.client.collection(collection).getFirstListItem(searchString);
+        } catch (err) {
+            if (err && (err.status === 404 || err.status === 400)) {
+                return null;
+            }
+            throw err;
+        }
     }
 
     async create(collection, data) {

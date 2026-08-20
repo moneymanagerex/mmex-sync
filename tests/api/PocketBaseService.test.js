@@ -166,7 +166,7 @@ describe('PocketBaseService', () => {
 
             const result = await service.getRemoteRecordByUniqueKeys('ACCOUNTLIST_V1', { REFTYPE: 'Transaction', REFID: 1, TAGID: 5 });
 
-            expect(mockGetFirstListItem).toHaveBeenCalledWith('REFTYPE = "Transaction" && REFID = 1 && TAGID = 5');
+            expect(mockGetFirstListItem).toHaveBeenCalledWith('REFTYPE = "Transaction" && REFID = 1 && TAGID = 5 && _is_deleted = 0');
             expect(result).toEqual(PB_MOCK_SUCCESS_RECORD);
         });
     });

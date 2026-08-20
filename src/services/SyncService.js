@@ -1,6 +1,6 @@
 // src/services/SyncService.js
 
-import { SYNC_ORDER } from '../config/table_config.js';
+import { SYNC_ORDER, SYNC_CONFIG } from '../config/table_config.js';
 import { ProgressBarService } from './../utils/ProgressBarService.js';
 
 
@@ -86,40 +86,55 @@ export class SyncService {
                 }
 
                 if (isUniqueValidationError) {
-                    if (table === 'TAGLINK_V1') {
-                        const { REFTYPE, REFID, TAGID } = record;
-                        let remoteRecord;
-                        try {
-                            remoteRecord = await this.pb.getRemoteRecordByUniqueKeys(table, { REFTYPE, REFID, TAGID });
-                        } catch (queryErr) {
-                            if (queryErr.status !== 404) {
-                                console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) taglink query failed:`, queryErr.message);
-                            }
-                        }
-                        if (remoteRecord) {
-                            this.db.resolveTagLinkConflict(record.rowid, remoteRecord);
-                            if (this.options.verbose) {
-                                console.log(`[Push] Resolved conflict for ${table} (rowid: ${record.rowid}) using remote TAGLINKID: ${remoteRecord.TAGLINKID}`);
-                            }
+                    let remoteRecord;
+                    // 1. Try to search by PK first
+                    try {
+                        remoteRecord = await this.pb.getByRowId(table, record.rowid);
+                    } catch (pkErr) {
+                        // Ignore not found error on PK lookup
+                    }
+
+                    if (remoteRecord) {
+                        response = await this.pb.update(table, remoteRecord.id, dataToSync);
+                        if (response.id != null) {
+                            if (this.options.verbose) console.log(`[Push] Updated ${table} (rowid: ${record.rowid}) with pb_id: ${response.id}`);
+                            this.db.setSyncedStatus(table, record.rowid, response.id);
                         } else {
-                            console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) taglink not found on remote server.`);
+                            console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
                         }
                     } else {
-                        // search for pk
-                        let remoteRecord;
-                        try {
-                            remoteRecord = await this.pb.getByRowId(table, record.rowid);
-                        } catch (err) {
-                            console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}) not found and probabily unique constraint violation`, err.message);
-                        }
-                        if (remoteRecord) {
-                            response = await this.pb.update(table, remoteRecord.id, dataToSync);
-                            if (response.id != null) {
-                                if (this.options.verbose) console.log(`[Push] Updated ${table} (rowid: ${record.rowid}) with pb_id: ${response.id}`);
-                                this.db.setSyncedStatus(table, record.rowid, response.id);
-                            } else {
-                                console.log(`❌ Critical push error on ${table} (rowid: ${record.rowid}): ID not returned.`);
+                        // 2. Search using configured unique constraints for this table
+                        const uniqueConstraints = SYNC_CONFIG[table]?.unique || [];
+                        for (const constraint of uniqueConstraints) {
+                            let uniqueKeys = {};
+                            if (typeof constraint === 'string') {
+                                uniqueKeys[constraint] = record[constraint];
+                            } else if (Array.isArray(constraint)) {
+                                for (const field of constraint) {
+                                    uniqueKeys[field] = record[field];
+                                }
                             }
+
+                            if (Object.keys(uniqueKeys).length > 0) {
+                                try {
+                                    remoteRecord = await this.pb.getRemoteRecordByUniqueKeys(table, uniqueKeys);
+                                } catch (queryErr) {
+                                    remoteRecord = null;
+                                }
+                                if (remoteRecord) {
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (remoteRecord) {
+                            // 3. Resolve conflict by replacing local record and updating all PK references in local DB
+                            this.db.replaceRecordAndReferences(table, record.rowid, remoteRecord);
+                            if (this.options.verbose) {
+                                console.log(`[Push] Resolved unique constraint conflict for ${table} (rowid: ${record.rowid}) using remote record id: ${remoteRecord.id}`);
+                            }
+                        } else {
+                            console.error(`❌ Critical push error on ${table} (rowid: ${record.rowid}): record not found on remote server despite unique constraint violation.`);
                         }
                     }
                 } else if (err.status === 409 || (err.response && err.response.status === 409)) {

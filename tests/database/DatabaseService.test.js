@@ -41,7 +41,14 @@ jest.unstable_mockModule('node:sqlite', () => ({
 
 // Mock della configurazione tabelle
 jest.unstable_mockModule('../../src/config/table_config.js', () => ({
-    SYNC_ORDER: ['ACCOUNTLIST_V1']
+    SYNC_ORDER: ['ACCOUNTLIST_V1', 'CHECKINGACCOUNT_V1'],
+    SYNC_CONFIG: {
+        'ACCOUNTLIST_V1': { pk: 'ACCOUNTID', fields: ['ACCOUNTNAME'], unique: ['ACCOUNTNAME'] },
+        'CHECKINGACCOUNT_V1': { pk: 'TRANSID', fields: ['ACCOUNTID', 'TOACCOUNTID', 'PAYEEID'], unique: [] }
+    },
+    FK_MAP: {
+        'ACCOUNTID': ['ACCOUNTID', 'TOACCOUNTID']
+    }
 }));
 
 // 3. Import dinamici dei moduli mockati
@@ -215,39 +222,47 @@ describe('DatabaseService', () => {
             expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
 
-        test('resolveTagLinkConflict deletes old record and inserts new synchronized record', () => {
+        test('replaceRecordAndReferences deletes old record, inserts remote record and updates FK references', () => {
+            service.syncOrder = ['ACCOUNTLIST_V1', 'CHECKINGACCOUNT_V1'];
             service.schemas = {
-                ...service.schemas,
-                'TAGLINK_V1': {
-                    pk: 'TAGLINKID',
-                    fields: ['REFTYPE', 'REFID', 'TAGID'],
+                'ACCOUNTLIST_V1': {
+                    pk: 'ACCOUNTID',
+                    fields: ['ACCOUNTNAME'],
+                    techFields: ['pb_id', 'pb_is_dirty', 'pb_updated_at']
+                },
+                'CHECKINGACCOUNT_V1': {
+                    pk: 'TRANSID',
+                    fields: ['ACCOUNTID', 'TOACCOUNTID', 'PAYEEID'],
                     techFields: ['pb_id', 'pb_is_dirty', 'pb_updated_at']
                 }
             };
 
+            const oldLocalRecord = { ACCOUNTID: 5, ACCOUNTNAME: 'Pippo', rowid: 45, pb_id: null };
             const remoteRecord = {
-                id: 'pb_taglink_123',
-                TAGLINKID: 123,
-                REFTYPE: 'Transaction',
-                REFID: 10,
-                TAGID: 5,
+                id: 'pb_account_123',
+                ACCOUNTID: 10,
+                ACCOUNTNAME: 'Pippo',
                 _updated_at: '2023-01-01T12:00:00Z'
             };
 
+            mockAll.mockReturnValue([oldLocalRecord]);
             mockRun.mockReturnValue({ lastInsertRowid: 50 });
 
-            service.resolveTagLinkConflict(45, remoteRecord);
+            service.replaceRecordAndReferences('ACCOUNTLIST_V1', 45, remoteRecord);
 
             expect(mockExec).toHaveBeenCalledWith('BEGIN TRANSACTION');
             // Delete old record
-            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM TAGLINK_V1 WHERE ROWID = ?');
+            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM ACCOUNTLIST_V1 WHERE ROWID = ?');
             expect(mockRun).toHaveBeenCalledWith(45);
 
             // Insert new record
-            expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO TAGLINK_V1'));
+            expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO ACCOUNTLIST_V1'));
             // Check mark synced
-            expect(mockPrepare).toHaveBeenCalledWith('UPDATE TAGLINK_V1 SET pb_is_dirty = 0 WHERE ROWID = ?');
-            expect(mockRun).toHaveBeenCalledWith(50);
+            expect(mockPrepare).toHaveBeenCalledWith('UPDATE ACCOUNTLIST_V1 SET pb_is_dirty = 0 WHERE ROWID = ?');
+
+            // FK replacement in CHECKINGACCOUNT_V1 for ACCOUNTID and TOACCOUNTID
+            expect(mockPrepare).toHaveBeenCalledWith('UPDATE CHECKINGACCOUNT_V1 SET ACCOUNTID = ? WHERE ACCOUNTID = ?');
+            expect(mockPrepare).toHaveBeenCalledWith('UPDATE CHECKINGACCOUNT_V1 SET TOACCOUNTID = ? WHERE TOACCOUNTID = ?');
             expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
     });
