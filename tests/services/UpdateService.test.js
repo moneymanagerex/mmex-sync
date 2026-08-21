@@ -1,4 +1,7 @@
 import { jest } from '@jest/globals';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { UpdateService } from '../../src/services/UpdateService.js';
 
 describe('UpdateService', () => {
@@ -113,6 +116,37 @@ describe('UpdateService', () => {
 
             expect(result.error).toBe('Connection failed');
             expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error checking for updates: Connection failed'));
+        });
+    });
+
+    describe('copyDirContents', () => {
+        let tempSrc;
+        let tempDest;
+
+        beforeEach(() => {
+            tempSrc = fs.mkdtempSync(path.join(os.tmpdir(), 'mmex-update-src-'));
+            tempDest = fs.mkdtempSync(path.join(os.tmpdir(), 'mmex-update-dest-'));
+        });
+
+        afterEach(() => {
+            if (fs.existsSync(tempSrc)) fs.rmSync(tempSrc, { recursive: true, force: true });
+            if (fs.existsSync(tempDest)) fs.rmSync(tempDest, { recursive: true, force: true });
+        });
+
+        test('copies all files and nested directories from source to destination', () => {
+            fs.writeFileSync(path.join(tempSrc, 'mmex-sync.exe'), 'fake binary');
+            fs.writeFileSync(path.join(tempSrc, 'tables_v1_for_sync.sql'), 'CREATE TABLE test;');
+            const subDir = path.join(tempSrc, 'assets');
+            fs.mkdirSync(subDir);
+            fs.writeFileSync(path.join(subDir, 'icon.ico'), 'fake icon');
+
+            updateService.copyDirContents(tempSrc, tempDest);
+
+            expect(fs.existsSync(path.join(tempDest, 'mmex-sync.exe'))).toBe(true);
+            expect(fs.readFileSync(path.join(tempDest, 'mmex-sync.exe'), 'utf8')).toBe('fake binary');
+            expect(fs.existsSync(path.join(tempDest, 'tables_v1_for_sync.sql'))).toBe(true);
+            expect(fs.readFileSync(path.join(tempDest, 'tables_v1_for_sync.sql'), 'utf8')).toBe('CREATE TABLE test;');
+            expect(fs.existsSync(path.join(tempDest, 'assets', 'icon.ico'))).toBe(true);
         });
     });
 });
