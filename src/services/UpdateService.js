@@ -199,7 +199,7 @@ export class UpdateService {
             // Extract the ZIP archive
             await this.extractZip(tempZipPath, extractDir);
 
-            // Install the extracted executable
+            // Install the extracted executable and assets/files
             const isPackaged = typeof process.pkg !== 'undefined';
             const binaryName = process.platform === 'win32' ? 'mmex-sync.exe' : 'mmex-sync';
             const extractedBinaryPath = path.join(extractDir, binaryName);
@@ -209,6 +209,7 @@ export class UpdateService {
             }
 
             const targetPath = isPackaged ? process.execPath : path.join(process.cwd(), binaryName);
+            const targetDir = path.dirname(targetPath);
 
             if (process.platform === 'win32') {
                 if (fs.existsSync(targetPath)) {
@@ -225,20 +226,32 @@ export class UpdateService {
                         fs.renameSync(targetPath, oldPath);
                     } catch (err) {
                         console.warn(`⚠️ Warning: Could not overwrite current executable directly. Saving as new file.`);
-                        const altPath = path.join(path.dirname(targetPath), 'mmex-sync-new.exe');
-                        fs.copyFileSync(extractedBinaryPath, altPath);
+                        const altPath = path.join(targetDir, 'mmex-sync-new.exe');
+                        
+                        // Copy all items, directing executable to altPath
+                        const items = fs.readdirSync(extractDir);
+                        for (const item of items) {
+                            const srcPath = path.join(extractDir, item);
+                            if (item === binaryName) {
+                                fs.copyFileSync(srcPath, altPath);
+                            } else {
+                                const destPath = path.join(targetDir, item);
+                                this.copyDirContents(srcPath, destPath);
+                            }
+                        }
+
                         console.log(`ℹ️ Saved the new executable to: ${altPath}`);
                         console.log(`Please rename it to ${binaryName} manually after closing the application.`);
                         return;
                     }
                 }
                 
-                fs.copyFileSync(extractedBinaryPath, targetPath);
+                this.copyDirContents(extractDir, targetDir);
                 console.log(`\n✅ Update to ${remoteVersion} completed successfully!`);
                 if (isPackaged) {
                     console.log(`ℹ️ The old version has been renamed to mmex-sync.exe.old. You can delete it after restarting the program.`);
                 } else {
-                    console.log(`ℹ️ The executable has been saved to: ${targetPath}`);
+                    console.log(`ℹ️ The executable and update files have been saved to: ${targetDir}`);
                 }
             } else {
                 // Linux/macOS
@@ -252,7 +265,7 @@ export class UpdateService {
                     }
                 }
 
-                fs.copyFileSync(extractedBinaryPath, targetPath);
+                this.copyDirContents(extractDir, targetDir);
                 fs.chmodSync(targetPath, 0o755);
                 console.log(`\n✅ Update to ${remoteVersion} completed successfully!`);
             }
@@ -298,6 +311,28 @@ export class UpdateService {
                 // Fallback to tar
                 const cmd = `tar -xf "${zipPath}" -C "${extractDir}"`;
                 await execPromise(cmd);
+            }
+        }
+    }
+
+    /**
+     * Copies contents from src to dest recursively.
+     */
+    copyDirContents(src, dest) {
+        if (fs.cpSync) {
+            fs.cpSync(src, dest, { recursive: true, force: true });
+        } else {
+            const stat = fs.statSync(src);
+            if (stat.isDirectory()) {
+                if (!fs.existsSync(dest)) {
+                    fs.mkdirSync(dest, { recursive: true });
+                }
+                const items = fs.readdirSync(src);
+                for (const item of items) {
+                    this.copyDirContents(path.join(src, item), path.join(dest, item));
+                }
+            } else {
+                fs.copyFileSync(src, dest);
             }
         }
     }
