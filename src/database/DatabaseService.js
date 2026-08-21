@@ -365,14 +365,16 @@ export class DatabaseService {
             ? __dirname
             : path.dirname(fileURLToPath(import.meta.url));
 
-        const table_file_name = 'table_V1_completo.sql';
+        const table_file_name = 'tables_v1_for_sync.sql';
 
         let sqlSchemaPath = path.join(currentDir, table_file_name);
-
         if (!fs.existsSync(sqlSchemaPath)) {
             sqlSchemaPath = './' + table_file_name;
             if (!fs.existsSync(sqlSchemaPath)) {
-                throw new Error(`File schema non trovato: ${sqlSchemaPath}`);
+                sqlSchemaPath = './assets/sql/' + table_file_name;
+                if (!fs.existsSync(sqlSchemaPath)) {
+                    throw new Error(`File schema non trovato: ${sqlSchemaPath}`);
+                }
             }
         }
 
