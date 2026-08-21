@@ -36,13 +36,27 @@ jobs:
           VERSION=$(node -e "import fs from 'fs'; console.log(JSON.parse(fs.readFileSync('./package.json')).version);")
           echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Estrai messaggio del commit di merge
+        id: commit_message
+        run: |
+          # Estrae l'intero messaggio del commit corrente (HEAD)
+          # Per prendere solo il body senza il subject, usa %b invece di %B
+          MSG=$(git log -1 --pretty=format:"%b")
+          
+          # Gestione corretta dell'output multilinea in GitHub Actions
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "BODY<<$EOF" >> "$GITHUB_OUTPUT"
+          echo "$MSG" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
+          
       - name: Creazione e Pubblicazione GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: ${{ steps.commit_message.outputs.BODY }}
           draft: false
-          prerelease: true
+          prerelease: false
           files: dist/release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
