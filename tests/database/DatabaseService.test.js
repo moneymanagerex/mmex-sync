@@ -222,7 +222,7 @@ describe('DatabaseService', () => {
             expect(mockExec).toHaveBeenCalledWith('COMMIT');
         });
 
-        test('replaceRecordAndReferences deletes old record, inserts remote record and updates FK references', () => {
+        test('replaceRecordAndReferences updates record in place and updates FK references', () => {
             service.syncOrder = ['ACCOUNTLIST_V1', 'CHECKINGACCOUNT_V1'];
             service.schemas = {
                 'ACCOUNTLIST_V1': {
@@ -246,19 +246,14 @@ describe('DatabaseService', () => {
             };
 
             mockAll.mockReturnValue([oldLocalRecord]);
-            mockRun.mockReturnValue({ lastInsertRowid: 50 });
 
             service.replaceRecordAndReferences('ACCOUNTLIST_V1', 45, remoteRecord);
 
             expect(mockExec).toHaveBeenCalledWith('BEGIN TRANSACTION');
-            // Delete old record
-            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM ACCOUNTLIST_V1 WHERE ROWID = ?');
-            expect(mockRun).toHaveBeenCalledWith(45);
-
-            // Insert new record
-            expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO ACCOUNTLIST_V1'));
+            // Update record in place
+            expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE ACCOUNTLIST_V1'));
             // Check mark synced
-            expect(mockPrepare).toHaveBeenCalledWith('UPDATE ACCOUNTLIST_V1 SET pb_is_dirty = 0 WHERE ROWID = ?');
+            expect(mockPrepare).toHaveBeenCalledWith('UPDATE ACCOUNTLIST_V1 SET pb_is_dirty = 0 WHERE ACCOUNTID = ?');
 
             // FK replacement in CHECKINGACCOUNT_V1 for ACCOUNTID and TOACCOUNTID
             expect(mockPrepare).toHaveBeenCalledWith('UPDATE CHECKINGACCOUNT_V1 SET ACCOUNTID = ? WHERE ACCOUNTID = ?');

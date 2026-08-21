@@ -254,40 +254,28 @@ export class DatabaseService {
         const newPkValue = remoteRecord[pkFieldName];
 
         this.createTransaction(() => {
-            // 1. Delete the old local record
-            this.db.prepare(`DELETE FROM ${table} WHERE ROWID = ?`).run(oldRowId);
-
-            // il vecchio record deve essere marcato come da cancellare anche nel db distribuito.
-            // bisogna quindi creare il record nella tabella di cancellazione e non rium
-            // quindi non bisogna cancellare il record creato dal trigger
-            // if (oldRecord.pb_id) {
-            //    this.removeDeletedRecordLog(table, oldRecord.pb_id);
-            //}
-
-            // 2. Insert the remote record
             const keys = this.schemas[table].fields;
-            const columns = [pkFieldName, ...keys, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].join(', ');
-            const placeholders = ['?', ...keys.map(() => '?'), '?', '2', '?'].join(', ');
+            const setClause = [pkFieldName, ...keys].map(k => `${k} = ?`).join(', ');
             const updatedAt = remoteRecord._updated_at || remoteRecord.updated || new Date().toISOString();
 
             const values = [
                 newPkValue,
-                ...keys.map(k => remoteRecord[k]),
+                ...keys.map(k => (remoteRecord[k] !== undefined ? remoteRecord[k] : null)),
                 remoteRecord.id,
-                updatedAt
+                updatedAt,
+                oldRowId
             ];
 
-            const result = this.db.prepare(`
-                INSERT INTO ${table} (${columns}) 
-                VALUES (${placeholders})
+            this.db.prepare(`
+                UPDATE ${table} 
+                SET ${setClause}, pb_id = ?, pb_is_dirty = 2, pb_updated_at = ?
+                WHERE ROWID = ?
             `).run(...values);
 
-            const newRowId = result.lastInsertRowid;
-
             // Mark as synchronized (pb_is_dirty = 0)
-            this.db.prepare(`UPDATE ${table} SET pb_is_dirty = 0 WHERE ROWID = ?`).run(newRowId);
+            this.db.prepare(`UPDATE ${table} SET pb_is_dirty = 0 WHERE ${pkFieldName} = ?`).run(newPkValue);
 
-            // 3. Update FK references in all dependent tables if PK changed
+            // Update FK references in all dependent tables if PK changed
             if (oldPkValue != null && newPkValue != null && oldPkValue !== newPkValue) {
                 const targetCols = FK_MAP[pkFieldName] || [pkFieldName];
                 for (const t of this.syncOrder) {
