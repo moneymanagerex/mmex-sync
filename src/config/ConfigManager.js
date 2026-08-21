@@ -49,7 +49,8 @@ export class ConfigManager {
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
             mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
-            lastSync: this.config.lastSync || null
+            lastSync: this.config.lastSync || null,
+            isRunning: this.config.isRunning || false
         };
 
         // 3. If data is missing, ask via Prompt
@@ -80,6 +81,7 @@ export class ConfigManager {
             .filter(f => f.endsWith(suffix))
             .map(f => f.replace(suffix, ''));
 
+        console.log("Profile Directory: " + this.configDir);
         if (profiles.length === 0) {
             console.log("No profiles found.");
         } else {
@@ -114,6 +116,7 @@ export class ConfigManager {
             console.log(`* exe = ${parsed.mmexExe || ''}`);
             console.log(`* defaultMode = ${parsed.defaultMode || ''}`);
             console.log(`* lastSync = ${parsed.lastSync || ''}`);
+            console.log(`* isRunning = ${parsed.isRunning || false}`);
             console.log(`* token = ${tokenStatus}`);
             console.log("===========================\n");
         } catch (e) {
@@ -169,11 +172,11 @@ export class ConfigManager {
         }
         if (!current.mmexExe && !this.config.mmexExe) {
             const foundPaths = this._searchMMEXExecutable();
-            
+
             if (foundPaths.length > 0) {
                 const choices = foundPaths.map(p => ({ name: p, value: p }));
                 choices.push({ name: 'Enter path manually...', value: 'MANUAL' });
-                
+
                 questions.push({
                     type: 'select',
                     name: 'mmexExe',
@@ -187,7 +190,7 @@ export class ConfigManager {
 
         if (questions.length > 0) {
             const answers = await enquirer.prompt(questions);
-            
+
             // If user selected "Enter path manually", prompt for manual input
             if (answers.mmexExe === 'MANUAL') {
                 const { manualPath } = await enquirer.prompt({
@@ -198,7 +201,7 @@ export class ConfigManager {
                 });
                 answers.mmexExe = manualPath;
             }
-            
+
             return { ...current, ...answers };
         }
 
@@ -237,6 +240,7 @@ export class ConfigManager {
             mmexExe: configData.mmexExe,
             defaultMode: configData.defaultMode,
             lastSync: configData.lastSync,
+            isRunning: configData.isRunning ?? false,
             encryptedToken: token ? protect(token) : this.config.encryptedToken
         };
         //        console.log("toSave:");

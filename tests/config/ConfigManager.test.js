@@ -157,6 +157,30 @@ describe('ConfigManager', () => {
             expect(finalConfig.pbUser).toBe('cli@user.com');
             expect(finalConfig.serverType).toBe('customer');
         });
+
+        test('handles isRunning flag correctly when present or absent in saved config', async () => {
+            const configManager = new ConfigManager({});
+            const mockSavedConfig = {
+                dbPath: '/test/db.mmb',
+                pbUrl: 'http://test',
+                pbUser: 'user@test.com',
+                encryptedToken: 'encrypted_token123',
+                isRunning: true
+            };
+
+            fs.existsSync.mockReturnValue(true);
+            fs.readFileSync.mockReturnValue(JSON.stringify(mockSavedConfig));
+
+            const finalConfig = await configManager.getEffectiveConfig();
+            expect(finalConfig.isRunning).toBe(true);
+
+            // Test saving preserves or updates isRunning
+            finalConfig.isRunning = false;
+            configManager.save(finalConfig);
+
+            const savedContent = JSON.parse(fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1][1]);
+            expect(savedContent.isRunning).toBe(false);
+        });
     });
 
     describe('setDefaultMode', () => {
