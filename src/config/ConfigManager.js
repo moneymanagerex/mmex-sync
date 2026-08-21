@@ -81,6 +81,7 @@ export class ConfigManager {
             .filter(f => f.endsWith(suffix))
             .map(f => f.replace(suffix, ''));
 
+        console.log("Profile Directory: " + this.configDir);
         if (profiles.length === 0) {
             console.log("No profiles found.");
         } else {
@@ -171,11 +172,11 @@ export class ConfigManager {
         }
         if (!current.mmexExe && !this.config.mmexExe) {
             const foundPaths = this._searchMMEXExecutable();
-            
+
             if (foundPaths.length > 0) {
                 const choices = foundPaths.map(p => ({ name: p, value: p }));
                 choices.push({ name: 'Enter path manually...', value: 'MANUAL' });
-                
+
                 questions.push({
                     type: 'select',
                     name: 'mmexExe',
@@ -189,7 +190,7 @@ export class ConfigManager {
 
         if (questions.length > 0) {
             const answers = await enquirer.prompt(questions);
-            
+
             // If user selected "Enter path manually", prompt for manual input
             if (answers.mmexExe === 'MANUAL') {
                 const { manualPath } = await enquirer.prompt({
@@ -200,7 +201,7 @@ export class ConfigManager {
                 });
                 answers.mmexExe = manualPath;
             }
-            
+
             return { ...current, ...answers };
         }
 

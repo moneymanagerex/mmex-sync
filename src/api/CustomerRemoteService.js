@@ -98,6 +98,7 @@ export class CustomerRemoteService extends RemoteService {
             }
             return `${k} = ${v}`;
         });
+        searchParts.push('_is_deleted = 0');
         query.set('filter', searchParts.join(' && '));
         const response = await fetch(`${this.url}/${collection}?${query.toString()}`, {
             method: 'GET',

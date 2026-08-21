@@ -1,7 +1,14 @@
 import { jest } from '@jest/globals';
 
 jest.unstable_mockModule('../../src/config/table_config.js', () => ({
-    SYNC_ORDER: ['ACCOUNTLIST_V1']
+    SYNC_ORDER: ['ACCOUNTLIST_V1', 'TAGLINK_V1'],
+    SYNC_CONFIG: {
+        'ACCOUNTLIST_V1': { pk: 'ACCOUNTID', fields: ['ACCOUNTNAME'], unique: ['ACCOUNTNAME'] },
+        'TAGLINK_V1': { pk: 'TAGLINKID', fields: ['REFTYPE', 'REFID', 'TAGID'], unique: [['REFTYPE', 'REFID', 'TAGID']] }
+    },
+    FK_MAP: {
+        'ACCOUNTID': ['ACCOUNTID', 'TOACCOUNTID']
+    }
 }));
 
 jest.unstable_mockModule('../../src/utils/ProgressBarService.js', () => ({
@@ -32,7 +39,7 @@ describe('SyncService', () => {
             getDeletedLog: jest.fn().mockReturnValue([]),
             clearDeletedLog: jest.fn(),
             removeDeletedRecordLog: jest.fn(),
-            resolveTagLinkConflict: jest.fn(),
+            replaceRecordAndReferences: jest.fn(),
             schemas: {
                 'ACCOUNTLIST_V1': { pk: 'ACCOUNTID' }
             }
@@ -134,12 +141,32 @@ describe('SyncService', () => {
             expect(mockDbService.setSyncedStatus).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1, 'pb_remote_123');
         });
 
+        test('handles validation_not_unique error by querying unique constraint fields and invoking replaceRecordAndReferences', async () => {
+            const record = { rowid: 1, ACCOUNTNAME: 'Pippo' };
+            mockDbService.getDirtyRecords.mockReturnValue([record]);
+
+            const validationError = { response: { data: { ACCOUNTNAME: { code: 'validation_not_unique' } } } };
+            mockPbService.create.mockRejectedValueOnce(validationError);
+            mockPbService.getByRowId.mockRejectedValueOnce(new Error('Not found'));
+
+            const remoteRecord = { id: 'pb_account_123', ACCOUNTID: 10, ACCOUNTNAME: 'Pippo' };
+            mockPbService.getRemoteRecordByUniqueKeys.mockResolvedValueOnce(remoteRecord);
+
+            await syncService.pushTable('ACCOUNTLIST_V1');
+
+            expect(mockPbService.create).toHaveBeenCalled();
+            expect(mockPbService.getByRowId).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1);
+            expect(mockPbService.getRemoteRecordByUniqueKeys).toHaveBeenCalledWith('ACCOUNTLIST_V1', { ACCOUNTNAME: 'Pippo' });
+            expect(mockDbService.replaceRecordAndReferences).toHaveBeenCalledWith('ACCOUNTLIST_V1', 1, remoteRecord);
+        });
+
         test('handles validation_not_unique error for TAGLINK_V1 by querying remote unique keys and resolving conflict', async () => {
             const record = { rowid: 1, REFTYPE: 'Transaction', REFID: 10, TAGID: 5 };
             mockDbService.getDirtyRecords.mockReturnValue([record]);
 
             const validationError = { response: { data: { REFTYPE: { code: 'validation_not_unique' } } } };
             mockPbService.create.mockRejectedValueOnce(validationError);
+            mockPbService.getByRowId.mockRejectedValueOnce(new Error('Not found'));
 
             const remoteRecord = { id: 'pb_taglink_123', TAGLINKID: 123, REFTYPE: 'Transaction', REFID: 10, TAGID: 5 };
             mockPbService.getRemoteRecordByUniqueKeys.mockResolvedValueOnce(remoteRecord);
@@ -148,7 +175,7 @@ describe('SyncService', () => {
 
             expect(mockPbService.create).toHaveBeenCalled();
             expect(mockPbService.getRemoteRecordByUniqueKeys).toHaveBeenCalledWith('TAGLINK_V1', { REFTYPE: 'Transaction', REFID: 10, TAGID: 5 });
-            expect(mockDbService.resolveTagLinkConflict).toHaveBeenCalledWith(1, remoteRecord);
+            expect(mockDbService.replaceRecordAndReferences).toHaveBeenCalledWith('TAGLINK_V1', 1, remoteRecord);
         });
 
         test('handles 409 conflict during update by fetching remote record via getById and applying changes', async () => {

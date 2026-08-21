@@ -150,6 +150,7 @@ async function main() {
         console.log("URL: " + config.pbUrl);
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
+        console.log("Profile: " + config.profileName);
 
         if (config.isRunning) {
             const { confirm } = await enquirer.prompt({
