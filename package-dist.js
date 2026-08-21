@@ -11,7 +11,7 @@ const entryPoint = path.join('dist', 'app', 'bundle.js');
 const binDir = path.resolve('dist', 'bin');
 const outDir = path.resolve('dist', 'release');
 
-async function createReleaseZipForPlatform(platform, exeFilename, exeSourcePath) {
+async function createReleaseZipForPlatform(platform, exeFilename, sourcePath) {
     const zipName = `mmex-sync-v${version}-${platform}.zip`;
     const zipPath = path.join(outDir, zipName);
     console.log(`🤐 Creazione pacchetto ZIP di release per ${platform}: ${zipPath}...`);
@@ -27,7 +27,8 @@ async function createReleaseZipForPlatform(platform, exeFilename, exeSourcePath)
         stream.on('close', () => resolve());
         archive.on('error', err => reject(err));
         archive.pipe(stream);
-        archive.file(exeSourcePath, { name: exeFilename });
+        archive.file(sourcePath + '/' + exeFilename, { name: exeFilename });
+        archive.file(sourcePath + '/' + 'tables_v1_for_sync.sql', { name: 'tables_v1_for_sync.sql' });
         archive.finalize();
     });
 }
@@ -74,6 +75,12 @@ async function main() {
         fs.mkdirSync(linuxDir, { recursive: true });
         fs.mkdirSync(macosDir, { recursive: true });
 
+        const sqlfile = path.join('dist', 'app', 'tables_v1_for_sync.sql');
+        fs.copyFileSync(sqlfile, path.join(winDir, 'tables_v1_for_sync.sql'));
+        fs.copyFileSync(sqlfile, path.join(linuxDir, 'tables_v1_for_sync.sql'));
+        fs.copyFileSync(sqlfile, path.join(macosDir, 'tables_v1_for_sync.sql'));
+
+
         // 3. Spostamento e standardizzazione dei nomi dei file generati
         fs.renameSync(srcWin, path.join(winDir, 'mmex-sync.exe'));
         fs.renameSync(srcLinux, path.join(linuxDir, 'mmex-sync'));
@@ -82,9 +89,9 @@ async function main() {
         console.log(`✅ Binari nativi organizzati con successo in: ${binDir}`);
 
         // 4. Generazione automatica dei pacchetti compressi per la distribuzione
-        await createReleaseZipForPlatform('win', 'mmex-sync.exe', path.join(winDir, 'mmex-sync.exe'));
-        await createReleaseZipForPlatform('linux', 'mmex-sync', path.join(linuxDir, 'mmex-sync'));
-        await createReleaseZipForPlatform('macos', 'mmex-sync', path.join(macosDir, 'mmex-sync'));
+        await createReleaseZipForPlatform('win', 'mmex-sync.exe', winDir);
+        await createReleaseZipForPlatform('linux', 'mmex-sync', linuxDir);
+        await createReleaseZipForPlatform('macos', 'mmex-sync', macosDir);
 
         console.log(`\n🎉 RELEASE PRONTA! ZIP generati in: ${outDir}\n`);
 

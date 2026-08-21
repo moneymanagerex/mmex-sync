@@ -35,10 +35,15 @@ async function main() {
 
     // 2. COPIA IL FILE SQL NELLA STESSA CARTELLA DEL BUNDLE
     const sqlSrc = path.join('assets', 'sql', 'tables_v1_for_sync.sql');
-    if (fs.existsSync(sqlSrc)) {
-        fs.copyFileSync(sqlSrc, path.join(appFolder, 'tables_v1_for_sync.sql'));
-        console.log("✅ Tabelle SQL copiate in " + appFolder);
+    if (!fs.existsSync(sqlSrc)) {
+        console.error(`❌ Errore: File SQL obbligatorio non trovato in "${sqlSrc}"`);
+        throw new Error(`File SQL obbligatorio non trovato: ${sqlSrc}`);
     }
+    fs.copyFileSync(sqlSrc, path.join(appFolder, 'tables_v1_for_sync.sql'));
+    console.log("✅ Tabelle SQL copiate in " + appFolder);
 }
 
-main().catch(console.error);
+main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});
