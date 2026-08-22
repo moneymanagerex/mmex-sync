@@ -306,5 +306,21 @@ describe('DatabaseService', () => {
             expect(mockExec).toHaveBeenCalledWith('PRAGMA user_version = 21');
             expect(result).toBeDefined();
         });
+
+        test('createEmptyDatabase finds schema in exeDir as fallback', () => {
+            mockExistsSync
+                .mockReturnValueOnce(false) // currentDir/tables_v1_for_sync.sql
+                .mockReturnValueOnce(false) // ./tables_v1_for_sync.sql
+                .mockReturnValueOnce(false) // ./assets/sql/tables_v1_for_sync.sql
+                .mockReturnValueOnce(true)  // exeDir/tables_v1_for_sync.sql
+                .mockReturnValueOnce(false); // dbPath exists check
+
+            mockReadFileSync.mockReturnValue('CREATE TABLE TEST;');
+
+            service.createEmptyDatabase();
+
+            expect(mockExec).toHaveBeenCalledWith('CREATE TABLE TEST;');
+            expect(mockExec).toHaveBeenCalledWith('PRAGMA user_version = 21');
+        });
     });
 });
