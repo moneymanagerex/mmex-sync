@@ -123,6 +123,18 @@ async function main() {
         await exitProgram(0);
     }
 
+    if (args.setDefaultProfile) {
+        const configMgrInstance = new ConfigManager(args);
+        const success = configMgrInstance.setDefaultProfile(args.setDefaultProfile);
+        await exitProgram(success ? 0 : 1);
+    }
+
+    if (args.renameProfileTo) {
+        const configMgrInstance = new ConfigManager(args);
+        const success = configMgrInstance.renameProfile(args.renameProfileTo);
+        await exitProgram(success ? 0 : 1);
+    }
+
     if (args.setDefaultMode) {
         const configMgrInstance = new ConfigManager(args);
         const success = configMgrInstance.setDefaultMode(args.setDefaultMode);

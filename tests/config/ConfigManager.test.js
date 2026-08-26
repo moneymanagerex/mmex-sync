@@ -8,7 +8,8 @@ jest.unstable_mockModule('fs', () => ({
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn(),
-        readdirSync: jest.fn()
+        readdirSync: jest.fn(),
+        renameSync: jest.fn()
     }
 }));
 
@@ -201,6 +202,67 @@ describe('ConfigManager', () => {
             expect(result).toBe(true);
             expect(config.config.defaultMode).toBe('watch');
             expect(fs.writeFileSync).toHaveBeenCalled();
+        });
+    });
+
+    describe('setDefaultProfile', () => {
+        test('returns false if profile name is invalid', () => {
+            const config = new ConfigManager({});
+            const result = config.setDefaultProfile('');
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Please specify a profile name'));
+        });
+
+        test('updates global config with specified profile name', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockReturnValue(false);
+
+            const result = config.setDefaultProfile('work');
+
+            expect(result).toBe(true);
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                expect.stringContaining('mmex-sync.config.json'),
+                expect.stringContaining('"defaultProfile": "work"')
+            );
+        });
+    });
+
+    describe('renameProfile', () => {
+        test('returns false if current profile file does not exist', () => {
+            const config = new ConfigManager({ profile: 'nonexistent' });
+            fs.existsSync.mockReturnValue(false);
+
+            const result = config.renameProfile('newname');
+
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('does not exist'));
+        });
+
+        test('renames profile file and updates global config if current profile was default', () => {
+            const config = new ConfigManager({ profile: 'work' });
+            // Mock exist checks for: configDir, currentPath, newPath, globalConfigPath
+            fs.existsSync.mockImplementation(p => {
+                const base = path.basename(p);
+                if (base === 'work.mmex-sync.json') return true;
+                if (base === 'newwork.mmex-sync.json') return false;
+                if (base === 'mmex-sync.config.json') return true;
+                return true;
+            });
+            fs.readFileSync.mockImplementation(p => {
+                if (p.includes('mmex-sync.config.json')) return JSON.stringify({ defaultProfile: 'work' });
+                return '{}';
+            });
+            const result = config.renameProfile('newwork');
+
+            expect(result).toBe(true);
+            expect(fs.renameSync).toHaveBeenCalledWith(
+                expect.stringContaining('work.mmex-sync.json'),
+                expect.stringContaining('newwork.mmex-sync.json')
+            );
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                expect.stringContaining('mmex-sync.config.json'),
+                expect.stringContaining('"defaultProfile": "newwork"')
+            );
         });
     });
 });

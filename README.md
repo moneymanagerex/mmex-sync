@@ -161,7 +161,10 @@ Use these if you want to sync data without opening the MMEX interface:
 You can manage different databases (e.g., "Home" vs "Work") using profiles:
 
 * **Select Profile:** `mmex-sync --profile=work`.
-* **List Profiles:** `mmex-sync --listProfile`.
+* **Set Default Profile:** `mmex-sync --setDefaultProfile=work` (sets `work` as the default profile in `mmex-sync.config.json` so running `mmex-sync` without `--profile` uses `work`).
+* **Rename Profile:** `mmex-sync --renameProfileTo=newname` (renames current profile to `newname` and updates default profile reference if needed).
+* **List Profiles:** `mmex-sync --listProfile` (shows available profiles and marks the default profile with `(default)`).
+* **Show Profile Info:** `mmex-sync --showProfile[=name]` (shows configuration details for a profile).
 
 ---
 
@@ -195,6 +198,8 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --url=address       URL of the PocketBase instance
   --user=email        PocketBase login email
   --pass=password     Password (not saved, generates a token)
+  --setDefaultProfile=X Sets default profile name in mmex-sync.config.json
+  --renameProfileTo=X  Renames current profile to new name
   --setDefaultMode=X  Sets the default mode for the profile
                       Values: sync (default), run, watch
   --exe=path          Path to the MMEX.exe executable
