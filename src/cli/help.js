@@ -11,22 +11,24 @@ Usage: mmex-sync [PARAMETERS] [MODE]
 -----------------------------------------------------------
 📂 PROFILE AND CONFIGURATION MANAGEMENT
 -----------------------------------------------------------
-  --profile=name      Selects the profile (e.g., 'home', 'work'). 
-                      Default: 'default'
-  --ignoreProfile     Ignore profile configuration and use default values
-  --listProfile       Shows the list of available profiles
-  --showProfile[=name] Shows profile information (content of profile)
-  --db=path           Path to the MoneyManagerEx .mmb file
-  --url=address       URL of the PocketBase instance
-  --user=email        PocketBase login email
-  --pass=password     Password (not saved, generates a token)
-  --setDefaultMode=X  Sets the default mode for the profile
-                      Values: sync (default), run, watch
-  --exe=path          Path to the MMEX.exe executable
-                      Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
-  --serverType=name   Remote server type to use. Default: pocketbase
-  --create            Delete and Recreates a new empty database
-  --verbose           Shows detailed logs of each operation.
+  --profile=name        Selects the profile (e.g., 'home', 'work'). 
+                        Default: 'default'
+  --ignoreProfile       Ignore profile configuration and use default values
+  --listProfile         Shows the list of available profiles
+  --showProfile[=name]   Shows profile information (content of profile)
+  --db=path             Path to the MoneyManagerEx .mmb file
+  --url=address         URL of the PocketBase instance
+  --user=email          PocketBase login email
+  --pass=password       Password (not saved, generates a token)
+  --setDefaultProfile=X Sets default profile name in mmex-sync.config.json
+  --renameProfileTo=X   Renames current profile to new name
+  --setDefaultMode=X    Sets the default mode for the profile
+                        Values: sync (default), run, watch
+  --exe=path            Path to the MMEX.exe executable
+                        Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
+  --serverType=name     Remote server type to use. Default: pocketbase
+  --create              Delete and Recreates a new empty database
+  --verbose             Shows detailed logs of each operation.
 
 -----------------------------------------------------------
 🕹️ SYNCHRONIZATION MODES

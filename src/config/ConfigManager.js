@@ -6,13 +6,15 @@ import enquirer from 'enquirer';
 import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
+const GLOBAL_CONFIG_FILENAME = 'mmex-sync.config.json';
 const DEFAULT_SERVER_TYPE = 'pocketbase';
 
 export class ConfigManager {
     constructor(cliArgs) {
         this.cliArgs = cliArgs;
         this.configDir = path.join(os.homedir(), 'AppData', 'Roaming', 'mmex-sync');
-        this.profile = cliArgs.profile || 'default';
+        this.globalConfigPath = path.join(this.configDir, GLOBAL_CONFIG_FILENAME);
+        this.profile = cliArgs.profile || this._getOrInitDefaultProfile();
         this.configPath = path.join(this.configDir, `${this.profile}.${CONFIG_FILE_EXTENSION}`);
         this.config = {};
         this.serverType = typeof cliArgs.serverType === 'string'
@@ -69,6 +71,129 @@ export class ConfigManager {
         return finalConfig;
     }
 
+    _getOrInitDefaultProfile() {
+        if (!fs.existsSync(this.configDir)) {
+            try {
+                fs.mkdirSync(this.configDir, { recursive: true });
+            } catch (e) {
+                // ignore
+            }
+        }
+        if (fs.existsSync(this.globalConfigPath)) {
+            try {
+                const content = fs.readFileSync(this.globalConfigPath, 'utf8');
+                if (content && typeof content === 'string') {
+                    const parsed = JSON.parse(content);
+                    if (parsed && typeof parsed.defaultProfile === 'string' && parsed.defaultProfile.trim()) {
+                        return parsed.defaultProfile.trim();
+                    }
+                }
+            } catch (e) {
+                // Ignore parsing issues when fallback is available
+            }
+        }
+        const defaultProfile = 'default';
+        try {
+            fs.writeFileSync(this.globalConfigPath, JSON.stringify({ defaultProfile }, null, 2));
+        } catch (e) {
+            console.error(`⚠️ Could not save default profile to ${GLOBAL_CONFIG_FILENAME}: ${e.message}`);
+        }
+        return defaultProfile;
+    }
+
+    getDefaultProfile() {
+        if (fs.existsSync(this.globalConfigPath)) {
+            try {
+                const content = fs.readFileSync(this.globalConfigPath, 'utf8');
+                if (content && typeof content === 'string') {
+                    const parsed = JSON.parse(content);
+                    if (parsed && typeof parsed.defaultProfile === 'string' && parsed.defaultProfile.trim()) {
+                        return parsed.defaultProfile.trim();
+                    }
+                }
+            } catch (e) {
+                // fallback
+            }
+        }
+        return 'default';
+    }
+
+    /**
+     * Sets the specified profile as defaultProfile in mmex-sync.config.json
+     */
+    setDefaultProfile(newDefault) {
+        if (typeof newDefault !== 'string' || !newDefault.trim()) {
+            console.error(`❌ Please specify a profile name, e.g. --setDefaultProfile=work`);
+            return false;
+        }
+        const profileName = newDefault.trim();
+        if (!fs.existsSync(this.configDir)) {
+            fs.mkdirSync(this.configDir, { recursive: true });
+        }
+
+        let globalConfig = {};
+        if (fs.existsSync(this.globalConfigPath)) {
+            try {
+                globalConfig = JSON.parse(fs.readFileSync(this.globalConfigPath, 'utf8'));
+            } catch (e) {
+                // overwritten below
+            }
+        }
+
+        globalConfig.defaultProfile = profileName;
+        fs.writeFileSync(this.globalConfigPath, JSON.stringify(globalConfig, null, 2));
+        console.log(`✅ Default profile set to '${profileName}' in ${GLOBAL_CONFIG_FILENAME}`);
+        return true;
+    }
+
+    /**
+     * Renames the current profile to newName and updates defaultProfile if needed
+     */
+    renameProfile(newName) {
+        if (typeof newName !== 'string' || !newName.trim()) {
+            console.error(`❌ Please specify a new profile name, e.g. --renameProfileTo=work`);
+            return false;
+        }
+        const targetName = newName.trim();
+        const currentProfile = this.profile;
+
+        if (currentProfile === targetName) {
+            console.error(`❌ New profile name is identical to current profile name '${currentProfile}'.`);
+            return false;
+        }
+
+        const currentPath = path.join(this.configDir, `${currentProfile}.${CONFIG_FILE_EXTENSION}`);
+        const newPath = path.join(this.configDir, `${targetName}.${CONFIG_FILE_EXTENSION}`);
+
+        if (!fs.existsSync(currentPath)) {
+            console.error(`❌ Profile '${currentProfile}' does not exist (${currentPath}). Cannot rename.`);
+            return false;
+        }
+
+        if (fs.existsSync(newPath)) {
+            console.error(`❌ Target profile '${targetName}' already exists (${newPath}). Cannot rename.`);
+            return false;
+        }
+
+        fs.renameSync(currentPath, newPath);
+        console.log(`✅ Profile '${currentProfile}' renamed to '${targetName}'`);
+
+        if (fs.existsSync(this.globalConfigPath)) {
+            try {
+                const globalConfig = JSON.parse(fs.readFileSync(this.globalConfigPath, 'utf8'));
+                if (globalConfig.defaultProfile === currentProfile) {
+                    globalConfig.defaultProfile = targetName;
+                    fs.writeFileSync(this.globalConfigPath, JSON.stringify(globalConfig, null, 2));
+                    console.log(`✅ Default profile updated to '${targetName}' in ${GLOBAL_CONFIG_FILENAME}`);
+                }
+            } catch (e) {
+                console.error(`⚠️ Error updating default profile in ${GLOBAL_CONFIG_FILENAME}: ${e.message}`);
+            }
+        }
+
+        return true;
+    }
+
     listProfiles() {
         if (!fs.existsSync(this.configDir)) {
             console.log("No profiles found (configuration folder not present).");
@@ -81,12 +206,17 @@ export class ConfigManager {
             .filter(f => f.endsWith(suffix))
             .map(f => f.replace(suffix, ''));
 
+        const defaultProfile = this.getDefaultProfile();
+
         console.log("Profile Directory: " + this.configDir);
         if (profiles.length === 0) {
             console.log("No profiles found.");
         } else {
             console.log("\n=== AVAILABLE PROFILES ===");
-            profiles.forEach(p => console.log(` - ${p}`));
+            profiles.forEach(p => {
+                const isDefault = (p === defaultProfile) ? ' (default)' : '';
+                console.log(` - ${p}${isDefault}`);
+            });
             console.log("===========================\n");
         }
     }
