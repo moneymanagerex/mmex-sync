@@ -19,6 +19,9 @@ async function exitProgram(code = 0) {
     if (isExiting) return;
     isExiting = true;
 
+    if (config) {
+        config.filePassword = null;
+    }
     if (hasAcquiredRunning && configMgr && config) {
         try {
             config.isRunning = false;
@@ -180,7 +183,7 @@ async function main() {
         hasAcquiredRunning = true;
         configMgr.save(config);
 
-        const db = new DatabaseService(config.dbPath, args.verbose);
+        const db = new DatabaseService(config.dbPath, args.verbose, config.filePassword);
 
         db.connect(args.create);
 

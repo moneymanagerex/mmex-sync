@@ -13,12 +13,13 @@ jest.unstable_mockModule('fs', () => ({
     }
 }));
 
-// 2. NUOVI MOCK: Mock per il modulo nativo 'node:sqlite'
+// 2. NUOVI MOCK: Mock per il modulo nativo 'node:sqlite' e 'better-sqlite3-multiple-ciphers'
 const mockRun = jest.fn();
 const mockAll = jest.fn();
 const mockPrepare = jest.fn();
 const mockExec = jest.fn();
 const mockClose = jest.fn();
+const mockPragma = jest.fn();
 
 // Creiamo una funzione spy per tracciare il costruttore della classe
 const mockDatabaseConstructor = jest.fn();
@@ -34,9 +35,24 @@ class MockDatabaseSync {
     close() { return mockClose(); }
 }
 
-// Istruiamo Jest a intercettare l'import di 'node:sqlite'
+class MockDatabaseCipher {
+    constructor(path) {
+        mockDatabaseConstructor(path);
+        this.path = path;
+    }
+    pragma(query) { return mockPragma(query); }
+    prepare(query) { return mockPrepare(query); }
+    exec(query) { return mockExec(query); }
+    close() { return mockClose(); }
+}
+
+// Istruiamo Jest a intercettare l'import di 'node:sqlite' e 'better-sqlite3-multiple-ciphers'
 jest.unstable_mockModule('node:sqlite', () => ({
     DatabaseSync: MockDatabaseSync
+}));
+
+jest.unstable_mockModule('better-sqlite3-multiple-ciphers', () => ({
+    default: MockDatabaseCipher
 }));
 
 // Mock della configurazione tabelle
@@ -120,6 +136,19 @@ describe('DatabaseService', () => {
             service.connect(true);
 
             expect(spyCreateEmpty).toHaveBeenCalled();
+        });
+
+        test('connects to .emb database using password and sets pragma key', () => {
+            const embService = new DatabaseService('/test/data.emb', false, 'secretPass123');
+            mockExistsSync.mockReturnValue(true);
+            mockPrepare.mockImplementation((query) => ({
+                all: () => [{ name: 'ACCOUNTID', pk: 1 }, { name: 'pb_id', pk: 0 }]
+            }));
+
+            embService.connect();
+
+            expect(mockDatabaseConstructor).toHaveBeenCalledWith('/test/data.emb');
+            expect(mockPragma).toHaveBeenCalledWith("key = 'secretPass123'");
         });
     });
 

@@ -16,10 +16,12 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --ignoreProfile       Ignore profile configuration and use default values
   --listProfile         Shows the list of available profiles
   --showProfile[=name]   Shows profile information (content of profile)
-  --db=path             Path to the MoneyManagerEx .mmb file
+  --db=path             Path to the MoneyManagerEx .mmb or .emb file
+  --filePassword=pwd    Password for encrypted .emb database file
+  --saveFilePassword=x  Save encrypted database password in profile (yes/no)
   --url=address         URL of the PocketBase instance
   --user=email          PocketBase login email
-  --pass=password       Password (not saved, generates a token)
+  --pass=password       Remote server login password (not saved, generates a token)
   --setDefaultProfile=X Sets default profile name in mmex-sync.config.json
   --renameProfileTo=X   Renames current profile to new name
   --setDefaultMode=X    Sets the default mode for the profile

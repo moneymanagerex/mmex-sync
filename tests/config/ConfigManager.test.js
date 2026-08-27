@@ -265,4 +265,77 @@ describe('ConfigManager', () => {
             );
         });
     });
+
+    describe('.emb File Password Handling', () => {
+        test('prompts for file password and save choice when .emb file is specified', async () => {
+            const configManager = new ConfigManager({ db: '/test/data.emb' });
+            fs.existsSync.mockReturnValue(false);
+
+            enquirer.prompt
+                .mockResolvedValueOnce({
+                    pbUrl: 'http://localhost:8090',
+                    pbUser: 'test@example.com',
+                    pbPass: 'secret',
+                    mmexExe: 'C:\\mmex.exe'
+                })
+                .mockResolvedValueOnce({
+                    filePassword: 'mypassword123',
+                    savePasswordChoice: 'no'
+                });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(finalConfig.filePassword).toBe('mypassword123');
+            expect(finalConfig.savePassword).toBe('no');
+
+            const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
+            const savedContent = JSON.parse(profileCalls[profileCalls.length - 1][1]);
+            expect(savedContent.savePassword).toBe('no');
+            expect(savedContent.encryptedFilePassword).toBeUndefined();
+        });
+
+        test('uses CLI --filePassword and saves encryptedFilePassword when --saveFilePassword=yes', async () => {
+            const cliArgs = {
+                db: '/test/data.emb',
+                filePassword: 'cliFilePassword123',
+                saveFilePassword: 'yes',
+                url: 'http://localhost:8090',
+                user: 'test@example.com'
+            };
+            const configManager = new ConfigManager(cliArgs);
+            fs.existsSync.mockReturnValue(false);
+            enquirer.prompt.mockResolvedValue({ pbPass: 'secret', mmexExe: 'C:\\mmex.exe' });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(finalConfig.filePassword).toBe('cliFilePassword123');
+            expect(finalConfig.savePassword).toBe('yes');
+            expect(dpapi.protect).toHaveBeenCalledWith('cliFilePassword123');
+
+            const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
+            const savedContent = JSON.parse(profileCalls[profileCalls.length - 1][1]);
+            expect(savedContent.savePassword).toBe('yes');
+            expect(savedContent.encryptedFilePassword).toBe('encrypted_cliFilePassword123');
+        });
+
+        test('decrypts saved encryptedFilePassword if savePassword is not "no"', async () => {
+            const configManager = new ConfigManager({ db: '/test/data.emb' });
+            const mockSavedConfig = {
+                dbPath: '/test/data.emb',
+                pbUrl: 'http://localhost:8090',
+                pbUser: 'user@test.com',
+                encryptedToken: 'encrypted_token123',
+                savePassword: 'yes',
+                encryptedFilePassword: 'encrypted_dbpassword123'
+            };
+
+            fs.existsSync.mockReturnValue(true);
+            fs.readFileSync.mockReturnValue(JSON.stringify(mockSavedConfig));
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(dpapi.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123');
+            expect(finalConfig.filePassword).toBe('dbpassword123');
+        });
+    });
 });

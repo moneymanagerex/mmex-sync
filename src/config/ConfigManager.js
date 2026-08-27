@@ -41,6 +41,13 @@ export class ConfigManager {
             this.config = this._loadFromFile();
         }
 
+        const cliFilePassword = this.cliArgs.filePassword || this.cliArgs['file-password'] || null;
+        let saveFilePassword = undefined;
+        if (this.cliArgs.saveFilePassword !== undefined) {
+            const val = String(this.cliArgs.saveFilePassword).toLowerCase();
+            saveFilePassword = (val === 'no' || val === 'false' || val === 'n') ? 'no' : 'yes';
+        }
+
         // 2. Define required parameters and resolve the origin
         const schema = {
             dbPath: this.cliArgs.db || this.config.dbPath,
@@ -52,8 +59,16 @@ export class ConfigManager {
             mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
             lastSync: this.config.lastSync || null,
-            isRunning: this.config.isRunning || false
+            isRunning: this.config.isRunning || false,
+            filePassword: cliFilePassword,
+            savePassword: saveFilePassword || this.config.savePassword || null
         };
+
+        if (cliFilePassword) {
+            schema.filePassword = cliFilePassword;
+        } else if (schema.savePassword !== 'no' && this.config.encryptedFilePassword) {
+            schema.filePassword = unprotect(this.config.encryptedFilePassword);
+        }
 
         // 3. If data is missing, ask via Prompt
         const finalConfig = await this._ensureValues(schema);
@@ -236,6 +251,10 @@ export class ConfigManager {
             const content = fs.readFileSync(configPath, 'utf8');
             const parsed = JSON.parse(content);
             const tokenStatus = parsed.encryptedToken ? 'present' : 'not present';
+            const savePasswordStatus = parsed.savePassword || 'not set';
+            const filePasswordStatus = parsed.encryptedFilePassword
+                ? 'present (encrypted)'
+                : (parsed.savePassword === 'no' ? 'ask every time' : 'not present');
 
             console.log(`\n=== PROFILE: ${profileToLoad} ===`);
             console.log(`* DB Path = ${parsed.dbPath || ''}`);
@@ -248,6 +267,8 @@ export class ConfigManager {
             console.log(`* lastSync = ${parsed.lastSync || ''}`);
             console.log(`* isRunning = ${parsed.isRunning || false}`);
             console.log(`* token = ${tokenStatus}`);
+            console.log(`* savePassword = ${savePasswordStatus}`);
+            console.log(`* filePassword = ${filePasswordStatus}`);
             console.log("===========================\n");
         } catch (e) {
             console.error(`⚠️ Error reading profile ${profileToLoad}:`, e.message);
@@ -294,7 +315,7 @@ export class ConfigManager {
     async _ensureValues(current) {
         const questions = [];
 
-        if (!current.dbPath) questions.push({ type: 'input', name: 'dbPath', message: '.mmb database path:' });
+        if (!current.dbPath) questions.push({ type: 'input', name: 'dbPath', message: '.mmb or .emb database path:' });
         if (!current.pbUrl) questions.push({ type: 'input', name: 'pbUrl', message: 'URL PocketBase:', initial: 'http://127.0.0.1:8090' });
         if (!current.pbUser) questions.push({ type: 'input', name: 'pbUser', message: 'Email PocketBase:' });
         if (!current.pbPass && !this.config.encryptedToken) {
@@ -318,8 +339,9 @@ export class ConfigManager {
             }
         }
 
+        let answers = {};
         if (questions.length > 0) {
-            const answers = await enquirer.prompt(questions);
+            answers = await enquirer.prompt(questions);
 
             // If user selected "Enter path manually", prompt for manual input
             if (answers.mmexExe === 'MANUAL') {
@@ -331,11 +353,40 @@ export class ConfigManager {
                 });
                 answers.mmexExe = manualPath;
             }
-
-            return { ...current, ...answers };
         }
 
-        return current;
+        const merged = { ...current, ...answers };
+
+        // Check if database file is encrypted (.emb)
+        const isEmb = merged.dbPath ? merged.dbPath.toLowerCase().endsWith('.emb') : false;
+        if (isEmb) {
+            const embQuestions = [];
+            if (!merged.filePassword) {
+                embQuestions.push({ type: 'password', name: 'filePassword', message: 'File Password (.emb database):' });
+            }
+            if (!merged.savePassword) {
+                embQuestions.push({
+                    type: 'select',
+                    name: 'savePasswordChoice',
+                    message: 'Do you want to save the database password in profile?',
+                    choices: [
+                        { name: 'No, ask every time', value: 'no' },
+                        { name: 'Yes, save securely', value: 'yes' }
+                    ]
+                });
+            }
+
+            if (embQuestions.length > 0) {
+                const embAnswers = await enquirer.prompt(embQuestions);
+                if (embAnswers.savePasswordChoice) {
+                    embAnswers.savePassword = embAnswers.savePasswordChoice;
+                    delete embAnswers.savePasswordChoice;
+                }
+                Object.assign(merged, embAnswers);
+            }
+        }
+
+        return merged;
     }
 
     _searchMMEXExecutable() {
@@ -361,6 +412,16 @@ export class ConfigManager {
     save(configData, token = null) {
         if (!fs.existsSync(this.configDir)) fs.mkdirSync(this.configDir, { recursive: true });
 
+        const savePasswordChoice = configData.savePassword || this.config.savePassword;
+        let encryptedFilePassword = undefined;
+        if (savePasswordChoice === 'no') {
+            encryptedFilePassword = undefined;
+        } else if (savePasswordChoice === 'yes' && configData.filePassword) {
+            encryptedFilePassword = protect(configData.filePassword);
+        } else {
+            encryptedFilePassword = this.config.encryptedFilePassword;
+        }
+
         const toSave = {
             dbPath: configData.dbPath,
             serverType: configData.serverType,
@@ -371,11 +432,10 @@ export class ConfigManager {
             defaultMode: configData.defaultMode,
             lastSync: configData.lastSync,
             isRunning: configData.isRunning ?? false,
-            encryptedToken: token ? protect(token) : this.config.encryptedToken
+            encryptedToken: token ? protect(token) : this.config.encryptedToken,
+            savePassword: savePasswordChoice || undefined,
+            encryptedFilePassword: encryptedFilePassword
         };
-        //        console.log("toSave:");
-        //        console.log("  Token: " + toSave.token);
-        //        console.log("  Encrypted: " + toSave.encryptedToken);
 
         fs.writeFileSync(this.configPath, JSON.stringify(toSave, null, 2));
         console.log(`✅ Configuration saved in profile: ${this.profile}`);
