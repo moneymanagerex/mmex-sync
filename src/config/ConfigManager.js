@@ -25,7 +25,7 @@ export class ConfigManager {
     }
 
     updateConfig(configData) {
-        this.config = configData;
+        this.config = { ...this.config, ...configData };
         if (this.config.token) {
             this.config.encryptedToken = protect(this.config.token);
         }
@@ -81,6 +81,7 @@ export class ConfigManager {
             finalConfig.token = unprotect(this.config.encryptedToken);
         }
 
+        this.config = finalConfig;
         this.save(finalConfig, finalConfig.token);
 
         return finalConfig;
@@ -419,7 +420,7 @@ export class ConfigManager {
         } else if (savePasswordChoice === 'yes' && configData.filePassword) {
             encryptedFilePassword = protect(configData.filePassword);
         } else {
-            encryptedFilePassword = this.config.encryptedFilePassword;
+            encryptedFilePassword = configData.encryptedFilePassword || this.config.encryptedFilePassword;
         }
 
         const toSave = {
@@ -432,9 +433,15 @@ export class ConfigManager {
             defaultMode: configData.defaultMode,
             lastSync: configData.lastSync,
             isRunning: configData.isRunning ?? false,
-            encryptedToken: token ? protect(token) : this.config.encryptedToken,
+            encryptedToken: token ? protect(token) : (configData.encryptedToken || this.config.encryptedToken),
             savePassword: savePasswordChoice || undefined,
             encryptedFilePassword: encryptedFilePassword
+        };
+
+        this.config = {
+            ...this.config,
+            ...configData,
+            ...toSave
         };
 
         fs.writeFileSync(this.configPath, JSON.stringify(toSave, null, 2));

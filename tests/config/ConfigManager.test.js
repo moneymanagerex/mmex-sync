@@ -337,5 +337,31 @@ describe('ConfigManager', () => {
             expect(dpapi.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123');
             expect(finalConfig.filePassword).toBe('dbpassword123');
         });
+
+        test('preserves encryptedFilePassword when save is called after filePassword is set to null (e.g. on exit)', async () => {
+            const cliArgs = {
+                db: '/test/data.emb',
+                filePassword: 'cliFilePassword123',
+                saveFilePassword: 'yes',
+                url: 'http://localhost:8090',
+                user: 'test@example.com'
+            };
+            const configManager = new ConfigManager(cliArgs);
+            fs.existsSync.mockReturnValue(false);
+            enquirer.prompt.mockResolvedValue({ pbPass: 'secret', mmexExe: 'C:\\mmex.exe' });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+            expect(finalConfig.filePassword).toBe('cliFilePassword123');
+
+            // Simulate exit procedure where clear-text password is wiped
+            finalConfig.filePassword = null;
+            finalConfig.isRunning = false;
+            configManager.save(finalConfig);
+
+            const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
+            const savedContentOnExit = JSON.parse(profileCalls[profileCalls.length - 1][1]);
+            expect(savedContentOnExit.savePassword).toBe('yes');
+            expect(savedContentOnExit.encryptedFilePassword).toBe('encrypted_cliFilePassword123');
+        });
     });
 });
