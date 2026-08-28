@@ -19,6 +19,9 @@ async function exitProgram(code = 0) {
     if (isExiting) return;
     isExiting = true;
 
+    if (config) {
+        config.filePassword = null;
+    }
     if (hasAcquiredRunning && configMgr && config) {
         try {
             config.isRunning = false;
@@ -123,6 +126,18 @@ async function main() {
         await exitProgram(0);
     }
 
+    if (args.setDefaultProfile) {
+        const configMgrInstance = new ConfigManager(args);
+        const success = configMgrInstance.setDefaultProfile(args.setDefaultProfile);
+        await exitProgram(success ? 0 : 1);
+    }
+
+    if (args.renameProfileTo) {
+        const configMgrInstance = new ConfigManager(args);
+        const success = configMgrInstance.renameProfile(args.renameProfileTo);
+        await exitProgram(success ? 0 : 1);
+    }
+
     if (args.setDefaultMode) {
         const configMgrInstance = new ConfigManager(args);
         const success = configMgrInstance.setDefaultMode(args.setDefaultMode);
@@ -143,14 +158,14 @@ async function main() {
         }
 
         // show all relevant parametert from configuration
-        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
-        console.log(`mmex-sync: v: ${appVersion}`);
+        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '[nodejs version]';
+        console.log(`mmex-sync: v${appVersion}`);
         console.log("Path DB: " + config.dbPath);
         console.log("Server Type: " + (config.serverType || 'pocketbase'));
         console.log("URL: " + config.pbUrl);
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
-        console.log("Profile: " + config.profileName);
+        console.log("Profile: " + configMgr.profile);
 
         if (config.isRunning) {
             const { confirm } = await enquirer.prompt({
@@ -168,7 +183,7 @@ async function main() {
         hasAcquiredRunning = true;
         configMgr.save(config);
 
-        const db = new DatabaseService(config.dbPath, args.verbose);
+        const db = new DatabaseService(config.dbPath, args.verbose, config.filePassword);
 
         db.connect(args.create);
 

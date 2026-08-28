@@ -8,7 +8,8 @@ jest.unstable_mockModule('fs', () => ({
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn(),
-        readdirSync: jest.fn()
+        readdirSync: jest.fn(),
+        renameSync: jest.fn()
     }
 }));
 
@@ -201,6 +202,166 @@ describe('ConfigManager', () => {
             expect(result).toBe(true);
             expect(config.config.defaultMode).toBe('watch');
             expect(fs.writeFileSync).toHaveBeenCalled();
+        });
+    });
+
+    describe('setDefaultProfile', () => {
+        test('returns false if profile name is invalid', () => {
+            const config = new ConfigManager({});
+            const result = config.setDefaultProfile('');
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Please specify a profile name'));
+        });
+
+        test('updates global config with specified profile name', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockReturnValue(false);
+
+            const result = config.setDefaultProfile('work');
+
+            expect(result).toBe(true);
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                expect.stringContaining('mmex-sync.config.json'),
+                expect.stringContaining('"defaultProfile": "work"')
+            );
+        });
+    });
+
+    describe('renameProfile', () => {
+        test('returns false if current profile file does not exist', () => {
+            const config = new ConfigManager({ profile: 'nonexistent' });
+            fs.existsSync.mockReturnValue(false);
+
+            const result = config.renameProfile('newname');
+
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('does not exist'));
+        });
+
+        test('renames profile file and updates global config if current profile was default', () => {
+            const config = new ConfigManager({ profile: 'work' });
+            // Mock exist checks for: configDir, currentPath, newPath, globalConfigPath
+            fs.existsSync.mockImplementation(p => {
+                const base = path.basename(p);
+                if (base === 'work.mmex-sync.json') return true;
+                if (base === 'newwork.mmex-sync.json') return false;
+                if (base === 'mmex-sync.config.json') return true;
+                return true;
+            });
+            fs.readFileSync.mockImplementation(p => {
+                if (p.includes('mmex-sync.config.json')) return JSON.stringify({ defaultProfile: 'work' });
+                return '{}';
+            });
+            const result = config.renameProfile('newwork');
+
+            expect(result).toBe(true);
+            expect(fs.renameSync).toHaveBeenCalledWith(
+                expect.stringContaining('work.mmex-sync.json'),
+                expect.stringContaining('newwork.mmex-sync.json')
+            );
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                expect.stringContaining('mmex-sync.config.json'),
+                expect.stringContaining('"defaultProfile": "newwork"')
+            );
+        });
+    });
+
+    describe('.emb File Password Handling', () => {
+        test('prompts for file password and save choice when .emb file is specified', async () => {
+            const configManager = new ConfigManager({ db: '/test/data.emb' });
+            fs.existsSync.mockReturnValue(false);
+
+            enquirer.prompt
+                .mockResolvedValueOnce({
+                    pbUrl: 'http://localhost:8090',
+                    pbUser: 'test@example.com',
+                    pbPass: 'secret',
+                    mmexExe: 'C:\\mmex.exe'
+                })
+                .mockResolvedValueOnce({
+                    filePassword: 'mypassword123',
+                    savePasswordChoice: 'no'
+                });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(finalConfig.filePassword).toBe('mypassword123');
+            expect(finalConfig.savePassword).toBe('no');
+
+            const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
+            const savedContent = JSON.parse(profileCalls[profileCalls.length - 1][1]);
+            expect(savedContent.savePassword).toBe('no');
+            expect(savedContent.encryptedFilePassword).toBeUndefined();
+        });
+
+        test('uses CLI --filePassword and saves encryptedFilePassword when --saveFilePassword=yes', async () => {
+            const cliArgs = {
+                db: '/test/data.emb',
+                filePassword: 'cliFilePassword123',
+                saveFilePassword: 'yes',
+                url: 'http://localhost:8090',
+                user: 'test@example.com'
+            };
+            const configManager = new ConfigManager(cliArgs);
+            fs.existsSync.mockReturnValue(false);
+            enquirer.prompt.mockResolvedValue({ pbPass: 'secret', mmexExe: 'C:\\mmex.exe' });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(finalConfig.filePassword).toBe('cliFilePassword123');
+            expect(finalConfig.savePassword).toBe('yes');
+            expect(dpapi.protect).toHaveBeenCalledWith('cliFilePassword123');
+
+            const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
+            const savedContent = JSON.parse(profileCalls[profileCalls.length - 1][1]);
+            expect(savedContent.savePassword).toBe('yes');
+            expect(savedContent.encryptedFilePassword).toBe('encrypted_cliFilePassword123');
+        });
+
+        test('decrypts saved encryptedFilePassword if savePassword is not "no"', async () => {
+            const configManager = new ConfigManager({ db: '/test/data.emb' });
+            const mockSavedConfig = {
+                dbPath: '/test/data.emb',
+                pbUrl: 'http://localhost:8090',
+                pbUser: 'user@test.com',
+                encryptedToken: 'encrypted_token123',
+                savePassword: 'yes',
+                encryptedFilePassword: 'encrypted_dbpassword123'
+            };
+
+            fs.existsSync.mockReturnValue(true);
+            fs.readFileSync.mockReturnValue(JSON.stringify(mockSavedConfig));
+
+            const finalConfig = await configManager.getEffectiveConfig();
+
+            expect(dpapi.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123');
+            expect(finalConfig.filePassword).toBe('dbpassword123');
+        });
+
+        test('preserves encryptedFilePassword when save is called after filePassword is set to null (e.g. on exit)', async () => {
+            const cliArgs = {
+                db: '/test/data.emb',
+                filePassword: 'cliFilePassword123',
+                saveFilePassword: 'yes',
+                url: 'http://localhost:8090',
+                user: 'test@example.com'
+            };
+            const configManager = new ConfigManager(cliArgs);
+            fs.existsSync.mockReturnValue(false);
+            enquirer.prompt.mockResolvedValue({ pbPass: 'secret', mmexExe: 'C:\\mmex.exe' });
+
+            const finalConfig = await configManager.getEffectiveConfig();
+            expect(finalConfig.filePassword).toBe('cliFilePassword123');
+
+            // Simulate exit procedure where clear-text password is wiped
+            finalConfig.filePassword = null;
+            finalConfig.isRunning = false;
+            configManager.save(finalConfig);
+
+            const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
+            const savedContentOnExit = JSON.parse(profileCalls[profileCalls.length - 1][1]);
+            expect(savedContentOnExit.savePassword).toBe('yes');
+            expect(savedContentOnExit.encryptedFilePassword).toBe('encrypted_cliFilePassword123');
         });
     });
 });
