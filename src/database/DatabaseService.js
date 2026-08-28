@@ -15,31 +15,66 @@ export class DatabaseService {
         this.syncOrder = SYNC_ORDER;
     }
 
-    _createDbInstance(dbPath, password = null) {
+    _createDbInstance(dbPath, password = null, isNew = false) {
         const isEmb = dbPath ? dbPath.toLowerCase().endsWith('.emb') : false;
         if (password || isEmb) {
-            try {
+            const escapedPassword = password ? password.replace(/'/g, "''") : '';
+
+            if (isNew) {
                 const db = new DatabaseCipher(dbPath);
+                db.pragma("cipher = 'sqlcipher'");
+                db.pragma("legacy = 4");
                 if (password) {
-                    db.pragma(`key = '${password.replace(/'/g, "''")}'`);
+                    db.pragma(`key = '${escapedPassword}'`);
                 }
                 return db;
-            } catch (err) {
-                throw new Error(`Failed to open encrypted database at ${dbPath}: ${err.message}`);
+            }
+
+            let db = null;
+            try {
+                db = new DatabaseCipher(dbPath);
+                db.pragma("cipher = 'sqlcipher'");
+                db.pragma("legacy = 4");
+                if (password) {
+                    db.pragma(`key = '${escapedPassword}'`);
+                }
+                db.prepare("SELECT count(*) FROM sqlite_master").get();
+                return db;
+            } catch (primaryErr) {
+                if (db) {
+                    try { db.close(); } catch (e) {}
+                    db = null;
+                }
+
+                let fallbackDb = null;
+                try {
+                    fallbackDb = new DatabaseCipher(dbPath);
+                    fallbackDb.pragma("cipher = 'aes256cbc'");
+                    if (password) {
+                        fallbackDb.pragma(`key = '${escapedPassword}'`);
+                    }
+                    fallbackDb.prepare("SELECT count(*) FROM sqlite_master").get();
+                    return fallbackDb;
+                } catch (fallbackErr) {
+                    if (fallbackDb) {
+                        try { fallbackDb.close(); } catch (e) {}
+                    }
+                    throw new Error(`Failed to open encrypted database at ${dbPath}: ${fallbackErr.message}`);
+                }
             }
         }
         return new DatabaseSync(dbPath);
     }
 
     connect(create = false) {
-        if (!fs.existsSync(this.dbPath) || create) {
-            // if not exists create
-            this.createEmptyDatabase();
-        } else {
-            this.db = this._createDbInstance(this.dbPath, this.password);
-        }
-
         try {
+            if (!fs.existsSync(this.dbPath) || create) {
+                // if not exists create
+                this.createEmptyDatabase();
+            } else {
+                this.db = this._createDbInstance(this.dbPath, this.password);
+            }
+
             this.schemas = {};
             for (const table of this.syncOrder) {
                 const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
@@ -426,7 +461,7 @@ export class DatabaseService {
 
         try {
             // Open a new connection
-            this.db = this._createDbInstance(this.dbPath, this.password);
+            this.db = this._createDbInstance(this.dbPath, this.password, true);
 
             const sqlSchema = fs.readFileSync(sqlSchemaPath, 'utf8');
 

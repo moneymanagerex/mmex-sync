@@ -16,6 +16,7 @@ jest.unstable_mockModule('fs', () => ({
 // 2. NUOVI MOCK: Mock per il modulo nativo 'node:sqlite' e 'better-sqlite3-multiple-ciphers'
 const mockRun = jest.fn();
 const mockAll = jest.fn();
+const mockGet = jest.fn();
 const mockPrepare = jest.fn();
 const mockExec = jest.fn();
 const mockClose = jest.fn();
@@ -86,7 +87,8 @@ describe('DatabaseService', () => {
         // Comportamento di default per il metodo prepare
         mockPrepare.mockReturnValue({
             run: mockRun,
-            all: mockAll
+            all: mockAll,
+            get: mockGet
         });
     });
 
@@ -138,17 +140,59 @@ describe('DatabaseService', () => {
             expect(spyCreateEmpty).toHaveBeenCalled();
         });
 
-        test('connects to .emb database using password and sets pragma key', () => {
+        test('connects to .emb database using SQLCipher default pragmas', () => {
             const embService = new DatabaseService('/test/data.emb', false, 'secretPass123');
             mockExistsSync.mockReturnValue(true);
             mockPrepare.mockImplementation((query) => ({
-                all: () => [{ name: 'ACCOUNTID', pk: 1 }, { name: 'pb_id', pk: 0 }]
+                all: () => [{ name: 'ACCOUNTID', pk: 1 }, { name: 'pb_id', pk: 0 }],
+                get: () => ({ count: 1 })
             }));
 
             embService.connect();
 
             expect(mockDatabaseConstructor).toHaveBeenCalledWith('/test/data.emb');
+            expect(mockPragma).toHaveBeenCalledWith("cipher = 'sqlcipher'");
+            expect(mockPragma).toHaveBeenCalledWith("legacy = 4");
             expect(mockPragma).toHaveBeenCalledWith("key = 'secretPass123'");
+        });
+
+        test('falls back to aes256cbc cipher if primary SQLCipher attempt fails', () => {
+            const embService = new DatabaseService('/test/data.emb', false, 'secretPass123');
+            mockExistsSync.mockReturnValue(true);
+
+            let primaryAttempt = true;
+            mockPrepare.mockImplementation((query) => ({
+                all: () => [{ name: 'ACCOUNTID', pk: 1 }, { name: 'pb_id', pk: 0 }],
+                get: () => {
+                    if (query.includes('sqlite_master') && primaryAttempt) {
+                        primaryAttempt = false;
+                        throw new Error('file is encrypted or is not a database');
+                    }
+                    return { count: 1 };
+                }
+            }));
+
+            embService.connect();
+
+            expect(mockPragma).toHaveBeenCalledWith("cipher = 'sqlcipher'");
+            expect(mockPragma).toHaveBeenCalledWith("legacy = 4");
+            expect(mockPragma).toHaveBeenCalledWith("cipher = 'aes256cbc'");
+            expect(mockPragma).toHaveBeenCalledWith("key = 'secretPass123'");
+            expect(mockClose).toHaveBeenCalled();
+        });
+
+        test('throws formatted error if both primary and fallback attempts fail', () => {
+            const embService = new DatabaseService('/test/data.emb', false, 'wrongPass');
+            mockExistsSync.mockReturnValue(true);
+
+            mockPrepare.mockImplementation((query) => ({
+                all: () => [],
+                get: () => {
+                    throw new Error('file is encrypted or is not a database');
+                }
+            }));
+
+            expect(() => embService.connect()).toThrow('If this is an .emb file, please verify the file password.');
         });
     });
 
