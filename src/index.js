@@ -158,14 +158,14 @@ async function main() {
         }
 
         // show all relevant parametert from configuration
-        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
-        console.log(`mmex-sync: v: ${appVersion}`);
+        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '[nodejs version]';
+        console.log(`mmex-sync: v${appVersion}`);
         console.log("Path DB: " + config.dbPath);
         console.log("Server Type: " + (config.serverType || 'pocketbase'));
         console.log("URL: " + config.pbUrl);
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
-        console.log("Profile: " + config.profileName);
+        console.log("Profile: " + configMgr.profile);
 
         if (config.isRunning) {
             const { confirm } = await enquirer.prompt({
