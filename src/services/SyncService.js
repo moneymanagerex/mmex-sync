@@ -261,10 +261,9 @@ export class SyncService {
 
             // Save the timestamp only after a completed pull without errors
             if (result) {
-                this.configMgr.save({
-                    ...this.configMgr.config,
-                    lastSync: newSyncTime
-                });
+                console.log("💾 Saving sync timestamp: " + newSyncTime);
+                this.configMgr.config.lastSync = newSyncTime;
+                await this.configMgr.save(this.configMgr.config);
             }
         }
 

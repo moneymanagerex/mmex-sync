@@ -1,34 +1,101 @@
 // src/database/DatabaseService.js
 import fs from 'fs';
 import { DatabaseSync } from 'node:sqlite';
+import DatabaseCipher from 'better-sqlite3-multiple-ciphers';
 import { SYNC_ORDER, FK_MAP } from '../config/table_config.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export class DatabaseService {
-    constructor(dbPath, verbose = false) {
+    constructor(dbPath, verbose = false, password = null) {
         this.dbPath = dbPath;
         this.verbose = verbose;
+        this.password = password;
         this.db = null;
         this.syncOrder = SYNC_ORDER;
     }
 
-    connect(create = false) {
-        if (!fs.existsSync(this.dbPath) || create) {
-            // if not exists create
-            this.createEmptyDatabase();
-        } else {
-            // this.db = new Database(this.dbPath, { verbose: this.verbose ? console.log : null });
-            this.db = new DatabaseSync(this.dbPath);
-        }
+    _createDbInstance(dbPath, password = null, isNew = false) {
+        const isEmb = dbPath ? dbPath.toLowerCase().endsWith('.emb') : false;
+        if (password || isEmb) {
+            const escapedPassword = password ? password.replace(/'/g, "''") : '';
 
-        this.schemas = {};
-        for (const table of this.syncOrder) {
-            const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
-            const pk = columns.find(col => col.pk === 1).name;
-            const fields = columns.filter(col => ![pk, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].includes(col.name)).map(col => col.name);
-            const techFields = columns.filter(col => ['pb_id', 'pb_is_dirty', 'pb_updated_at'].includes(col.name)).map(col => col.name);
-            this.schemas[table] = { pk, fields, techFields };
+            if (isNew) {
+                const db = new DatabaseCipher(dbPath);
+                db.pragma("cipher = 'sqlcipher'");
+                db.pragma("legacy = 4");
+                if (password) {
+                    db.pragma(`key = '${escapedPassword}'`);
+                }
+                return db;
+            }
+
+            let db = null;
+            try {
+                db = new DatabaseCipher(dbPath);
+                db.pragma("cipher = 'sqlcipher'");
+                db.pragma("legacy = 4");
+                if (password) {
+                    db.pragma(`key = '${escapedPassword}'`);
+                }
+                db.prepare("SELECT count(*) FROM sqlite_master").get();
+                return db;
+            } catch (primaryErr) {
+                if (db) {
+                    try { db.close(); } catch (e) {}
+                    db = null;
+                }
+
+                let fallbackDb = null;
+                try {
+                    fallbackDb = new DatabaseCipher(dbPath);
+                    fallbackDb.pragma("cipher = 'aes256cbc'");
+                    if (password) {
+                        fallbackDb.pragma(`key = '${escapedPassword}'`);
+                    }
+                    fallbackDb.prepare("SELECT count(*) FROM sqlite_master").get();
+                    return fallbackDb;
+                } catch (fallbackErr) {
+                    if (fallbackDb) {
+                        try { fallbackDb.close(); } catch (e) {}
+                    }
+                    throw new Error(`Failed to open encrypted database at ${dbPath}: ${fallbackErr.message}`);
+                }
+            }
+        }
+        return new DatabaseSync(dbPath);
+    }
+
+    connect(create = false) {
+        try {
+            if (!fs.existsSync(this.dbPath) || create) {
+                // if not exists create
+                this.createEmptyDatabase();
+            } else {
+                this.db = this._createDbInstance(this.dbPath, this.password);
+            }
+
+            this.schemas = {};
+            for (const table of this.syncOrder) {
+                const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+                if (!columns || columns.length === 0) {
+                    throw new Error(`Table ${table} not found or database file cannot be read.`);
+                }
+                const pkObj = columns.find(col => col.pk === 1);
+                const pk = pkObj ? pkObj.name : 'ROWID';
+                const fields = columns.filter(col => ![pk, 'pb_id', 'pb_is_dirty', 'pb_updated_at'].includes(col.name)).map(col => col.name);
+                const techFields = columns.filter(col => ['pb_id', 'pb_is_dirty', 'pb_updated_at'].includes(col.name)).map(col => col.name);
+                this.schemas[table] = { pk, fields, techFields };
+            }
+        } catch (err) {
+            if (this.db) {
+                try { this.db.close(); } catch (e) {}
+                this.db = null;
+            }
+            if (err.message.includes('file is not a database') || err.message.includes('file is encrypted')) {
+                throw new Error(`Failed to open database at ${this.dbPath}. If this is an .emb file, please verify the file password.`);
+            }
+            throw err;
         }
         return this;
     }
@@ -304,7 +371,11 @@ export class DatabaseService {
     }
 
     close() {
-        if (this.db) this.db.close();
+        if (this.db) {
+            try { this.db.close(); } catch(e) {}
+            this.db = null;
+        }
+        this.password = null;
     }
 
     /**
@@ -390,8 +461,7 @@ export class DatabaseService {
 
         try {
             // Open a new connection
-            // this.db = new Database(this.dbPath, { verbose: this.verbose ? console.log : null });
-            this.db = new DatabaseSync(this.dbPath);
+            this.db = this._createDbInstance(this.dbPath, this.password, true);
 
             const sqlSchema = fs.readFileSync(sqlSchemaPath, 'utf8');
 
