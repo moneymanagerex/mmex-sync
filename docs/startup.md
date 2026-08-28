@@ -15,7 +15,7 @@ This guide explains the correct procedure to set up the new synchronization syst
 ## 1. Prerequisites: Account Registration
 
 Before you begin, you need to set up your authentication credentials. You can choose one of the following methods:
-* **Online Service:** Register on the unofficial website by filling out the signup form to get your username and password. Please fill out suvery form at [mmex-sync-prudenzano.org](https://mmex-sync-prudenzano.org).
+* **Online Service:** Register on the unofficial website by filling out the signup form to get your username and password. Please fill out suvery form at [mmex-sync.prudenzano.org](https://mmex-sync.prudenzano.org).
 * **Local Docker Instance:** If you prefer to have full control over your data, you can set up and run your own self-hosted PocketBase Docker instance.
 
 ---
