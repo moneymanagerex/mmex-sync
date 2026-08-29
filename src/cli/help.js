@@ -1,9 +1,9 @@
 // src/cli/help.js
 
-export function showHelp() {
+export function showHelp(version = 'unknown') {
   console.log(`
 ===========================================================
-🚀 MMEX-PocketBase Sync Tool | User Manual
+🚀 MMEX-PocketBase Sync Tool [v${version}] | User Manual
 ===========================================================
 
 Usage: mmex-sync [PARAMETERS] [MODE]

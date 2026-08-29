@@ -127,16 +127,24 @@ const args = new Proxy(rawArgs, {
 
 
 async function main() {
+    // Get version for use in help and logging
+    let version = 'unknown';
+    try {
+        version = __APP_VERSION__;
+    } catch (err) {
+        // __APP_VERSION__ is not defined (e.g., running in Node.js directly)
+    }
+
     // Validate command line parameters
     const invalidParam = validateParameters(rawArgs);
     if (invalidParam) {
         console.error(`❌ wrong parameters: ${invalidParam}`);
-        showHelp();
+        showHelp(version);
         await exitProgram(1);
     }
 
     if (args.help) {
-        showHelp();
+        showHelp(version);
         await exitProgram(0);
     }
 
