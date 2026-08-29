@@ -15,6 +15,51 @@ let config = null;
 let hasAcquiredRunning = false;
 let isExiting = false;
 
+// List of all valid command line parameters
+const VALID_PARAMETERS = [
+    'profile',
+    'ignoreProfile',
+    'listProfile',
+    'showProfile',
+    'db',
+    'filePassword',
+    'saveFilePassword',
+    'url',
+    'user',
+    'pass',
+    'setDefaultProfile',
+    'renameProfileTo',
+    'setDefaultMode',
+    'exe',
+    'serverType',
+    'create',
+    'verbose',
+    'sync',
+    'force',
+    'run',
+    'watch',
+    'checkForUpdate',
+    'autoDownloadUpdate',
+    'clearDb',
+    'clearServer',
+    'help',
+    'version',
+    'nowait'
+];
+
+/**
+ * Validates command line parameters
+ * @returns {string|null} Returns the name of the first invalid parameter, or null if all are valid
+ */
+function validateParameters(rawArgs) {
+    for (const param of Object.keys(rawArgs)) {
+        if (!VALID_PARAMETERS.includes(param)) {
+            return param;
+        }
+    }
+    return null;
+}
+
 async function exitProgram(code = 0) {
     if (isExiting) return;
     isExiting = true;
@@ -82,6 +127,14 @@ const args = new Proxy(rawArgs, {
 
 
 async function main() {
+    // Validate command line parameters
+    const invalidParam = validateParameters(rawArgs);
+    if (invalidParam) {
+        console.error(`❌ wrong parameters: ${invalidParam}`);
+        showHelp();
+        await exitProgram(1);
+    }
+
     if (args.help) {
         showHelp();
         await exitProgram(0);
