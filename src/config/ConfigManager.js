@@ -12,7 +12,7 @@ const DEFAULT_SERVER_TYPE = 'pocketbase';
 export class ConfigManager {
     constructor(cliArgs) {
         this.cliArgs = cliArgs;
-        this.configDir = path.join(os.homedir(), 'AppData', 'Roaming', 'mmex-sync');
+        this.configDir = this._getConfigDir();
         this.globalConfigPath = path.join(this.configDir, GLOBAL_CONFIG_FILENAME);
         this.profile = cliArgs.profile || this._getOrInitDefaultProfile();
         this.configPath = path.join(this.configDir, `${this.profile}.${CONFIG_FILE_EXTENSION}`);
@@ -22,6 +22,16 @@ export class ConfigManager {
             : cliArgs.serverType === true
                 ? DEFAULT_SERVER_TYPE
                 : undefined;
+    }
+
+    _getConfigDir() {
+        const homeDir = os.homedir();
+        if (process.platform === 'win32') {
+            return path.join(homeDir, 'AppData', 'Roaming', 'mmex-sync');
+        } else {
+            // Linux, macOS, and other Unix-like systems
+            return path.join(homeDir, '.mmex-sync');
+        }
     }
 
     updateConfig(configData) {
