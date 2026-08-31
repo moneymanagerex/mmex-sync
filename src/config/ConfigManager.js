@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import enquirer from 'enquirer';
 import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
+import { expandTildePath } from '../utils/pathUtils.js';
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
 const GLOBAL_CONFIG_FILENAME = 'mmex-sync.config.json';
@@ -60,13 +61,13 @@ export class ConfigManager {
 
         // 2. Define required parameters and resolve the origin
         const schema = {
-            dbPath: this.cliArgs.db || this.config.dbPath,
+            dbPath: expandTildePath(this.cliArgs.db) || this.config.dbPath,
             serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
-            mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
+            mmexExe: expandTildePath(this.cliArgs.exe) || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
             lastSync: this.config.lastSync || null,
             isRunning: this.config.isRunning || false,

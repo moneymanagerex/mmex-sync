@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import { ConfigManager } from './config/ConfigManager.js';
 import { DatabaseService } from './database/DatabaseService.js';
 import { RemoteServiceFactory } from './api/RemoteServiceFactory.js';
@@ -9,6 +10,7 @@ import { showHelp } from './cli/help.js';
 import enquirer from 'enquirer';
 import path from 'path';
 import { waitForExit } from './utils/waitForExit.js';
+import { expandTildePath } from './utils/pathUtils.js';
 
 let configMgr = null;
 let config = null;
@@ -210,13 +212,17 @@ async function main() {
         configMgr = new ConfigManager(args);
         config = await configMgr.getEffectiveConfig();
 
-        // get full path of db
+        // Expand tilde in dbPath and get full path
+        config.dbPath = expandTildePath(config.dbPath);
         const newDbPath = path.resolve(config.dbPath);
         if (newDbPath != config.dbPath) {
             config.dbPath = newDbPath;
             // save config
             await configMgr.save(config);
         }
+
+        // Expand tilde in mmexExe path
+        config.mmexExe = expandTildePath(config.mmexExe);
 
         // show all relevant parametert from configuration
         const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '[nodejs version]';
