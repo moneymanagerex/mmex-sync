@@ -19,14 +19,14 @@ jest.unstable_mockModule('enquirer', () => ({
     }
 }));
 
-jest.unstable_mockModule('../../src/utils/dpapi.js', () => ({
-    protect: jest.fn(val => `encrypted_${val}`),
-    unprotect: jest.fn(val => val.replace('encrypted_', ''))
+jest.unstable_mockModule('../../src/utils/security.js', () => ({
+    protect: jest.fn((val, dir) => `encrypted_${val}`),
+    unprotect: jest.fn((val, dir) => val.replace('encrypted_', ''))
 }));
 
 const fs = (await import('fs')).default;
 const enquirer = (await import('enquirer')).default;
-const dpapi = await import('../../src/utils/dpapi.js');
+const security = await import('../../src/utils/security.js');
 const { ConfigManager } = await import('../../src/config/ConfigManager.js');
 
 describe('ConfigManager', () => {
@@ -67,7 +67,7 @@ describe('ConfigManager', () => {
 
             config.updateConfig({ token: 'my-secret-token' });
 
-            expect(dpapi.protect).toHaveBeenCalledWith('my-secret-token');
+            expect(security.protect).toHaveBeenCalledWith('my-secret-token', config.configDir);
             expect(config.config.encryptedToken).toBe('encrypted_my-secret-token');
             expect(fs.writeFileSync).toHaveBeenCalled();
         });
@@ -310,7 +310,7 @@ describe('ConfigManager', () => {
 
             expect(finalConfig.filePassword).toBe('cliFilePassword123');
             expect(finalConfig.savePassword).toBe('yes');
-            expect(dpapi.protect).toHaveBeenCalledWith('cliFilePassword123');
+            expect(security.protect).toHaveBeenCalledWith('cliFilePassword123', configManager.configDir);
 
             const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
             const savedContent = JSON.parse(profileCalls[profileCalls.length - 1][1]);
@@ -334,7 +334,7 @@ describe('ConfigManager', () => {
 
             const finalConfig = await configManager.getEffectiveConfig();
 
-            expect(dpapi.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123');
+            expect(security.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123', configManager.configDir);
             expect(finalConfig.filePassword).toBe('dbpassword123');
         });
 

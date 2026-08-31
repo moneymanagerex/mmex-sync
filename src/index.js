@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import { ConfigManager } from './config/ConfigManager.js';
 import { DatabaseService } from './database/DatabaseService.js';
 import { RemoteServiceFactory } from './api/RemoteServiceFactory.js';
@@ -9,6 +10,7 @@ import { showHelp } from './cli/help.js';
 import enquirer from 'enquirer';
 import path from 'path';
 import { waitForExit } from './utils/waitForExit.js';
+import { expandTildePath } from './utils/pathUtils.js';
 
 let configMgr = null;
 let config = null;
@@ -53,7 +55,8 @@ const VALID_PARAMETERS = [
  */
 function validateParameters(rawArgs) {
     for (const param of Object.keys(rawArgs)) {
-        if (!VALID_PARAMETERS.includes(param)) {
+        const lowerParam = param.toLowerCase();
+        if (!VALID_PARAMETERS.some(vp => vp.toLowerCase() === lowerParam)) {
             return param;
         }
     }
@@ -210,13 +213,17 @@ async function main() {
         configMgr = new ConfigManager(args);
         config = await configMgr.getEffectiveConfig();
 
-        // get full path of db
+        // Expand tilde in dbPath and get full path
+        config.dbPath = expandTildePath(config.dbPath);
         const newDbPath = path.resolve(config.dbPath);
         if (newDbPath != config.dbPath) {
             config.dbPath = newDbPath;
             // save config
             await configMgr.save(config);
         }
+
+        // Expand tilde in mmexExe path (in case user entered it via prompt in ConfigManager)
+        config.mmexExe = expandTildePath(config.mmexExe);
 
         // show all relevant parametert from configuration
         const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '[nodejs version]';
@@ -272,7 +279,20 @@ async function main() {
                 throw new Error("Session expired on server. Please run again providing your password.");
             }
         } else {
-            throw new Error("No authentication method found. Please provide a password.");
+            const { pass } = await enquirer.prompt({
+                type: 'password',
+                name: 'pass',
+                message: `Password (${config.pbUser}):`
+            });
+            if (!pass) {
+                throw new Error("No password provided.");
+            }
+            console.log("🔑 Authenticating with password...");
+            remoteService.invalidateToken();
+            await remoteService.authenticate(config.pbUser, pass);
+            config.token = remoteService.getToken();
+            config.pbAuthCollection = remoteService.authCollection;
+            configMgr.updateConfig(config);
         }
 
         const sync = new SyncService(db, remoteService, configMgr, args);
@@ -303,7 +323,7 @@ async function main() {
         let mode = args.watch ? 'watch' : (args.run ? 'run' : (args.sync ? 'sync' : config.defaultMode));
         console.log(`🚀 MMEX-Sync | Profile: ${configMgr.profile} | Mode: ${mode.toUpperCase()}`);
 
-        if ((mode === 'run' || mode === 'watch') && !fs.existsSync(config.mmexExe)) {
+        if ((mode === 'run' || mode === 'watch') && (!config.mmexExe || !fs.existsSync(config.mmexExe))) {
             console.warn(`⚠️ MMEX executable not found at path: ${config.mmexExe}. Switching to sync mode.`);
             mode = 'sync';
         }
