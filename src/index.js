@@ -221,7 +221,7 @@ async function main() {
             await configMgr.save(config);
         }
 
-        // Expand tilde in mmexExe path
+        // Expand tilde in mmexExe path (in case user entered it via prompt in ConfigManager)
         config.mmexExe = expandTildePath(config.mmexExe);
 
         // show all relevant parametert from configuration
@@ -309,7 +309,7 @@ async function main() {
         let mode = args.watch ? 'watch' : (args.run ? 'run' : (args.sync ? 'sync' : config.defaultMode));
         console.log(`🚀 MMEX-Sync | Profile: ${configMgr.profile} | Mode: ${mode.toUpperCase()}`);
 
-        if ((mode === 'run' || mode === 'watch') && !fs.existsSync(config.mmexExe)) {
+        if ((mode === 'run' || mode === 'watch') && (!config.mmexExe || !fs.existsSync(config.mmexExe))) {
             console.warn(`⚠️ MMEX executable not found at path: ${config.mmexExe}. Switching to sync mode.`);
             mode = 'sync';
         }

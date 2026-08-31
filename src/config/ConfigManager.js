@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import enquirer from 'enquirer';
+import { execSync } from 'child_process';
 import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
 import { expandTildePath } from '../utils/pathUtils.js';
 
@@ -61,13 +62,13 @@ export class ConfigManager {
 
         // 2. Define required parameters and resolve the origin
         const schema = {
-            dbPath: expandTildePath(this.cliArgs.db) || this.config.dbPath,
+            dbPath: (this.cliArgs.db ? expandTildePath(this.cliArgs.db) : null) || this.config.dbPath,
             serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
-            mmexExe: expandTildePath(this.cliArgs.exe) || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
+            mmexExe: (this.cliArgs.exe ? expandTildePath(this.cliArgs.exe) : null) || this.config.mmexExe || this._resolveMMEXPath(),
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
             lastSync: this.config.lastSync || null,
             isRunning: this.config.isRunning || false,
@@ -333,38 +334,16 @@ export class ConfigManager {
         if (!current.pbPass && !this.config.encryptedToken) {
             questions.push({ type: 'password', name: 'pbPass', message: 'Password PocketBase:' });
         }
-        if (!current.mmexExe && !this.config.mmexExe) {
-            const foundPaths = this._searchMMEXExecutable();
-
-            if (foundPaths.length > 0) {
-                const choices = foundPaths.map(p => ({ name: p, value: p }));
-                choices.push({ name: 'Enter path manually...', value: 'MANUAL' });
-
-                questions.push({
-                    type: 'select',
-                    name: 'mmexExe',
-                    message: 'Select MoneyManagerEx executable:',
-                    choices: choices
-                });
-            } else {
-                questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe' });
-            }
+        if (!current.mmexExe) {
+            const defaultPath = process.platform === 'win32' 
+                ? 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe'
+                : '/usr/bin/mmex';
+            questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: defaultPath });
         }
 
         let answers = {};
         if (questions.length > 0) {
             answers = await enquirer.prompt(questions);
-
-            // If user selected "Enter path manually", prompt for manual input
-            if (answers.mmexExe === 'MANUAL') {
-                const { manualPath } = await enquirer.prompt({
-                    type: 'input',
-                    name: 'manualPath',
-                    message: 'Enter MoneyManagerEx executable path:',
-                    default: 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe'
-                });
-                answers.mmexExe = manualPath;
-            }
         }
 
         const merged = { ...current, ...answers };
@@ -401,21 +380,42 @@ export class ConfigManager {
         return merged;
     }
 
-    _searchMMEXExecutable() {
-        const commonPaths = [
-            'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
-            'C:\\Program Files (x86)\\Money Manager Ex\\bin\\mmex.exe',
-            'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
-            'C:\\Program Files (x86)\\MoneyManagerEx\\bin\\mmex.exe'
-        ];
-
-        return commonPaths.filter(p => {
-            try {
-                return fs.existsSync(p);
-            } catch (e) {
-                return false;
+    /**
+     * Resolves the MMEX executable path based on OS and availability.
+     * Priority: CLI args > saved config > auto-detect > null (ask user)
+     * 
+     * For Windows: tries standard installation path, then current directory
+     * For Linux/Unix: tries 'which mmex', then current directory
+     * Returns null if not found (caller should prompt user)
+     */
+    _resolveMMEXPath() {
+        if (process.platform === 'win32') {
+            // Windows: try standard installation path
+            const standardPath = 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe';
+            if (fs.existsSync(standardPath)) {
+                return standardPath;
             }
-        });
+            // Try current directory
+            if (fs.existsSync('mmex.exe')) {
+                return path.resolve('mmex.exe');
+            }
+        } else {
+            // Linux/macOS: try 'which mmex'
+            try {
+                const result = execSync('which mmex', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                if (result && fs.existsSync(result)) {
+                    return result;
+                }
+            } catch (e) {
+                // which failed, try current directory
+            }
+            // Try current directory
+            if (fs.existsSync('mmex')) {
+                return path.resolve('mmex');
+            }
+        }
+        // Not found anywhere
+        return null;
     }
 
     /**
