@@ -279,7 +279,20 @@ async function main() {
                 throw new Error("Session expired on server. Please run again providing your password.");
             }
         } else {
-            throw new Error("No authentication method found. Please provide a password.");
+            const { pass } = await enquirer.prompt({
+                type: 'password',
+                name: 'pass',
+                message: `Password (${config.pbUser}):`
+            });
+            if (!pass) {
+                throw new Error("No password provided.");
+            }
+            console.log("🔑 Authenticating with password...");
+            remoteService.invalidateToken();
+            await remoteService.authenticate(config.pbUser, pass);
+            config.token = remoteService.getToken();
+            config.pbAuthCollection = remoteService.authCollection;
+            configMgr.updateConfig(config);
         }
 
         const sync = new SyncService(db, remoteService, configMgr, args);

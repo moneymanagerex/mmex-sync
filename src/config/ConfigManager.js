@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import enquirer from 'enquirer';
 import { execSync } from 'child_process';
-import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
+import { protect, unprotect } from '../utils/security.js';
 import { expandTildePath } from '../utils/pathUtils.js';
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
@@ -39,7 +39,7 @@ export class ConfigManager {
     updateConfig(configData) {
         this.config = { ...this.config, ...configData };
         if (this.config.token) {
-            this.config.encryptedToken = protect(this.config.token);
+            this.config.encryptedToken = protect(this.config.token, this.configDir);
         }
         this.save(this.config);
     }
@@ -79,7 +79,7 @@ export class ConfigManager {
         if (cliFilePassword) {
             schema.filePassword = cliFilePassword;
         } else if (schema.savePassword !== 'no' && this.config.encryptedFilePassword) {
-            schema.filePassword = unprotect(this.config.encryptedFilePassword);
+            schema.filePassword = unprotect(this.config.encryptedFilePassword, this.configDir);
         }
 
         // 3. If data is missing, ask via Prompt
@@ -90,7 +90,7 @@ export class ConfigManager {
             // If we have a password (from CLI or Prompt), we don't save it in JSON
             // but we will use it to obtain the token in PbService.
         } else if (this.config.encryptedToken) {
-            finalConfig.token = unprotect(this.config.encryptedToken);
+            finalConfig.token = unprotect(this.config.encryptedToken, this.configDir);
         }
 
         this.config = finalConfig;
@@ -429,7 +429,7 @@ export class ConfigManager {
         if (savePasswordChoice === 'no') {
             encryptedFilePassword = undefined;
         } else if (savePasswordChoice === 'yes' && configData.filePassword) {
-            encryptedFilePassword = protect(configData.filePassword);
+            encryptedFilePassword = protect(configData.filePassword, this.configDir);
         } else {
             encryptedFilePassword = configData.encryptedFilePassword || this.config.encryptedFilePassword;
         }
@@ -444,7 +444,7 @@ export class ConfigManager {
             defaultMode: configData.defaultMode,
             lastSync: configData.lastSync,
             isRunning: configData.isRunning ?? false,
-            encryptedToken: token ? protect(token) : (configData.encryptedToken || this.config.encryptedToken),
+            encryptedToken: token ? protect(token, this.configDir) : (configData.encryptedToken || this.config.encryptedToken),
             savePassword: savePasswordChoice || undefined,
             encryptedFilePassword: encryptedFilePassword
         };
