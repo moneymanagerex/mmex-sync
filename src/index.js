@@ -55,7 +55,8 @@ const VALID_PARAMETERS = [
  */
 function validateParameters(rawArgs) {
     for (const param of Object.keys(rawArgs)) {
-        if (!VALID_PARAMETERS.includes(param)) {
+        const lowerParam = param.toLowerCase();
+        if (!VALID_PARAMETERS.some(vp => vp.toLowerCase() === lowerParam)) {
             return param;
         }
     }
