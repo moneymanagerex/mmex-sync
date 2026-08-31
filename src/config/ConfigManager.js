@@ -222,6 +222,165 @@ export class ConfigManager {
         return true;
     }
 
+    /**
+     * Checks if any profile files exist in the configuration directory
+     */
+    hasProfiles() {
+        if (!fs.existsSync(this.configDir)) return false;
+        const suffix = `.${CONFIG_FILE_EXTENSION}`;
+        const files = fs.readdirSync(this.configDir);
+        return files.some(f => f.endsWith(suffix));
+    }
+
+    /**
+     * Returns an array of all profiles with their configuration summary and default flag
+     */
+    getProfiles() {
+        if (!fs.existsSync(this.configDir)) {
+            return [];
+        }
+
+        const files = fs.readdirSync(this.configDir);
+        const suffix = `.${CONFIG_FILE_EXTENSION}`;
+        const defaultProfile = this.getDefaultProfile();
+        const profiles = [];
+
+        for (const file of files) {
+            if (file.endsWith(suffix)) {
+                const name = file.replace(suffix, '');
+                const filePath = path.join(this.configDir, file);
+                let details = {};
+                try {
+                    details = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                } catch (e) {
+                    // Ignore corrupted profile files
+                }
+                profiles.push({
+                    name,
+                    isDefault: name === defaultProfile,
+                    dbPath: details.dbPath || '',
+                    serverType: details.serverType || DEFAULT_SERVER_TYPE,
+                    pbUrl: details.pbUrl || '',
+                    pbUser: details.pbUser || '',
+                    mmexExe: details.mmexExe || '',
+                    defaultMode: details.defaultMode || 'run',
+                    lastSync: details.lastSync || null,
+                    savePassword: details.savePassword || null,
+                    hasPassword: !!details.encryptedFilePassword,
+                    hasToken: !!details.encryptedToken
+                });
+            }
+        }
+        return profiles;
+    }
+
+    /**
+     * Returns configuration data for a specific profile (or default if 'default')
+     */
+    getProfileData(targetProfile) {
+        const defaultProfile = this.getDefaultProfile();
+        const profileToLoad = (!targetProfile || targetProfile === 'default')
+            ? defaultProfile
+            : targetProfile;
+
+        const configPath = path.join(this.configDir, `${profileToLoad}.${CONFIG_FILE_EXTENSION}`);
+        if (!fs.existsSync(configPath)) {
+            return null;
+        }
+
+        try {
+            const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            return {
+                name: profileToLoad,
+                isDefault: profileToLoad === defaultProfile,
+                dbPath: parsed.dbPath || '',
+                serverType: parsed.serverType || DEFAULT_SERVER_TYPE,
+                pbUrl: parsed.pbUrl || '',
+                pbAuthCollection: parsed.pbAuthCollection || null,
+                pbUser: parsed.pbUser || '',
+                mmexExe: parsed.mmexExe || '',
+                defaultMode: parsed.defaultMode || 'run',
+                lastSync: parsed.lastSync || null,
+                savePassword: parsed.savePassword || null,
+                hasPassword: !!parsed.encryptedFilePassword,
+                hasToken: !!parsed.encryptedToken
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Saves or creates profile data programmatically
+     */
+    saveProfileData(profileName, data = {}) {
+        if (!profileName || typeof profileName !== 'string' || !profileName.trim()) {
+            throw new Error('Profile name is required.');
+        }
+        const name = profileName.trim();
+        if (!fs.existsSync(this.configDir)) {
+            fs.mkdirSync(this.configDir, { recursive: true });
+        }
+
+        const targetPath = path.join(this.configDir, `${name}.${CONFIG_FILE_EXTENSION}`);
+        let existing = {};
+        if (fs.existsSync(targetPath)) {
+            try {
+                existing = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        const dbPath = data.dbPath !== undefined ? data.dbPath : (existing.dbPath || '');
+        const isEmb = dbPath ? dbPath.toLowerCase().endsWith('.emb') : false;
+        let encryptedFilePassword = existing.encryptedFilePassword;
+        let savePasswordChoice = data.savePassword !== undefined ? data.savePassword : existing.savePassword;
+
+        if (!isEmb) {
+            encryptedFilePassword = undefined;
+            savePasswordChoice = undefined;
+        } else if (data.filePassword) {
+            if (savePasswordChoice === 'no') {
+                encryptedFilePassword = undefined;
+            } else {
+                encryptedFilePassword = protect(data.filePassword, this.configDir);
+                savePasswordChoice = 'yes';
+            }
+        } else if (savePasswordChoice === 'no') {
+            encryptedFilePassword = undefined;
+        }
+
+        let encryptedToken = existing.encryptedToken;
+        if (data.token) {
+            encryptedToken = protect(data.token, this.configDir);
+        }
+
+        const toSave = {
+            dbPath: dbPath,
+            serverType: data.serverType || existing.serverType || DEFAULT_SERVER_TYPE,
+            pbUrl: data.pbUrl !== undefined ? data.pbUrl : (existing.pbUrl || ''),
+            pbAuthCollection: data.pbAuthCollection || existing.pbAuthCollection || null,
+            pbUser: data.pbUser !== undefined ? data.pbUser : (existing.pbUser || ''),
+            mmexExe: data.mmexExe !== undefined ? data.mmexExe : (existing.mmexExe || this._resolveMMEXPath() || ''),
+            defaultMode: data.defaultMode || existing.defaultMode || 'run',
+            lastSync: existing.lastSync || null,
+            isRunning: false,
+            encryptedToken: encryptedToken,
+            savePassword: savePasswordChoice,
+            encryptedFilePassword: encryptedFilePassword
+        };
+
+        fs.writeFileSync(targetPath, JSON.stringify(toSave, null, 2));
+
+        const allProfiles = this.getProfiles();
+        if (data.isDefault || allProfiles.length === 1 || !fs.existsSync(this.globalConfigPath)) {
+            this.setDefaultProfile(name);
+        }
+
+        return this.getProfileData(name);
+    }
+
     listProfiles() {
         if (!fs.existsSync(this.configDir)) {
             console.log("No profiles found (configuration folder not present).");

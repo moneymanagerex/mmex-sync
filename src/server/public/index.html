@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMEX-Sync | Profile Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Top Navigation / Header -->
+        <header class="navbar">
+            <div class="nav-brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                    </svg>
+                </div>
+                <div class="brand-title">
+                    <h1>MMEX-Sync</h1>
+                    <span class="badge badge-subtle">Dashboard</span>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <button id="btn-refresh" class="btn btn-secondary btn-icon" title="Refresh profiles">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6M1 20v-6h6" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                    <span>Refresh</span>
+                </button>
+                <button id="btn-create-top" class="btn btn-primary btn-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>New Profile</span>
+                </button>
+                <button id="btn-exit" class="btn btn-secondary btn-icon btn-exit" title="Save & Exit MMEX-Sync">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    <span>Exit</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- First-Run Wizard View (Hidden by default) -->
+            <section id="wizard-view" class="view-section hidden">
+                <div class="wizard-card">
+                    <div class="wizard-header">
+                        <div class="wizard-badge">🎉 First-Run Setup</div>
+                        <h2>Configure Your First Profile</h2>
+                        <p>Welcome to MMEX-Sync! Set up your primary profile to start synchronizing your Money Manager
+                            Ex database with PocketBase.</p>
+                    </div>
+
+                    <form id="wizard-form" class="config-form">
+                        <div class="form-grid">
+                            <!-- Profile Name -->
+                            <div class="form-group full-width">
+                                <label for="wizard-name">Profile Name <span class="required">*</span></label>
+                                <input type="text" id="wizard-name" name="name" value="default" required
+                                    placeholder="e.g. default, personal, work">
+                                <small class="form-hint">This initial profile will automatically be set as your active
+                                    default.</small>
+                            </div>
+
+                            <!-- Database Path -->
+                            <div class="form-group full-width">
+                                <label for="wizard-dbPath">Database Path (.mmb / .emb) <span
+                                        class="required">*</span></label>
+                                <div class="input-file-wrapper">
+                                    <input type="text" id="wizard-dbPath" name="dbPath" required
+                                        placeholder="e.g. C:\Users\user\Documents\finances.mmb">
+                                    <button type="button" class="btn btn-secondary btn-browse-file" data-target="wizard-dbPath" data-type="database" title="Browse for database file">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                        </svg>
+                                        <span>Browse</span>
+                                    </button>
+                                </div>
+                                <small class="form-hint">Absolute path to your local Money Manager Ex database
+                                    file.</small>
+                            </div>
+
+                            <!-- EMB Password Fields (Visible only for .emb) -->
+                            <div id="wizard-emb-group" class="emb-fields full-width hidden">
+                                <div class="emb-box">
+                                    <div class="form-group">
+                                        <label for="wizard-filePassword">Database File Password (.emb)</label>
+                                        <input type="password" id="wizard-filePassword" name="filePassword"
+                                            placeholder="Enter .emb file password">
+                                    </div>
+                                    <div class="form-group-checkbox">
+                                        <label class="checkbox-container">
+                                            <input type="checkbox" id="wizard-savePassword" name="savePassword" checked>
+                                            <span class="checkmark"></span>
+                                            Save database password securely in profile
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Remote PocketBase Server Settings -->
+                            <div class="form-group">
+                                <label for="wizard-pbUrl">PocketBase Server URL <span class="required">*</span></label>
+                                <input type="url" id="wizard-pbUrl" name="pbUrl" required
+                                    placeholder="http://127.0.0.1:8090">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="wizard-pbUser">PocketBase User / Email <span
+                                        class="required">*</span></label>
+                                <input type="text" id="wizard-pbUser" name="pbUser" required
+                                    placeholder="user@example.com">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="wizard-pbPass">PocketBase Password</label>
+                                <input type="password" id="wizard-pbPass" name="pbPass"
+                                    placeholder="Enter remote server password">
+                                <small class="form-hint">Used for initial token acquisition (never saved in
+                                    plaintext).</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="wizard-defaultMode">Default Sync Mode</label>
+                                <select id="wizard-defaultMode" name="defaultMode">
+                                    <option value="run" selected>Run (Sync, Launch MMEX, Final Sync)</option>
+                                    <option value="watch">Watch (Real-time monitoring while MMEX is open)</option>
+                                    <option value="sync">Sync (Direct Sync & Exit)</option>
+                                </select>
+                            </div>
+
+                            <!-- MMEX Executable Path -->
+                            <div class="form-group full-width">
+                                <div class="label-with-action">
+                                    <label for="wizard-mmexExe">MMEX Executable Path (Support File)</label>
+                                    <div class="actions-group">
+                                        <button type="button" class="btn-text btn-detect-mmex"
+                                            data-target="wizard-mmexExe">Auto-Detect</button>
+                                        <button type="button" class="btn-text btn-browse-file"
+                                            data-target="wizard-mmexExe" data-type="executable">Browse</button>
+                                    </div>
+                                </div>
+                                <input type="text" id="wizard-mmexExe" name="mmexExe"
+                                    placeholder="C:\Program Files\Money Manager Ex\bin\mmex.exe">
+                                <small class="form-hint">Required for 'Run' and 'Watch' modes.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-large">
+                                <span>Create Default Profile & Finish</span>
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6" />
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Dashboard View (Shown when profiles exist) -->
+            <section id="dashboard-view" class="view-section">
+                <div class="dashboard-header">
+                    <div>
+                        <h2>Configured Profiles</h2>
+                        <p class="subtitle">Manage multi-profile database paths, synchronization endpoints, and
+                            defaults.</p>
+                    </div>
+                </div>
+
+                <!-- Profiles List Grid -->
+                <div id="profiles-grid" class="profiles-grid">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Profile Modal (Create / Edit) -->
+        <div id="profile-modal" class="modal-backdrop hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3 id="modal-title">Create Profile</h3>
+                    <button class="modal-close" id="modal-close-btn">&times;</button>
+                </div>
+
+                <form id="profile-form" class="config-form">
+                    <input type="hidden" id="form-is-edit" value="false">
+                    <input type="hidden" id="form-original-name" value="">
+
+                    <div class="form-grid">
+                        <!-- Profile Name -->
+                        <div class="form-group full-width">
+                            <label for="profile-name">Profile Name <span class="required">*</span></label>
+                            <input type="text" id="profile-name" name="name" required placeholder="e.g. personal, work">
+                        </div>
+
+                        <!-- Database Path -->
+                        <div class="form-group full-width">
+                            <label for="profile-dbPath">Database Path (.mmb / .emb) <span
+                                    class="required">*</span></label>
+                            <div class="input-file-wrapper">
+                                <input type="text" id="profile-dbPath" name="dbPath" required
+                                    placeholder="C:\path\to\database.mmb">
+                                <button type="button" class="btn btn-secondary btn-browse-file" data-target="profile-dbPath" data-type="database" title="Browse for database file">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                    <span>Browse</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- EMB Password Section -->
+                        <div id="profile-emb-group" class="emb-fields full-width hidden">
+                            <div class="emb-box">
+                                <div class="form-group">
+                                    <label for="profile-filePassword">Database File Password (.emb)</label>
+                                    <input type="password" id="profile-filePassword" name="filePassword"
+                                        placeholder="Enter new password to update">
+                                    <small id="emb-password-status" class="form-hint"></small>
+                                </div>
+                                <div class="form-group-checkbox">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="profile-savePassword" name="savePassword" checked>
+                                        <span class="checkmark"></span>
+                                        Save database password securely in profile
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Remote Server Settings -->
+                        <div class="form-group">
+                            <label for="profile-pbUrl">PocketBase URL <span class="required">*</span></label>
+                            <input type="url" id="profile-pbUrl" name="pbUrl" placeholder="http://127.0.0.1:8090"
+                                required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-pbUser">PocketBase User / Email <span class="required">*</span></label>
+                            <input type="text" id="profile-pbUser" name="pbUser" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-pbPass">PocketBase Password</label>
+                            <input type="password" id="profile-pbPass" name="pbPass"
+                                placeholder="Enter password to (re-)authenticate">
+                            <small id="pb-token-status" class="form-hint"></small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-defaultMode">Default Sync Mode</label>
+                            <select id="profile-defaultMode" name="defaultMode">
+                                <option value="run">Run (Sync, Launch MMEX, Final Sync)</option>
+                                <option value="watch">Watch (Continuous sync while MMEX is open)</option>
+                                <option value="sync">Sync (Direct Sync & Exit)</option>
+                            </select>
+                        </div>
+
+                        <!-- MMEX Path -->
+                        <div class="form-group full-width">
+                            <div class="label-with-action">
+                                <label for="profile-mmexExe">MMEX Executable Path (Support File)</label>
+                                <div class="actions-group">
+                                    <button type="button" class="btn-text btn-detect-mmex"
+                                        data-target="profile-mmexExe">Auto-Detect</button>
+                                    <button type="button" class="btn-text btn-browse-file"
+                                        data-target="profile-mmexExe" data-type="executable">Browse</button>
+                                </div>
+                            </div>
+                            <input type="text" id="profile-mmexExe" name="mmexExe"
+                                placeholder="C:\Program Files\Money Manager Ex\bin\mmex.exe">
+                        </div>
+
+                        <div class="form-group-checkbox full-width">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="profile-isDefault" name="isDefault">
+                                <span class="checkmark"></span>
+                                Set as active default profile
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="modal-save-btn">Save Profile</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Rename Modal -->
+        <div id="rename-modal" class="modal-backdrop hidden">
+            <div class="modal-card modal-small">
+                <div class="modal-header">
+                    <h3>Rename Profile</h3>
+                    <button class="modal-close" id="rename-close-btn">&times;</button>
+                </div>
+                <form id="rename-form">
+                    <input type="hidden" id="rename-target" value="">
+                    <div class="form-group">
+                        <label for="rename-new-name">New Profile Name <span class="required">*</span></label>
+                        <input type="text" id="rename-new-name" required placeholder="Enter new profile name">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" id="rename-cancel-btn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Rename</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div id="delete-modal" class="modal-backdrop hidden">
+            <div class="modal-card modal-small">
+                <div class="modal-header">
+                    <h3 class="text-danger">Delete Profile</h3>
+                    <button class="modal-close" id="delete-close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete profile <strong id="delete-profile-name"></strong>?</p>
+                    <p class="text-subtle">This action cannot be undone.</p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="delete-cancel-btn">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="delete-confirm-btn">Delete Profile</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exit / Shutdown Confirmation Modal -->
+        <div id="exit-modal" class="modal-backdrop hidden">
+            <div class="modal-card modal-small">
+                <div class="modal-header">
+                    <h3>Save & Start MMEX-Sync</h3>
+                    <button class="modal-close" id="exit-close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Configuration changes are saved.</p>
+                    <p class="text-subtle">Closing the Web UI will start the normal sync/run cycle in the terminal.</p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="exit-cancel-btn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="exit-confirm-btn">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        <span>Start MMEX-Sync</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shutdown Complete Screen -->
+        <div id="shutdown-screen" class="shutdown-screen hidden">
+            <div class="shutdown-card">
+                <div class="shutdown-icon">🚀</div>
+                <h2>MMEX-Sync Running</h2>
+                <p>The Web UI has closed and the sync cycle has started in the terminal.</p>
+                <p class="text-subtle">You can now safely close this browser tab.</p>
+                <button type="button" class="btn btn-secondary" onclick="window.close()">Close Tab</button>
+            </div>
+        </div>
+
+        <!-- Toast Notifications Container -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <script src="app.js?v=6"></script>
+</body>
+
+</html>

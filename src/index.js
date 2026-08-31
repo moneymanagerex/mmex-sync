@@ -11,6 +11,8 @@ import enquirer from 'enquirer';
 import path from 'path';
 import { waitForExit } from './utils/waitForExit.js';
 import { expandTildePath } from './utils/pathUtils.js';
+import { startServer } from './server/server.js';
+import { waitForInteractiveKey } from './cli/interactiveTimeout.js';
 
 let configMgr = null;
 let config = null;
@@ -45,6 +47,7 @@ const VALID_PARAMETERS = [
     'autoDownloadUpdate',
     'clearDb',
     'clearServer',
+    'gui',
     'help',
     'version',
     'nowait'
@@ -214,6 +217,28 @@ async function main() {
         const configMgrInstance = new ConfigManager(args);
         const success = configMgrInstance.setDefaultMode(args.setDefaultMode);
         await exitProgram(success ? 0 : 1);
+    }
+
+    // --- GUI / FIRST-RUN / INTERACTIVE TIMEOUT HANDLING ---
+    if (args.gui) {
+        await startServer({ open: true, cliArgs: args });
+        delete args.gui;
+    } else {
+        const startupConfigMgr = new ConfigManager(args);
+        const hasProfiles = startupConfigMgr.hasProfiles();
+
+        if (!hasProfiles) {
+            console.log("👋 No profiles found. Launching Web Setup Wizard...");
+            await startServer({ open: true, cliArgs: args });
+        } else {
+            const isExplicitHeadless = Boolean(hasProfiles && !args.gui);
+            if (!isExplicitHeadless) {
+                const openUI = await waitForInteractiveKey(3000);
+                if (openUI) {
+                    await startServer({ open: true, cliArgs: args });
+                }
+            }
+        }
     }
 
     try {

@@ -30,6 +30,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --exe=path             Path to the MMEX.exe executable
                          Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
   --serverType=name      Remote server type to use. Default: pocketbase
+  --gui                  Starts the local Web UI dashboard directly
   --create               Delete and Recreates a new empty database
   --verbose              Shows detailed logs of each operation.
 

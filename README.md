@@ -166,19 +166,23 @@ You can manage different databases (e.g., "Home" vs "Work") using profiles:
 * **List Profiles:** `mmex-sync --listProfile` (shows available profiles and marks the default profile with `(default)`).
 * **Show Profile Info:** `mmex-sync --showProfile[=name]` (shows configuration details for a profile).
 * **Delete Profile:** `mmex-sync --deleteProfile[=name]` (deletes the current default profile or a specific profile).
+* **Web UI Dashboard:** `mmex-sync --gui` (launches local browser-based management dashboard).
 
 ---
 
 ## ⚙️ Configuration & Setup
 
-### First Run
+### First Run & Web UI
 
-Simply run `mmex-sync`. On the first start, the program will interactively ask for your PocketBase URL, credentials, and database path, then store them in the `default` profile.
+* **First Run:** When no profiles exist, running `mmex-sync` automatically starts the local web server and opens your browser to the **First-Run Configuration Wizard**, guiding you through creating and configuring your initial default profile.
+* **Interactive Timeout:** On subsequent launches without specific CLI action flags, `mmex-sync` displays a 3-second countdown prompt. Pressing any key aborts headless mode and opens the **Web Management Dashboard**. If no key is pressed, it continues with the configured sync mode.
+* **Direct Web UI Launch:** Run `mmex-sync --gui` at any time to open the management dashboard immediately.
+* **Native File Picker (Browse Button):** The Web UI allows browsing local file paths directly via native OS dialogs. On **Linux**, this feature requires either **`zenity`** or **`kdialog`** installed on your system (e.g., `sudo apt install zenity` or `sudo dnf install zenity`).
 
 ### Command Line Arguments
 
 > [!NOTE]
-> **Case-insensitivity:** All parameters are case-insensitive (e.g., `--CHECKFORUPDATE`, `--DB`, `--verbose` work interchangeably with their lowercase or camelCase equivalents). Values for parameters (such as passwords, profile names, or file paths) remain case-sensitive.
+> **Case-insensitivity:** All parameters are case-insensitive (e.g., `--CHECKFORUPDATE`, `--DB`, `--verbose`, `--GUI` work interchangeably with their lowercase or camelCase equivalents). Values for parameters (such as passwords, profile names, or file paths) remain case-sensitive.
 
 ```bash
 ===========================================================
@@ -196,6 +200,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --listProfile       Shows the list of available profiles
   --showProfile[=name] Shows profile information (content of profile)
   --deleteProfile[=name] Deletes default profile or specified profile
+  --gui               Starts the local Web UI dashboard directly
   --db=path           Path to the MoneyManagerEx .mmb file
   --url=address       URL of the PocketBase instance
   --user=email        PocketBase login email
