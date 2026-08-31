@@ -165,6 +165,7 @@ You can manage different databases (e.g., "Home" vs "Work") using profiles:
 * **Rename Profile:** `mmex-sync --renameProfileTo=newname` (renames current profile to `newname` and updates default profile reference if needed).
 * **List Profiles:** `mmex-sync --listProfile` (shows available profiles and marks the default profile with `(default)`).
 * **Show Profile Info:** `mmex-sync --showProfile[=name]` (shows configuration details for a profile).
+* **Delete Profile:** `mmex-sync --deleteProfile[=name]` (deletes the current default profile or a specific profile).
 
 ---
 
@@ -194,6 +195,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
   --ignoreProfile     Ignore profile configuration and use default values
   --listProfile       Shows the list of available profiles
   --showProfile[=name] Shows profile information (content of profile)
+  --deleteProfile[=name] Deletes default profile or specified profile
   --db=path           Path to the MoneyManagerEx .mmb file
   --url=address       URL of the PocketBase instance
   --user=email        PocketBase login email

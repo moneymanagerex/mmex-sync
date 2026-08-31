@@ -9,7 +9,8 @@ jest.unstable_mockModule('fs', () => ({
         writeFileSync: jest.fn(),
         readFileSync: jest.fn(),
         readdirSync: jest.fn(),
-        renameSync: jest.fn()
+        renameSync: jest.fn(),
+        unlinkSync: jest.fn()
     }
 }));
 
@@ -263,6 +264,73 @@ describe('ConfigManager', () => {
                 expect.stringContaining('mmex-sync.config.json'),
                 expect.stringContaining('"defaultProfile": "newwork"')
             );
+        });
+    });
+
+    describe('deleteProfile', () => {
+        test('returns false if profile file does not exist', () => {
+            const config = new ConfigManager({ profile: 'nonexistent' });
+            fs.existsSync.mockReturnValue(false);
+
+            const result = config.deleteProfile();
+
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('not found'));
+        });
+
+        test('deletes specified profile file and returns true', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockImplementation(p => {
+                const base = path.basename(p);
+                if (base === 'custom.mmex-sync.json') return true;
+                if (base === 'mmex-sync.config.json') return false;
+                return false;
+            });
+
+            const result = config.deleteProfile('custom');
+
+            expect(result).toBe(true);
+            expect(fs.unlinkSync).toHaveBeenCalledWith(
+                expect.stringContaining('custom.mmex-sync.json')
+            );
+        });
+
+        test('deletes current default profile and resets global defaultProfile to "default" if matched', () => {
+            const config = new ConfigManager({ profile: 'work' });
+            fs.existsSync.mockImplementation(p => {
+                const base = path.basename(p);
+                if (base === 'work.mmex-sync.json') return true;
+                if (base === 'mmex-sync.config.json') return true;
+                return true;
+            });
+            fs.readFileSync.mockImplementation(p => {
+                if (p.includes('mmex-sync.config.json')) return JSON.stringify({ defaultProfile: 'work' });
+                return '{}';
+            });
+
+            const result = config.deleteProfile();
+
+            expect(result).toBe(true);
+            expect(fs.unlinkSync).toHaveBeenCalledWith(
+                expect.stringContaining('work.mmex-sync.json')
+            );
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                expect.stringContaining('mmex-sync.config.json'),
+                expect.stringContaining('"defaultProfile": "default"')
+            );
+        });
+
+        test('returns false if unlinkSync throws an error', () => {
+            const config = new ConfigManager({ profile: 'work' });
+            fs.existsSync.mockReturnValue(true);
+            fs.unlinkSync.mockImplementation(() => {
+                throw new Error('Permission denied');
+            });
+
+            const result = config.deleteProfile('work');
+
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error deleting profile'));
         });
     });
 

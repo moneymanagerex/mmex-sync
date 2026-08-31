@@ -23,6 +23,7 @@ const VALID_PARAMETERS = [
     'ignoreProfile',
     'listProfile',
     'showProfile',
+    'deleteProfile',
     'db',
     'filePassword',
     'saveFilePassword',
@@ -188,6 +189,13 @@ async function main() {
         const profileName = typeof args.showProfile === 'string' ? args.showProfile : undefined;
         configMgrInstance.showProfile(profileName);
         await exitProgram(0);
+    }
+
+    if (args.deleteProfile) {
+        const configMgrInstance = new ConfigManager(args);
+        const profileName = typeof args.deleteProfile === 'string' ? args.deleteProfile : undefined;
+        const success = configMgrInstance.deleteProfile(profileName);
+        await exitProgram(success ? 0 : 1);
     }
 
     if (args.setDefaultProfile) {

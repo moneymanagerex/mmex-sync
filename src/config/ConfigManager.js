@@ -289,6 +289,42 @@ export class ConfigManager {
     }
 
     /**
+     * Deletes the specified profile or the current profile and resets defaultProfile if needed
+     */
+    deleteProfile(targetProfile) {
+        const profileToDelete = (typeof targetProfile === 'string' && targetProfile.trim().length > 0) ? targetProfile.trim() : this.profile;
+        const targetPath = path.join(this.configDir, `${profileToDelete}.${CONFIG_FILE_EXTENSION}`);
+
+        if (!fs.existsSync(targetPath)) {
+            console.error(`❌ Profile '${profileToDelete}' not found (${targetPath}). Cannot delete.`);
+            return false;
+        }
+
+        try {
+            fs.unlinkSync(targetPath);
+            console.log(`✅ Profile '${profileToDelete}' deleted.`);
+        } catch (e) {
+            console.error(`❌ Error deleting profile '${profileToDelete}': ${e.message}`);
+            return false;
+        }
+
+        if (fs.existsSync(this.globalConfigPath)) {
+            try {
+                const globalConfig = JSON.parse(fs.readFileSync(this.globalConfigPath, 'utf8'));
+                if (globalConfig.defaultProfile === profileToDelete) {
+                    globalConfig.defaultProfile = 'default';
+                    fs.writeFileSync(this.globalConfigPath, JSON.stringify(globalConfig, null, 2));
+                    console.log(`ℹ️ Default profile reset to 'default' in ${GLOBAL_CONFIG_FILENAME}`);
+                }
+            } catch (e) {
+                console.error(`⚠️ Error updating default profile in ${GLOBAL_CONFIG_FILENAME}: ${e.message}`);
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Updates the default mode in the profile and saves it
      */
     setDefaultMode(mode) {
