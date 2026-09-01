@@ -83,23 +83,47 @@ For maximum privacy and control over your financial data, you can easily deploy 
 
 The engine can be launched in different modes depending on your workflow.
 
-### 0. First setup
-On first launch, the program will interactively ask for your PocketBase URL, credentials, and database path, then store them in the `default` profile.
+### 0. First Setup (Web Wizard)
+
+When you launch `mmex-sync` for the first time (or whenever no profiles are configured), the program automatically launches a local web server and opens the **First-Run Configuration Wizard** in your default web browser:
 
 ```bash
 C:\> mmex-sync
-√ Percorso database .mmb: · test.mmb
-√ URL PocketBase: · http://127.0.0.1:8090
-√ Email PocketBase: · test@yourdomain.com
-√ Password PocketBase: · ************
-✅ Configurazione salvata nel profilo: default
-Path DB: test.mmb
-URL: http://127.0.0.1:8090
-User: test@yourdomain.com
-MMEX Path: C:\Program Files\MoneyManagerEx\bin\mmex.exe
-🏗️  [Create] Creazione nuovo database in corso: test.mmb
-✅ Database creato e pronto per la sincronizzazione.
+👋 No profiles found. Launching Web Setup Wizard...
+🌐 Web UI Server running at http://127.0.0.1:4567
 ```
+
+The Web Wizard guides you step-by-step through setting up your initial profile. Once filled, you can choose between two actions:
+* **Save & Run:** Saves the profile configuration, closes the Web UI server, and immediately starts the synchronization / MMEX workflow in your terminal.
+* **Save & Exit:** Saves the profile configuration and exits cleanly back to the command prompt.
+
+> [!TIP]
+> You can open the Web Management Dashboard at any time to create, edit, rename, or delete profiles by running:
+> ```bash
+> mmex-sync --gui
+> ```
+
+---
+
+#### 🔍 Profile Configuration Parameters in Detail
+
+The table below explains every single parameter configurable in a profile (accessible via the First-Run Wizard and the Profile Manager modal in the Web UI):
+
+| Parameter | Field in Web UI | Required | Description |
+| :--- | :--- | :---: | :--- |
+| **Profile Name** | `Profile Name` | Yes | Unique name / identifier for the profile (e.g., `default`, `personal`, `work`). On first-run setup, it defaults to `default` and is automatically set as the active default profile. |
+| **Database Path** | `Database Path (.mmb / .emb)` | Yes | Absolute or relative path to your local Money Manager Ex database (`.mmb` standard SQLite file or `.emb` encrypted database). Supports `~` home directory expansion. You can click the **Browse** button to select the file using the native OS file picker. |
+| **Database Password** | `Database File Password (.emb)` | Conditional | Visible only when a `.emb` (encrypted) database file is selected. Used to decrypt/encrypt the database on the fly during synchronization. |
+| **Save DB Password** | `Save database password securely in profile` | Optional | Checkbox for `.emb` files. When checked, securely stores the password in the local profile configuration so you are not prompted on each run. |
+| **PocketBase URL** | `PocketBase Server URL` | Yes | The HTTP/HTTPS endpoint of your PocketBase instance (e.g., `https://mmex-sync.prudenzano.org` for the community server, or `http://127.0.0.1:8090` / `http://your-server-ip:8090` for self-hosted servers). |
+| **PocketBase User** | `PocketBase User / Email` | Yes | The user email address or username registered on your PocketBase instance used to authenticate sync sessions. |
+| **PocketBase Password** | `PocketBase Password` | Setup / Edit | Your PocketBase account password. It is transmitted once to the server to obtain a secure JWT session token (`pbToken`). Plaintext passwords are never saved in the configuration file. |
+| **Default Sync Mode** | `Default Sync Mode` | Yes | The default execution mode when running `mmex-sync` with this profile:<ul><li>**Run** (`run`, Default): Initial sync → Launches MMEX desktop → Final sync upon closing MMEX.</li><li>**Watch** (`watch`): Initial sync → Launches MMEX → Real-time continuous background monitoring of local and remote changes.</li><li>**Sync** (`sync`): Immediate full sync cycle (Pull + Push) and exit without opening the MMEX desktop interface.</li></ul> |
+| **MMEX Executable Path** | `MMEX Executable Path (Support File)` | Required for `run`/`watch` | The path to your local Money Manager Ex application executable (`mmex.exe` on Windows, or `mmex` on Linux/macOS). Includes two helper buttons:<ul><li>**Auto-Detect:** Automatically searches standard OS installation directories for MMEX.</li><li>**Browse:** Opens native OS file picker dialog to locate the binary manually.</li></ul> |
+| **Active Default Profile** | `Set as active default profile` | Optional | (In Profile Modal) Sets this profile as the global `defaultProfile` in `mmex-sync.config.json`. When running `mmex-sync` without explicit `--profile=name`, this profile is executed. |
+
+---
+
 ### 1. Normal run (Default Mode)
 After first launch, you can run the program with:
 ```bash
@@ -175,7 +199,7 @@ You can manage different databases (e.g., "Home" vs "Work") using profiles:
 ### First Run & Web UI
 
 * **First Run:** When no profiles exist, running `mmex-sync` automatically starts the local web server and opens your browser to the **First-Run Configuration Wizard**, guiding you through creating and configuring your initial default profile.
-* **Interactive Timeout:** On subsequent launches without specific CLI action flags, `mmex-sync` displays a 3-second countdown prompt. Pressing any key aborts headless mode and opens the **Web Management Dashboard**. If no key is pressed, it continues with the configured sync mode.
+* **Headless Execution:** When one or more profiles are already configured, running `mmex-sync` executes in headless mode using the active default profile without starting the web interface.
 * **Direct Web UI Launch:** Run `mmex-sync --gui` at any time to open the management dashboard immediately.
 * **Native File Picker (Browse Button):** The Web UI allows browsing local file paths directly via native OS dialogs. On **Linux**, this feature requires either **`zenity`** or **`kdialog`** installed on your system (e.g., `sudo apt install zenity` or `sudo dnf install zenity`).
 

@@ -244,7 +244,7 @@ async function main() {
     }
 
     if (serverResult && serverResult.action === 'exit') {
-        console.log("👋 Salva ed esci: configurazione salvata. Uscita da MMEX-Sync.");
+        console.log("👋 Save & Exit: configuration saved. Exiting MMEX-Sync.");
         await exitProgram(0);
     }
 

@@ -169,13 +169,13 @@
                                     <polyline points="17 21 17 13 7 13 7 21"></polyline>
                                     <polyline points="7 3 7 8 15 8"></polyline>
                                 </svg>
-                                <span>Salva ed esci</span>
+                                <span>Save & Exit</span>
                             </button>
                             <button type="button" id="wizard-btn-save-run" class="btn btn-primary btn-large">
                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                                     <polygon points="5 3 19 12 5 21 5 3" />
                                 </svg>
-                                <span>Salva ed esegui</span>
+                                <span>Save & Run</span>
                             </button>
                         </div>
                     </form>
@@ -356,28 +356,28 @@
         <div id="exit-modal" class="modal-backdrop hidden">
             <div class="modal-card modal-small">
                 <div class="modal-header">
-                    <h3>Esci da MMEX-Sync</h3>
+                    <h3>Exit MMEX-Sync</h3>
                     <button class="modal-close" id="exit-close-btn">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p>Le modifiche alla configurazione sono state salvate.</p>
-                    <p class="text-subtle">Scegli come desideri procedere:</p>
+                    <p>Configuration changes have been saved.</p>
+                    <p class="text-subtle">Choose how you would like to proceed:</p>
                 </div>
                 <div class="modal-actions modal-actions-exit">
-                    <button type="button" class="btn btn-secondary" id="exit-cancel-btn">Annulla</button>
+                    <button type="button" class="btn btn-secondary" id="exit-cancel-btn">Cancel</button>
                     <button type="button" class="btn btn-warning" id="exit-save-exit-btn">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                             <polyline points="17 21 17 13 7 13 7 21"></polyline>
                             <polyline points="7 3 7 8 15 8"></polyline>
                         </svg>
-                        <span>Salva ed esci</span>
+                        <span>Save & Exit</span>
                     </button>
                     <button type="button" class="btn btn-primary" id="exit-save-run-btn">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="5 3 19 12 5 21 5 3" />
                         </svg>
-                        <span>Salva ed esegui</span>
+                        <span>Save & Run</span>
                     </button>
                 </div>
             </div>
@@ -387,10 +387,10 @@
         <div id="shutdown-screen" class="shutdown-screen hidden">
             <div class="shutdown-card">
                 <div class="shutdown-icon" id="shutdown-icon">🚀</div>
-                <h2 id="shutdown-title">MMEX-Sync in Esecuzione</h2>
-                <p id="shutdown-message">L'interfaccia web è stata chiusa e il ciclo di sincronizzazione è stato avviato nel terminale.</p>
-                <p class="text-subtle">Ora puoi chiudere questa scheda del browser in sicurezza.</p>
-                <button type="button" class="btn btn-secondary" onclick="window.close()">Chiudi Scheda</button>
+                <h2 id="shutdown-title">MMEX-Sync Running</h2>
+                <p id="shutdown-message">The web interface has closed and the sync process was launched in the terminal.</p>
+                <p class="text-subtle">You can now safely close this browser tab.</p>
+                <button type="button" class="btn btn-secondary" onclick="window.close()">Close Tab</button>
             </div>
         </div>
 

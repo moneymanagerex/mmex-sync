@@ -614,16 +614,16 @@ async function triggerShutdown(action = 'run') {
     if (shutdownScreen) {
         if (action === 'exit') {
             if (shutdownIcon) shutdownIcon.textContent = '💾';
-            if (shutdownTitle) shutdownTitle.textContent = 'MMEX-Sync Chiuso';
-            if (shutdownMessage) shutdownMessage.textContent = 'La configurazione è stata salvata. L\'applicazione è terminata.';
+            if (shutdownTitle) shutdownTitle.textContent = 'MMEX-Sync Closed';
+            if (shutdownMessage) shutdownMessage.textContent = 'Configuration has been saved. The application has exited.';
         } else {
             if (shutdownIcon) shutdownIcon.textContent = '🚀';
-            if (shutdownTitle) shutdownTitle.textContent = 'MMEX-Sync in Esecuzione';
-            if (shutdownMessage) shutdownMessage.textContent = 'La configurazione è stata salvata e il processo di sincronizzazione è stato avviato nel terminale.';
+            if (shutdownTitle) shutdownTitle.textContent = 'MMEX-Sync Running';
+            if (shutdownMessage) shutdownMessage.textContent = 'Configuration has been saved and the sync process was launched in the terminal.';
         }
         shutdownScreen.classList.remove('hidden');
     } else {
-        showToast(action === 'exit' ? 'Configurazione salvata. Chiusura in corso...' : 'Avvio di MMEX-Sync in corso...', 'info');
+        showToast(action === 'exit' ? 'Configuration saved. Exiting...' : 'Launching MMEX-Sync...', 'info');
     }
 }
 
