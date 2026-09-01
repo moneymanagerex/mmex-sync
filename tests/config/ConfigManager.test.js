@@ -9,7 +9,8 @@ jest.unstable_mockModule('fs', () => ({
         writeFileSync: jest.fn(),
         readFileSync: jest.fn(),
         readdirSync: jest.fn(),
-        renameSync: jest.fn()
+        renameSync: jest.fn(),
+        unlinkSync: jest.fn()
     }
 }));
 
@@ -19,14 +20,14 @@ jest.unstable_mockModule('enquirer', () => ({
     }
 }));
 
-jest.unstable_mockModule('../../src/utils/dpapi.js', () => ({
-    protect: jest.fn(val => `encrypted_${val}`),
-    unprotect: jest.fn(val => val.replace('encrypted_', ''))
+jest.unstable_mockModule('../../src/utils/security.js', () => ({
+    protect: jest.fn((val, dir) => `encrypted_${val}`),
+    unprotect: jest.fn((val, dir) => val.replace('encrypted_', ''))
 }));
 
 const fs = (await import('fs')).default;
 const enquirer = (await import('enquirer')).default;
-const dpapi = await import('../../src/utils/dpapi.js');
+const security = await import('../../src/utils/security.js');
 const { ConfigManager } = await import('../../src/config/ConfigManager.js');
 
 describe('ConfigManager', () => {
@@ -67,7 +68,7 @@ describe('ConfigManager', () => {
 
             config.updateConfig({ token: 'my-secret-token' });
 
-            expect(dpapi.protect).toHaveBeenCalledWith('my-secret-token');
+            expect(security.protect).toHaveBeenCalledWith('my-secret-token', config.configDir);
             expect(config.config.encryptedToken).toBe('encrypted_my-secret-token');
             expect(fs.writeFileSync).toHaveBeenCalled();
         });
@@ -266,6 +267,73 @@ describe('ConfigManager', () => {
         });
     });
 
+    describe('deleteProfile', () => {
+        test('returns false if profile file does not exist', () => {
+            const config = new ConfigManager({ profile: 'nonexistent' });
+            fs.existsSync.mockReturnValue(false);
+
+            const result = config.deleteProfile();
+
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('not found'));
+        });
+
+        test('deletes specified profile file and returns true', () => {
+            const config = new ConfigManager({});
+            fs.existsSync.mockImplementation(p => {
+                const base = path.basename(p);
+                if (base === 'custom.mmex-sync.json') return true;
+                if (base === 'mmex-sync.config.json') return false;
+                return false;
+            });
+
+            const result = config.deleteProfile('custom');
+
+            expect(result).toBe(true);
+            expect(fs.unlinkSync).toHaveBeenCalledWith(
+                expect.stringContaining('custom.mmex-sync.json')
+            );
+        });
+
+        test('deletes current default profile and resets global defaultProfile to "default" if matched', () => {
+            const config = new ConfigManager({ profile: 'work' });
+            fs.existsSync.mockImplementation(p => {
+                const base = path.basename(p);
+                if (base === 'work.mmex-sync.json') return true;
+                if (base === 'mmex-sync.config.json') return true;
+                return true;
+            });
+            fs.readFileSync.mockImplementation(p => {
+                if (p.includes('mmex-sync.config.json')) return JSON.stringify({ defaultProfile: 'work' });
+                return '{}';
+            });
+
+            const result = config.deleteProfile();
+
+            expect(result).toBe(true);
+            expect(fs.unlinkSync).toHaveBeenCalledWith(
+                expect.stringContaining('work.mmex-sync.json')
+            );
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                expect.stringContaining('mmex-sync.config.json'),
+                expect.stringContaining('"defaultProfile": "default"')
+            );
+        });
+
+        test('returns false if unlinkSync throws an error', () => {
+            const config = new ConfigManager({ profile: 'work' });
+            fs.existsSync.mockReturnValue(true);
+            fs.unlinkSync.mockImplementation(() => {
+                throw new Error('Permission denied');
+            });
+
+            const result = config.deleteProfile('work');
+
+            expect(result).toBe(false);
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error deleting profile'));
+        });
+    });
+
     describe('.emb File Password Handling', () => {
         test('prompts for file password and save choice when .emb file is specified', async () => {
             const configManager = new ConfigManager({ db: '/test/data.emb' });
@@ -310,7 +378,7 @@ describe('ConfigManager', () => {
 
             expect(finalConfig.filePassword).toBe('cliFilePassword123');
             expect(finalConfig.savePassword).toBe('yes');
-            expect(dpapi.protect).toHaveBeenCalledWith('cliFilePassword123');
+            expect(security.protect).toHaveBeenCalledWith('cliFilePassword123', configManager.configDir);
 
             const profileCalls = fs.writeFileSync.mock.calls.filter(c => c[0].endsWith('.mmex-sync.json') && !c[0].endsWith('mmex-sync.config.json'));
             const savedContent = JSON.parse(profileCalls[profileCalls.length - 1][1]);
@@ -334,7 +402,7 @@ describe('ConfigManager', () => {
 
             const finalConfig = await configManager.getEffectiveConfig();
 
-            expect(dpapi.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123');
+            expect(security.unprotect).toHaveBeenCalledWith('encrypted_dbpassword123', configManager.configDir);
             expect(finalConfig.filePassword).toBe('dbpassword123');
         });
 
@@ -362,6 +430,80 @@ describe('ConfigManager', () => {
             const savedContentOnExit = JSON.parse(profileCalls[profileCalls.length - 1][1]);
             expect(savedContentOnExit.savePassword).toBe('yes');
             expect(savedContentOnExit.encryptedFilePassword).toBe('encrypted_cliFilePassword123');
+        });
+    });
+
+    describe('Programmatic GUI helper methods', () => {
+        test('hasProfiles returns false when directory does not exist or has no profile files', () => {
+            const configManager = new ConfigManager({});
+            fs.existsSync.mockReturnValue(false);
+            expect(configManager.hasProfiles()).toBe(false);
+
+            fs.existsSync.mockReturnValue(true);
+            fs.readdirSync.mockReturnValue(['mmex-sync.config.json', 'notes.txt']);
+            expect(configManager.hasProfiles()).toBe(false);
+        });
+
+        test('hasProfiles returns true when profile files exist', () => {
+            const configManager = new ConfigManager({});
+            fs.existsSync.mockReturnValue(true);
+            fs.readdirSync.mockReturnValue(['default.mmex-sync.json', 'mmex-sync.config.json']);
+            expect(configManager.hasProfiles()).toBe(true);
+        });
+
+        test('getProfiles returns list of profile details and default flag', () => {
+            const configManager = new ConfigManager({});
+            fs.existsSync.mockReturnValue(true);
+            fs.readdirSync.mockReturnValue(['default.mmex-sync.json', 'work.mmex-sync.json']);
+            fs.readFileSync.mockImplementation((filePath) => {
+                if (filePath.endsWith('mmex-sync.config.json')) {
+                    return JSON.stringify({ defaultProfile: 'default' });
+                }
+                if (filePath.endsWith('default.mmex-sync.json')) {
+                    return JSON.stringify({ dbPath: '/path/default.mmb', pbUrl: 'http://localhost:8090', pbUser: 'user1' });
+                }
+                if (filePath.endsWith('work.mmex-sync.json')) {
+                    return JSON.stringify({ dbPath: '/path/work.emb', pbUrl: 'http://work:8090', pbUser: 'user2', encryptedFilePassword: 'enc' });
+                }
+                return '{}';
+            });
+
+            const profiles = configManager.getProfiles();
+            expect(profiles).toHaveLength(2);
+            expect(profiles[0].name).toBe('default');
+            expect(profiles[0].isDefault).toBe(true);
+            expect(profiles[1].name).toBe('work');
+            expect(profiles[1].isDefault).toBe(false);
+            expect(profiles[1].hasPassword).toBe(true);
+        });
+
+        test('getProfileData returns null if profile does not exist, and returns object if exists', () => {
+            const configManager = new ConfigManager({});
+            fs.existsSync.mockImplementation((filePath) => filePath.endsWith('default.mmex-sync.json'));
+            fs.readFileSync.mockReturnValue(JSON.stringify({ dbPath: '/data.mmb', pbUrl: 'http://localhost:8090', pbUser: 'admin' }));
+
+            expect(configManager.getProfileData('nonexistent')).toBeNull();
+            const data = configManager.getProfileData('default');
+            expect(data).not.toBeNull();
+            expect(data.name).toBe('default');
+            expect(data.dbPath).toBe('/data.mmb');
+        });
+
+        test('saveProfileData saves data and handles default flag', () => {
+            const configManager = new ConfigManager({});
+            fs.existsSync.mockReturnValue(true);
+            fs.readdirSync.mockReturnValue(['newprofile.mmex-sync.json']);
+            fs.readFileSync.mockReturnValue(JSON.stringify({ dbPath: '/test.mmb' }));
+
+            const result = configManager.saveProfileData('newprofile', {
+                dbPath: '/test.mmb',
+                pbUrl: 'http://localhost:8090',
+                pbUser: 'user@test.com',
+                isDefault: true
+            });
+
+            expect(fs.writeFileSync).toHaveBeenCalled();
+            expect(result).toBeDefined();
         });
     });
 });

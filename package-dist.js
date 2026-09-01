@@ -29,6 +29,10 @@ async function createReleaseZipForPlatform(platform, exeFilename, sourcePath) {
         archive.pipe(stream);
         archive.file(sourcePath + '/' + exeFilename, { name: exeFilename });
         archive.file(sourcePath + '/' + 'tables_v1_for_sync.sql', { name: 'tables_v1_for_sync.sql' });
+        const publicDir = path.join(sourcePath, 'public');
+        if (fs.existsSync(publicDir)) {
+            archive.directory(publicDir, 'public');
+        }
         archive.finalize();
     });
 }
@@ -79,6 +83,13 @@ async function main() {
         fs.copyFileSync(sqlfile, path.join(winDir, 'tables_v1_for_sync.sql'));
         fs.copyFileSync(sqlfile, path.join(linuxDir, 'tables_v1_for_sync.sql'));
         fs.copyFileSync(sqlfile, path.join(macosDir, 'tables_v1_for_sync.sql'));
+
+        const publicSrc = path.join('dist', 'app', 'public');
+        if (fs.existsSync(publicSrc)) {
+            fs.cpSync(publicSrc, path.join(winDir, 'public'), { recursive: true });
+            fs.cpSync(publicSrc, path.join(linuxDir, 'public'), { recursive: true });
+            fs.cpSync(publicSrc, path.join(macosDir, 'public'), { recursive: true });
+        }
 
 
         // 3. Spostamento e standardizzazione dei nomi dei file generati

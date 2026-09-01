@@ -3,7 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import enquirer from 'enquirer';
-import { protect, unprotect } from '../utils/dpapi.js'; // Assuming moving dpapi to utils
+import { execSync } from 'child_process';
+import { protect, unprotect } from '../utils/security.js';
+import { expandTildePath } from '../utils/pathUtils.js';
 
 const CONFIG_FILE_EXTENSION = 'mmex-sync.json';
 const GLOBAL_CONFIG_FILENAME = 'mmex-sync.config.json';
@@ -37,7 +39,7 @@ export class ConfigManager {
     updateConfig(configData) {
         this.config = { ...this.config, ...configData };
         if (this.config.token) {
-            this.config.encryptedToken = protect(this.config.token);
+            this.config.encryptedToken = protect(this.config.token, this.configDir);
         }
         this.save(this.config);
     }
@@ -60,13 +62,13 @@ export class ConfigManager {
 
         // 2. Define required parameters and resolve the origin
         const schema = {
-            dbPath: this.cliArgs.db || this.config.dbPath,
+            dbPath: (this.cliArgs.db ? expandTildePath(this.cliArgs.db) : null) || this.config.dbPath,
             serverType: this.serverType || this.config.serverType || DEFAULT_SERVER_TYPE,
             pbUrl: this.cliArgs.url || this.config.pbUrl,
             pbAuthCollection: this.config.pbAuthCollection || null,
             pbUser: this.cliArgs.user || this.config.pbUser,
             pbPass: this.cliArgs.pass || null, // The password is never saved in clear text
-            mmexExe: this.cliArgs.exe || this.config.mmexExe || 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
+            mmexExe: (this.cliArgs.exe ? expandTildePath(this.cliArgs.exe) : null) || this.config.mmexExe || this._resolveMMEXPath(),
             defaultMode: this.cliArgs.setDefaultMode || this.config.defaultMode || 'run',
             lastSync: this.config.lastSync || null,
             isRunning: this.config.isRunning || false,
@@ -77,7 +79,7 @@ export class ConfigManager {
         if (cliFilePassword) {
             schema.filePassword = cliFilePassword;
         } else if (schema.savePassword !== 'no' && this.config.encryptedFilePassword) {
-            schema.filePassword = unprotect(this.config.encryptedFilePassword);
+            schema.filePassword = unprotect(this.config.encryptedFilePassword, this.configDir);
         }
 
         // 3. If data is missing, ask via Prompt
@@ -88,7 +90,7 @@ export class ConfigManager {
             // If we have a password (from CLI or Prompt), we don't save it in JSON
             // but we will use it to obtain the token in PbService.
         } else if (this.config.encryptedToken) {
-            finalConfig.token = unprotect(this.config.encryptedToken);
+            finalConfig.token = unprotect(this.config.encryptedToken, this.configDir);
         }
 
         this.config = finalConfig;
@@ -220,6 +222,165 @@ export class ConfigManager {
         return true;
     }
 
+    /**
+     * Checks if any profile files exist in the configuration directory
+     */
+    hasProfiles() {
+        if (!fs.existsSync(this.configDir)) return false;
+        const suffix = `.${CONFIG_FILE_EXTENSION}`;
+        const files = fs.readdirSync(this.configDir);
+        return files.some(f => f.endsWith(suffix));
+    }
+
+    /**
+     * Returns an array of all profiles with their configuration summary and default flag
+     */
+    getProfiles() {
+        if (!fs.existsSync(this.configDir)) {
+            return [];
+        }
+
+        const files = fs.readdirSync(this.configDir);
+        const suffix = `.${CONFIG_FILE_EXTENSION}`;
+        const defaultProfile = this.getDefaultProfile();
+        const profiles = [];
+
+        for (const file of files) {
+            if (file.endsWith(suffix)) {
+                const name = file.replace(suffix, '');
+                const filePath = path.join(this.configDir, file);
+                let details = {};
+                try {
+                    details = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                } catch (e) {
+                    // Ignore corrupted profile files
+                }
+                profiles.push({
+                    name,
+                    isDefault: name === defaultProfile,
+                    dbPath: details.dbPath || '',
+                    serverType: details.serverType || DEFAULT_SERVER_TYPE,
+                    pbUrl: details.pbUrl || '',
+                    pbUser: details.pbUser || '',
+                    mmexExe: details.mmexExe || '',
+                    defaultMode: details.defaultMode || 'run',
+                    lastSync: details.lastSync || null,
+                    savePassword: details.savePassword || null,
+                    hasPassword: !!details.encryptedFilePassword,
+                    hasToken: !!details.encryptedToken
+                });
+            }
+        }
+        return profiles;
+    }
+
+    /**
+     * Returns configuration data for a specific profile (or default if 'default')
+     */
+    getProfileData(targetProfile) {
+        const defaultProfile = this.getDefaultProfile();
+        const profileToLoad = (!targetProfile || targetProfile === 'default')
+            ? defaultProfile
+            : targetProfile;
+
+        const configPath = path.join(this.configDir, `${profileToLoad}.${CONFIG_FILE_EXTENSION}`);
+        if (!fs.existsSync(configPath)) {
+            return null;
+        }
+
+        try {
+            const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            return {
+                name: profileToLoad,
+                isDefault: profileToLoad === defaultProfile,
+                dbPath: parsed.dbPath || '',
+                serverType: parsed.serverType || DEFAULT_SERVER_TYPE,
+                pbUrl: parsed.pbUrl || '',
+                pbAuthCollection: parsed.pbAuthCollection || null,
+                pbUser: parsed.pbUser || '',
+                mmexExe: parsed.mmexExe || '',
+                defaultMode: parsed.defaultMode || 'run',
+                lastSync: parsed.lastSync || null,
+                savePassword: parsed.savePassword || null,
+                hasPassword: !!parsed.encryptedFilePassword,
+                hasToken: !!parsed.encryptedToken
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Saves or creates profile data programmatically
+     */
+    saveProfileData(profileName, data = {}) {
+        if (!profileName || typeof profileName !== 'string' || !profileName.trim()) {
+            throw new Error('Profile name is required.');
+        }
+        const name = profileName.trim();
+        if (!fs.existsSync(this.configDir)) {
+            fs.mkdirSync(this.configDir, { recursive: true });
+        }
+
+        const targetPath = path.join(this.configDir, `${name}.${CONFIG_FILE_EXTENSION}`);
+        let existing = {};
+        if (fs.existsSync(targetPath)) {
+            try {
+                existing = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        const dbPath = data.dbPath !== undefined ? data.dbPath : (existing.dbPath || '');
+        const isEmb = dbPath ? dbPath.toLowerCase().endsWith('.emb') : false;
+        let encryptedFilePassword = existing.encryptedFilePassword;
+        let savePasswordChoice = data.savePassword !== undefined ? data.savePassword : existing.savePassword;
+
+        if (!isEmb) {
+            encryptedFilePassword = undefined;
+            savePasswordChoice = undefined;
+        } else if (data.filePassword) {
+            if (savePasswordChoice === 'no') {
+                encryptedFilePassword = undefined;
+            } else {
+                encryptedFilePassword = protect(data.filePassword, this.configDir);
+                savePasswordChoice = 'yes';
+            }
+        } else if (savePasswordChoice === 'no') {
+            encryptedFilePassword = undefined;
+        }
+
+        let encryptedToken = existing.encryptedToken;
+        if (data.token) {
+            encryptedToken = protect(data.token, this.configDir);
+        }
+
+        const toSave = {
+            dbPath: dbPath,
+            serverType: data.serverType || existing.serverType || DEFAULT_SERVER_TYPE,
+            pbUrl: data.pbUrl !== undefined ? data.pbUrl : (existing.pbUrl || ''),
+            pbAuthCollection: data.pbAuthCollection || existing.pbAuthCollection || null,
+            pbUser: data.pbUser !== undefined ? data.pbUser : (existing.pbUser || ''),
+            mmexExe: data.mmexExe !== undefined ? data.mmexExe : (existing.mmexExe || this._resolveMMEXPath() || ''),
+            defaultMode: data.defaultMode || existing.defaultMode || 'run',
+            lastSync: existing.lastSync || null,
+            isRunning: false,
+            encryptedToken: encryptedToken,
+            savePassword: savePasswordChoice,
+            encryptedFilePassword: encryptedFilePassword
+        };
+
+        fs.writeFileSync(targetPath, JSON.stringify(toSave, null, 2));
+
+        const allProfiles = this.getProfiles();
+        if (data.isDefault || allProfiles.length === 1 || !fs.existsSync(this.globalConfigPath)) {
+            this.setDefaultProfile(name);
+        }
+
+        return this.getProfileData(name);
+    }
+
     listProfiles() {
         if (!fs.existsSync(this.configDir)) {
             console.log("No profiles found (configuration folder not present).");
@@ -287,6 +448,42 @@ export class ConfigManager {
     }
 
     /**
+     * Deletes the specified profile or the current profile and resets defaultProfile if needed
+     */
+    deleteProfile(targetProfile) {
+        const profileToDelete = (typeof targetProfile === 'string' && targetProfile.trim().length > 0) ? targetProfile.trim() : this.profile;
+        const targetPath = path.join(this.configDir, `${profileToDelete}.${CONFIG_FILE_EXTENSION}`);
+
+        if (!fs.existsSync(targetPath)) {
+            console.error(`❌ Profile '${profileToDelete}' not found (${targetPath}). Cannot delete.`);
+            return false;
+        }
+
+        try {
+            fs.unlinkSync(targetPath);
+            console.log(`✅ Profile '${profileToDelete}' deleted.`);
+        } catch (e) {
+            console.error(`❌ Error deleting profile '${profileToDelete}': ${e.message}`);
+            return false;
+        }
+
+        if (fs.existsSync(this.globalConfigPath)) {
+            try {
+                const globalConfig = JSON.parse(fs.readFileSync(this.globalConfigPath, 'utf8'));
+                if (globalConfig.defaultProfile === profileToDelete) {
+                    globalConfig.defaultProfile = 'default';
+                    fs.writeFileSync(this.globalConfigPath, JSON.stringify(globalConfig, null, 2));
+                    console.log(`ℹ️ Default profile reset to 'default' in ${GLOBAL_CONFIG_FILENAME}`);
+                }
+            } catch (e) {
+                console.error(`⚠️ Error updating default profile in ${GLOBAL_CONFIG_FILENAME}: ${e.message}`);
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Updates the default mode in the profile and saves it
      */
     setDefaultMode(mode) {
@@ -332,38 +529,16 @@ export class ConfigManager {
         if (!current.pbPass && !this.config.encryptedToken) {
             questions.push({ type: 'password', name: 'pbPass', message: 'Password PocketBase:' });
         }
-        if (!current.mmexExe && !this.config.mmexExe) {
-            const foundPaths = this._searchMMEXExecutable();
-
-            if (foundPaths.length > 0) {
-                const choices = foundPaths.map(p => ({ name: p, value: p }));
-                choices.push({ name: 'Enter path manually...', value: 'MANUAL' });
-
-                questions.push({
-                    type: 'select',
-                    name: 'mmexExe',
-                    message: 'Select MoneyManagerEx executable:',
-                    choices: choices
-                });
-            } else {
-                questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe' });
-            }
+        if (!current.mmexExe) {
+            const defaultPath = process.platform === 'win32' 
+                ? 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe'
+                : '/usr/bin/mmex';
+            questions.push({ type: 'input', name: 'mmexExe', message: 'MoneyManagerEx executable path:', default: defaultPath });
         }
 
         let answers = {};
         if (questions.length > 0) {
             answers = await enquirer.prompt(questions);
-
-            // If user selected "Enter path manually", prompt for manual input
-            if (answers.mmexExe === 'MANUAL') {
-                const { manualPath } = await enquirer.prompt({
-                    type: 'input',
-                    name: 'manualPath',
-                    message: 'Enter MoneyManagerEx executable path:',
-                    default: 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe'
-                });
-                answers.mmexExe = manualPath;
-            }
         }
 
         const merged = { ...current, ...answers };
@@ -400,21 +575,42 @@ export class ConfigManager {
         return merged;
     }
 
-    _searchMMEXExecutable() {
-        const commonPaths = [
-            'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe',
-            'C:\\Program Files (x86)\\Money Manager Ex\\bin\\mmex.exe',
-            'C:\\Program Files\\MoneyManagerEx\\bin\\mmex.exe',
-            'C:\\Program Files (x86)\\MoneyManagerEx\\bin\\mmex.exe'
-        ];
-
-        return commonPaths.filter(p => {
-            try {
-                return fs.existsSync(p);
-            } catch (e) {
-                return false;
+    /**
+     * Resolves the MMEX executable path based on OS and availability.
+     * Priority: CLI args > saved config > auto-detect > null (ask user)
+     * 
+     * For Windows: tries standard installation path, then current directory
+     * For Linux/Unix: tries 'which mmex', then current directory
+     * Returns null if not found (caller should prompt user)
+     */
+    _resolveMMEXPath() {
+        if (process.platform === 'win32') {
+            // Windows: try standard installation path
+            const standardPath = 'C:\\Program Files\\Money Manager Ex\\bin\\mmex.exe';
+            if (fs.existsSync(standardPath)) {
+                return standardPath;
             }
-        });
+            // Try current directory
+            if (fs.existsSync('mmex.exe')) {
+                return path.resolve('mmex.exe');
+            }
+        } else {
+            // Linux/macOS: try 'which mmex'
+            try {
+                const result = execSync('which mmex', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                if (result && fs.existsSync(result)) {
+                    return result;
+                }
+            } catch (e) {
+                // which failed, try current directory
+            }
+            // Try current directory
+            if (fs.existsSync('mmex')) {
+                return path.resolve('mmex');
+            }
+        }
+        // Not found anywhere
+        return null;
     }
 
     /**
@@ -428,7 +624,7 @@ export class ConfigManager {
         if (savePasswordChoice === 'no') {
             encryptedFilePassword = undefined;
         } else if (savePasswordChoice === 'yes' && configData.filePassword) {
-            encryptedFilePassword = protect(configData.filePassword);
+            encryptedFilePassword = protect(configData.filePassword, this.configDir);
         } else {
             encryptedFilePassword = configData.encryptedFilePassword || this.config.encryptedFilePassword;
         }
@@ -443,7 +639,7 @@ export class ConfigManager {
             defaultMode: configData.defaultMode,
             lastSync: configData.lastSync,
             isRunning: configData.isRunning ?? false,
-            encryptedToken: token ? protect(token) : (configData.encryptedToken || this.config.encryptedToken),
+            encryptedToken: token ? protect(token, this.configDir) : (configData.encryptedToken || this.config.encryptedToken),
             savePassword: savePasswordChoice || undefined,
             encryptedFilePassword: encryptedFilePassword
         };
