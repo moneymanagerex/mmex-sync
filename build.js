@@ -41,6 +41,14 @@ async function main() {
     }
     fs.copyFileSync(sqlSrc, path.join(appFolder, 'tables_v1_for_sync.sql'));
     console.log("✅ Tabelle SQL copiate in " + appFolder);
+
+    // 3. COPIA GLI ASSET STATICI DELLA WEB UI
+    const publicSrc = path.join('src', 'server', 'public');
+    const publicDest = path.join(appFolder, 'public');
+    if (fs.existsSync(publicSrc)) {
+        fs.cpSync(publicSrc, publicDest, { recursive: true });
+        console.log("✅ Asset Web UI copiati in " + publicDest);
+    }
 }
 
 main().catch((err) => {

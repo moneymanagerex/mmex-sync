@@ -11,6 +11,8 @@ import enquirer from 'enquirer';
 import path from 'path';
 import { waitForExit } from './utils/waitForExit.js';
 import { expandTildePath } from './utils/pathUtils.js';
+import { startServer } from './server/server.js';
+import { waitForInteractiveKey } from './cli/interactiveTimeout.js';
 
 let configMgr = null;
 let config = null;
@@ -23,6 +25,7 @@ const VALID_PARAMETERS = [
     'ignoreProfile',
     'listProfile',
     'showProfile',
+    'deleteProfile',
     'db',
     'filePassword',
     'saveFilePassword',
@@ -44,6 +47,8 @@ const VALID_PARAMETERS = [
     'autoDownloadUpdate',
     'clearDb',
     'clearServer',
+    'gui',
+    'nogui',
     'help',
     'version',
     'nowait'
@@ -190,6 +195,13 @@ async function main() {
         await exitProgram(0);
     }
 
+    if (args.deleteProfile) {
+        const configMgrInstance = new ConfigManager(args);
+        const profileName = typeof args.deleteProfile === 'string' ? args.deleteProfile : undefined;
+        const success = configMgrInstance.deleteProfile(profileName);
+        await exitProgram(success ? 0 : 1);
+    }
+
     if (args.setDefaultProfile) {
         const configMgrInstance = new ConfigManager(args);
         const success = configMgrInstance.setDefaultProfile(args.setDefaultProfile);
@@ -206,6 +218,34 @@ async function main() {
         const configMgrInstance = new ConfigManager(args);
         const success = configMgrInstance.setDefaultMode(args.setDefaultMode);
         await exitProgram(success ? 0 : 1);
+    }
+
+    // --- GUI / FIRST-RUN / INTERACTIVE TIMEOUT HANDLING ---
+    let serverResult = null;
+    if (args.gui) {
+        serverResult = await startServer({ open: true, cliArgs: args });
+        delete args.gui;
+    } else {
+        const startupConfigMgr = new ConfigManager(args);
+        const hasProfiles = startupConfigMgr.hasProfiles();
+
+        if (!hasProfiles) {
+            console.log("👋 No profiles found. Launching Web Setup Wizard...");
+            serverResult = await startServer({ open: true, cliArgs: args });
+        } else {
+            const isExplicitHeadless = Boolean(hasProfiles && !args.gui);
+            if (!isExplicitHeadless) {
+                const openUI = await waitForInteractiveKey(3000);
+                if (openUI) {
+                    serverResult = await startServer({ open: true, cliArgs: args });
+                }
+            }
+        }
+    }
+
+    if (serverResult && serverResult.action === 'exit') {
+        console.log("👋 Save & Exit: configuration saved. Exiting MMEX-Sync.");
+        await exitProgram(0);
     }
 
     try {
