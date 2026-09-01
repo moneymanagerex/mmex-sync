@@ -204,6 +204,17 @@ body {
     background: var(--danger-hover);
 }
 
+.btn-warning {
+    background: #d97706;
+    color: white;
+}
+
+.btn-warning:hover {
+    background: #b45309;
+    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
+    transform: translateY(-1px);
+}
+
 .btn-icon {
     padding: 8px 14px;
 }
@@ -634,6 +645,31 @@ select:focus {
     justify-content: flex-end;
     gap: 10px;
     margin-top: 24px;
+}
+
+.modal-actions-exit {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.wizard-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 600px) {
+    .wizard-actions {
+        grid-template-columns: 1fr;
+    }
+    .modal-actions-exit {
+        flex-direction: column;
+    }
+    .modal-actions-exit .btn {
+        width: 100%;
+    }
 }
 
 /* Toast Container */

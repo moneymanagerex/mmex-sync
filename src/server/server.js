@@ -85,13 +85,13 @@ export function startServer({ port = 3000, open = true, cliArgs = {} } = {}) {
         const maxAttempts = 10;
         let activeServer = null;
 
-        const onShutdown = () => {
+        const onShutdown = (action = 'run') => {
             if (activeServer) {
                 activeServer.close(() => {
-                    resolve({ reason: 'shutdown' });
+                    resolve({ reason: 'shutdown', action });
                 });
             } else {
-                resolve({ reason: 'shutdown' });
+                resolve({ reason: 'shutdown', action });
             }
         };
 

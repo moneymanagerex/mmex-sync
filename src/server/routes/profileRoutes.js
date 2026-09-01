@@ -209,15 +209,25 @@ export function createProfileRouter(baseCliArgs = {}, onShutdown = null) {
 
     /**
      * POST /api/system/shutdown
-     * Gracefully shuts down the local web server and proceeds with execution.
+     * Gracefully shuts down the local web server and proceeds with execution or exits.
      */
     router.post('/system/shutdown', (req, res) => {
         try {
-            res.json({ success: true, message: 'Server is shutting down. Starting synchronization...' });
-            console.log('\n👋 Closing Web UI and proceeding with execution...');
+            const { action = 'run' } = req.body || {};
+            const isExitOnly = action === 'exit';
+            res.json({
+                success: true,
+                action,
+                message: isExitOnly
+                    ? 'Server is shutting down. Exiting MMEX-Sync...'
+                    : 'Server is shutting down. Starting synchronization...'
+            });
+            console.log(isExitOnly
+                ? '\n👋 Closing Web UI and exiting MMEX-Sync...'
+                : '\n👋 Closing Web UI and proceeding with execution...');
             if (typeof onShutdown === 'function') {
                 setTimeout(() => {
-                    onShutdown();
+                    onShutdown(action);
                 }, 200);
             } else {
                 setTimeout(() => {

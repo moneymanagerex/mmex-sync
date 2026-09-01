@@ -162,13 +162,20 @@
                             </div>
                         </div>
 
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary btn-large">
-                                <span>Create Default Profile & Finish</span>
-                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <polyline points="9 18 15 12 9 6" />
+                        <div class="form-actions wizard-actions">
+                            <button type="button" id="wizard-btn-save-exit" class="btn btn-secondary btn-large">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
                                 </svg>
+                                <span>Salva ed esci</span>
+                            </button>
+                            <button type="button" id="wizard-btn-save-run" class="btn btn-primary btn-large">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                <span>Salva ed esegui</span>
                             </button>
                         </div>
                     </form>
@@ -349,20 +356,28 @@
         <div id="exit-modal" class="modal-backdrop hidden">
             <div class="modal-card modal-small">
                 <div class="modal-header">
-                    <h3>Save & Start MMEX-Sync</h3>
+                    <h3>Esci da MMEX-Sync</h3>
                     <button class="modal-close" id="exit-close-btn">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p>Configuration changes are saved.</p>
-                    <p class="text-subtle">Closing the Web UI will start the normal sync/run cycle in the terminal.</p>
+                    <p>Le modifiche alla configurazione sono state salvate.</p>
+                    <p class="text-subtle">Scegli come desideri procedere:</p>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="exit-cancel-btn">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="exit-confirm-btn">
+                <div class="modal-actions modal-actions-exit">
+                    <button type="button" class="btn btn-secondary" id="exit-cancel-btn">Annulla</button>
+                    <button type="button" class="btn btn-warning" id="exit-save-exit-btn">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        <span>Salva ed esci</span>
+                    </button>
+                    <button type="button" class="btn btn-primary" id="exit-save-run-btn">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="5 3 19 12 5 21 5 3" />
                         </svg>
-                        <span>Start MMEX-Sync</span>
+                        <span>Salva ed esegui</span>
                     </button>
                 </div>
             </div>
@@ -371,11 +386,11 @@
         <!-- Shutdown Complete Screen -->
         <div id="shutdown-screen" class="shutdown-screen hidden">
             <div class="shutdown-card">
-                <div class="shutdown-icon">🚀</div>
-                <h2>MMEX-Sync Running</h2>
-                <p>The Web UI has closed and the sync cycle has started in the terminal.</p>
-                <p class="text-subtle">You can now safely close this browser tab.</p>
-                <button type="button" class="btn btn-secondary" onclick="window.close()">Close Tab</button>
+                <div class="shutdown-icon" id="shutdown-icon">🚀</div>
+                <h2 id="shutdown-title">MMEX-Sync in Esecuzione</h2>
+                <p id="shutdown-message">L'interfaccia web è stata chiusa e il ciclo di sincronizzazione è stato avviato nel terminale.</p>
+                <p class="text-subtle">Ora puoi chiudere questa scheda del browser in sicurezza.</p>
+                <button type="button" class="btn btn-secondary" onclick="window.close()">Chiudi Scheda</button>
             </div>
         </div>
 

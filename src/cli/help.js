@@ -31,6 +31,7 @@ Usage: mmex-sync [PARAMETERS] [MODE]
                          Default: C:\Program Files\MoneyManagerEx\bin\mmex.exe
   --serverType=name      Remote server type to use. Default: pocketbase
   --gui                  Starts the local Web UI dashboard directly
+  --nogui                Disable GUI
   --create               Delete and Recreates a new empty database
   --verbose              Shows detailed logs of each operation.
 

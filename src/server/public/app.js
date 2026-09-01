@@ -64,8 +64,14 @@ const btnExit = document.getElementById('btn-exit');
 const exitModal = document.getElementById('exit-modal');
 const exitCloseBtn = document.getElementById('exit-close-btn');
 const exitCancelBtn = document.getElementById('exit-cancel-btn');
-const exitConfirmBtn = document.getElementById('exit-confirm-btn');
+const exitSaveExitBtn = document.getElementById('exit-save-exit-btn');
+const exitSaveRunBtn = document.getElementById('exit-save-run-btn');
+const wizardBtnSaveExit = document.getElementById('wizard-btn-save-exit');
+const wizardBtnSaveRun = document.getElementById('wizard-btn-save-run');
 const shutdownScreen = document.getElementById('shutdown-screen');
+const shutdownIcon = document.getElementById('shutdown-icon');
+const shutdownTitle = document.getElementById('shutdown-title');
+const shutdownMessage = document.getElementById('shutdown-message');
 
 // ==========================================
 // Toast Notification Utility
@@ -510,8 +516,12 @@ profileForm.addEventListener('submit', async (e) => {
 // ==========================================
 // Wizard Form Submit
 // ==========================================
-wizardForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+async function handleWizardSubmit(action = 'run') {
+    if (!wizardForm.checkValidity()) {
+        wizardForm.reportValidity();
+        return;
+    }
+
     const name = document.getElementById('wizard-name').value.trim() || 'default';
     const dbPath = wizardDbPathInput.value.trim();
     const pbUrl = document.getElementById('wizard-pbUrl').value.trim();
@@ -546,15 +556,29 @@ wizardForm.addEventListener('submit', async (e) => {
         });
         const data = await res.json();
         if (data.success) {
-            showToast(`Initial profile '${name}' created and set as default!`, 'success');
-            await fetchProfiles();
+            showToast(`Profilo iniziale '${name}' creato con successo!`, 'success');
+            await triggerShutdown(action);
         } else {
-            showToast(data.error || 'Failed to create initial profile', 'error');
+            showToast(data.error || 'Errore durante la creazione del profilo', 'error');
         }
     } catch (err) {
         showToast(err.message, 'error');
     }
-});
+}
+
+if (wizardForm) {
+    wizardForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await handleWizardSubmit('run');
+    });
+}
+
+if (wizardBtnSaveExit) {
+    wizardBtnSaveExit.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await handleWizardSubmit('exit');
+    });
+}
 
 btnRefresh.addEventListener('click', fetchProfiles);
 
@@ -569,27 +593,53 @@ function closeExitModal() {
     if (exitModal) exitModal.classList.add('hidden');
 }
 
+async function triggerShutdown(action = 'run') {
+    if (exitSaveExitBtn) exitSaveExitBtn.disabled = true;
+    if (exitSaveRunBtn) exitSaveRunBtn.disabled = true;
+    if (wizardBtnSaveExit) wizardBtnSaveExit.disabled = true;
+    if (wizardBtnSaveRun) wizardBtnSaveRun.disabled = true;
+
+    try {
+        await fetch('/api/system/shutdown', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action })
+        });
+    } catch {
+        // Ignored as server shuts down immediately
+    }
+
+    closeExitModal();
+
+    if (shutdownScreen) {
+        if (action === 'exit') {
+            if (shutdownIcon) shutdownIcon.textContent = '💾';
+            if (shutdownTitle) shutdownTitle.textContent = 'MMEX-Sync Chiuso';
+            if (shutdownMessage) shutdownMessage.textContent = 'La configurazione è stata salvata. L\'applicazione è terminata.';
+        } else {
+            if (shutdownIcon) shutdownIcon.textContent = '🚀';
+            if (shutdownTitle) shutdownTitle.textContent = 'MMEX-Sync in Esecuzione';
+            if (shutdownMessage) shutdownMessage.textContent = 'La configurazione è stata salvata e il processo di sincronizzazione è stato avviato nel terminale.';
+        }
+        shutdownScreen.classList.remove('hidden');
+    } else {
+        showToast(action === 'exit' ? 'Configurazione salvata. Chiusura in corso...' : 'Avvio di MMEX-Sync in corso...', 'info');
+    }
+}
+
 if (btnExit) btnExit.addEventListener('click', openExitModal);
 if (exitCloseBtn) exitCloseBtn.addEventListener('click', closeExitModal);
 if (exitCancelBtn) exitCancelBtn.addEventListener('click', closeExitModal);
 
-if (exitConfirmBtn) {
-    exitConfirmBtn.addEventListener('click', async () => {
-        exitConfirmBtn.disabled = true;
-        try {
-            await fetch('/api/system/shutdown', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-        } catch {
-            // Ignored as server shuts down immediately
-        }
-        closeExitModal();
-        if (shutdownScreen) {
-            shutdownScreen.classList.remove('hidden');
-        } else {
-            showToast('MMEX-Sync stopped. You can close this window.', 'info');
-        }
+if (exitSaveExitBtn) {
+    exitSaveExitBtn.addEventListener('click', async () => {
+        await triggerShutdown('exit');
+    });
+}
+
+if (exitSaveRunBtn) {
+    exitSaveRunBtn.addEventListener('click', async () => {
+        await triggerShutdown('run');
     });
 }
 

@@ -176,4 +176,30 @@ describe('Server API Endpoints', () => {
         expect(data.success).toBe(true);
         expect(data).toHaveProperty('mmexPath');
     });
+
+    test('POST /api/system/shutdown handles exit action', async () => {
+        const res = await fetch(`${baseUrl}/api/system/shutdown`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'exit' })
+        });
+        const data = await res.json();
+
+        expect(res.status).toBe(200);
+        expect(data.success).toBe(true);
+        expect(data.action).toBe('exit');
+    });
+
+    test('POST /api/system/shutdown handles run action', async () => {
+        const res = await fetch(`${baseUrl}/api/system/shutdown`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'run' })
+        });
+        const data = await res.json();
+
+        expect(res.status).toBe(200);
+        expect(data.success).toBe(true);
+        expect(data.action).toBe('run');
+    });
 });

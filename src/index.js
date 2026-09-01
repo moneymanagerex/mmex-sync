@@ -48,6 +48,7 @@ const VALID_PARAMETERS = [
     'clearDb',
     'clearServer',
     'gui',
+    'nogui',
     'help',
     'version',
     'nowait'
@@ -220,8 +221,9 @@ async function main() {
     }
 
     // --- GUI / FIRST-RUN / INTERACTIVE TIMEOUT HANDLING ---
+    let serverResult = null;
     if (args.gui) {
-        await startServer({ open: true, cliArgs: args });
+        serverResult = await startServer({ open: true, cliArgs: args });
         delete args.gui;
     } else {
         const startupConfigMgr = new ConfigManager(args);
@@ -229,16 +231,21 @@ async function main() {
 
         if (!hasProfiles) {
             console.log("👋 No profiles found. Launching Web Setup Wizard...");
-            await startServer({ open: true, cliArgs: args });
+            serverResult = await startServer({ open: true, cliArgs: args });
         } else {
             const isExplicitHeadless = Boolean(hasProfiles && !args.gui);
             if (!isExplicitHeadless) {
                 const openUI = await waitForInteractiveKey(3000);
                 if (openUI) {
-                    await startServer({ open: true, cliArgs: args });
+                    serverResult = await startServer({ open: true, cliArgs: args });
                 }
             }
         }
+    }
+
+    if (serverResult && serverResult.action === 'exit') {
+        console.log("👋 Salva ed esci: configurazione salvata. Uscita da MMEX-Sync.");
+        await exitProgram(0);
     }
 
     try {
