@@ -156,7 +156,8 @@ export class SyncService {
 
         let filter = '';
         if (lastSyncDate) {
-            filter = `_updated_at > "${lastSyncDate.replace('T', ' ').split('.')[0]}"`;
+            // filter = `_updated_at > "${lastSyncDate.replace('T', ' ').split('.')[0]}"`;
+            filter = `_updated_at > "${lastSyncDate}"`;
         }
         try {
             const remoteRecords = await this.pb.getFullList(table, filter);
