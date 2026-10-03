@@ -72,13 +72,9 @@ async function exitProgram(code = 0) {
     if (isExiting) return;
     isExiting = true;
 
-    if (config) {
-        config.filePassword = null;
-    }
-    if (hasAcquiredRunning && configMgr && config) {
+    if (hasAcquiredRunning && configMgr) {
         try {
-            config.isRunning = false;
-            configMgr.save(config);
+            configMgr.updateConfig({ isRunning: false, filePassword: null });
             hasAcquiredRunning = false;
         } catch (err) {
             console.error(`⚠️ Failed to reset isRunning flag on exit: ${err.message}`);
@@ -274,6 +270,7 @@ async function main() {
         console.log("User: " + config.pbUser);
         console.log("MMEX Path: " + config.mmexExe);
         console.log("Profile: " + configMgr.profile);
+        console.log("Last Sync: " + config.lastSync);
 
         if (config.isRunning) {
             const { confirm } = await enquirer.prompt({
