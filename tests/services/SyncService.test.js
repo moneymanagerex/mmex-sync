@@ -59,7 +59,8 @@ describe('SyncService', () => {
             config: {
                 lastSync: '2023-01-01T12:00:00.000Z'
             },
-            save: jest.fn()
+            save: jest.fn(),
+            updateConfig: jest.fn()
         };
 
         // Default options verbose off to avoid noise, force off
@@ -305,7 +306,7 @@ describe('SyncService', () => {
             expect(syncService.pushTable).toHaveBeenCalledWith('ACCOUNTLIST_V1');
             expect(syncService.pullTable).toHaveBeenCalledWith('ACCOUNTLIST_V1');
             // Must save the config
-            expect(mockConfigManager.save).toHaveBeenCalled();
+            expect(mockConfigManager.updateConfig).toHaveBeenCalled();
         });
 
         test('executes only push if options.sync = "push"', async () => {
@@ -315,7 +316,7 @@ describe('SyncService', () => {
             
             expect(syncService.pushTable).toHaveBeenCalledWith('ACCOUNTLIST_V1');
             expect(syncService.pullTable).not.toHaveBeenCalled();
-            expect(mockConfigManager.save).not.toHaveBeenCalled(); // config save only happens post-pull
+            expect(mockConfigManager.updateConfig).not.toHaveBeenCalled(); // config save only happens post-pull
         });
 
         test('does not save the config if pull fails (result = false)', async () => {
@@ -323,7 +324,7 @@ describe('SyncService', () => {
             
             await syncService.runSyncCycle();
             
-            expect(mockConfigManager.save).not.toHaveBeenCalled();
+            expect(mockConfigManager.updateConfig).not.toHaveBeenCalled();
         });
     });
 });
