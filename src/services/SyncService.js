@@ -151,7 +151,7 @@ export class SyncService {
      */
     async pullTable(table) {
         let result = true;
-        const lastSyncDate = this.options.force ? null :
+        const lastSyncDate = (this.options.force || !this.configMgr.config.lastSync) ? null :
             (new Date(new Date(this.configMgr.config.lastSync).getTime() - 5000).toISOString());
 
         let filter = '';
@@ -262,8 +262,7 @@ export class SyncService {
             // Save the timestamp only after a completed pull without errors
             if (result) {
                 console.log("💾 Saving sync timestamp: " + newSyncTime);
-                this.configMgr.config.lastSync = newSyncTime;
-                await this.configMgr.save(this.configMgr.config);
+                this.configMgr.updateConfig({ lastSync: newSyncTime });
             }
         }
 
