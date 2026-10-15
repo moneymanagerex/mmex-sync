@@ -130,6 +130,25 @@ const args = new Proxy(rawArgs, {
 });
 
 
+async function tryWithPassword(remoteService, configMgr, config) {
+    let pass = null;
+    pass = await enquirer.prompt({
+        type: 'password',
+        name: 'pass',
+        message: `Password (${config.pbUser}):`
+    });
+    if (!pass) {
+        throw new Error("No password provided.");
+    }
+    console.log("🔑 Authenticating with password...");
+    remoteService.invalidateToken();
+    await remoteService.authenticate(config.pbUser, pass);
+    config.token = remoteService.getToken();
+    config.pbAuthCollection = remoteService.authCollection;
+    configMgr.updateConfig(config);
+}
+
+
 async function main() {
     // Get version for use in help and logging
     let version = 'unknown';
@@ -313,23 +332,10 @@ async function main() {
                 console.warn("⚠️ Token refresh failed on server. Clearing saved token.");
                 config.token = null;
                 await configMgr.updateConfig(config);
-                throw new Error("Session expired on server. Please run again providing your password.");
+                await tryWithPassword(remoteService, configMgr, config);
             }
         } else {
-            const { pass } = await enquirer.prompt({
-                type: 'password',
-                name: 'pass',
-                message: `Password (${config.pbUser}):`
-            });
-            if (!pass) {
-                throw new Error("No password provided.");
-            }
-            console.log("🔑 Authenticating with password...");
-            remoteService.invalidateToken();
-            await remoteService.authenticate(config.pbUser, pass);
-            config.token = remoteService.getToken();
-            config.pbAuthCollection = remoteService.authCollection;
-            configMgr.updateConfig(config);
+            await tryWithPassword(remoteService, configMgr, config);
         }
 
         const sync = new SyncService(db, remoteService, configMgr, args);
