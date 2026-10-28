@@ -205,6 +205,7 @@ async fn run_cli(args: CliArgs) -> Result<()> {
         info!("{}", t("cli.cleaning_db_start"));
         db.clear_technical()
             .context(t("cli.context_clear_db"))?;
+        db.flush()?;
         info!("{}", t("cli.cleaning_db_done"));
         return Ok(());
     }
@@ -212,16 +213,6 @@ async fn run_cli(args: CliArgs) -> Result<()> {
     // Inizializzazione Client Remoto tramite Factory
     let mut remote = create_remote_server(&config.server_type, &config.url)
         .context(t("cli.context_remote_create"))?;
-
-    if args.clear_server {
-        info!("{}", t("cli.cleaning_server_start"));
-        remote
-            .clear_remote_server(SYNC_ORDER)
-            .await
-            .context(t("cli.context_clear_server"))?;
-        info!("{}", t("cli.cleaning_server_done"));
-        return Ok(());
-    }
 
     // Gestione credenziali e autenticazione remota
     let mut current_profile = config_mgr.load_profile(&config.profile)?;
@@ -232,10 +223,11 @@ async fn run_cli(args: CliArgs) -> Result<()> {
             Ok(auth) => {
                 let uid = auth.user_id.as_deref().unwrap_or("-");
                 info!("{}", t_fmt("cli.remote_auth_success", &[("uid", uid)]));
+                current_profile.pb_auth_collection = Some(auth.collection.clone());
                 if let Ok(enc_tok) = protect(&auth.token, None) {
                     current_profile.encrypted_token = Some(enc_tok);
-                    let _ = config_mgr.save_profile(&config.profile, &current_profile);
                 }
+                let _ = config_mgr.save_profile(&config.profile, &current_profile);
             }
             Err(e) => {
                 error!("{}", t_fmt("cli.remote_auth_failed", &[("error", &e.to_string())]));
@@ -245,10 +237,29 @@ async fn run_cli(args: CliArgs) -> Result<()> {
     } else if let Some(enc_token) = &current_profile.encrypted_token {
         if let Ok(Some(tok)) = unprotect(enc_token, None) {
             remote.set_token(tok, config.auth_collection.clone());
-            if let Err(e) = remote.refresh_token().await {
-                error!("{}", t_fmt("cli.remote_token_refresh_failed", &[("error", &e.to_string())]));
+            match remote.refresh_token().await {
+                Ok(refreshed) => {
+                    current_profile.pb_auth_collection = Some(refreshed.collection);
+                    if let Ok(enc_tok) = protect(&refreshed.token, None) {
+                        current_profile.encrypted_token = Some(enc_tok);
+                    }
+                    let _ = config_mgr.save_profile(&config.profile, &current_profile);
+                }
+                Err(e) => {
+                    error!("{}", t_fmt("cli.remote_token_refresh_failed", &[("error", &e.to_string())]));
+                }
             }
         }
+    }
+
+    if args.clear_server {
+        info!("{}", t("cli.cleaning_server_start"));
+        remote
+            .clear_remote_server(SYNC_ORDER)
+            .await
+            .context(t("cli.context_clear_server"))?;
+        info!("{}", t("cli.cleaning_server_done"));
+        return Ok(());
     }
 
     // Modalità operativa e ciclo di sincronizzazione

@@ -43,6 +43,13 @@ impl DatabaseService {
             emb_handler = Some(handler);
             p
         } else {
+            if create && db_path.exists() {
+                let _ = std::fs::remove_file(db_path);
+                let wal_path = PathBuf::from(format!("{}-wal", db_path.display()));
+                let shm_path = PathBuf::from(format!("{}-shm", db_path.display()));
+                let _ = std::fs::remove_file(wal_path);
+                let _ = std::fs::remove_file(shm_path);
+            }
             db_path.to_path_buf()
         };
 
@@ -64,6 +71,7 @@ impl DatabaseService {
             info!("{}", crate::i18n::t_fmt("db.init_new_db", &[("path", &db_path.display().to_string())]));
             create_empty_database(&service.conn, None)?;
             service.mark_modified();
+            service.flush()?;
         }
 
         service.refresh_schemas()?;
@@ -350,6 +358,13 @@ impl DatabaseService {
 
         if let Some(rowid) = existing_rowid {
             if remote.is_deleted {
+                // Bypass intenzionale di TRG_<table>_DELETE (WHEN OLD.pb_id IS NOT NULL):
+                // azzeriamo pb_id prima della DELETE nella stessa transazione così che l'eliminazione
+                // proveniente dal server non venga registrata in pb_DELETED_RECORDS_LOG.
+                tx.execute(
+                    &format!("UPDATE {} SET pb_id = NULL WHERE ROWID = ?", table),
+                    [rowid],
+                )?;
                 tx.execute(&format!("DELETE FROM {} WHERE ROWID = ?", table), [rowid])?;
             } else {
                 // Aggiornamento del record esistente

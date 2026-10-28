@@ -77,20 +77,21 @@ pub fn create_remote_server(
   - `Authorization: <token>` (raw token value without a `"Bearer "` prefix, which PocketBase accepts directly).
 
 ### 2.2 Authentication & Fallback Flow (`authenticate` & `refresh_token`)
-1. **Primary Attempt (`users` collection):**
+1. **Default Internal State:** `PocketBaseClient::new(url)` initializes `self.auth_collection = Some("users")`.
+2. **Primary Attempt (`users` collection):**
    - `POST {base_url}/api/collections/users/auth-with-password`
    - Body: `{"identity": user, "password": pass}`
-   - On HTTP 2xx: stores `self.token = Some(token)` and `self.auth_collection = Some("users")`, returning `AuthResponse`.
-2. **Fallback Attempt (`_superusers` collection):**
+   - On HTTP 2xx: stores `self.token = Some(token)` and `self.auth_collection = Some("users")`, returning `AuthResponse` (which the caller persists as `pbAuthCollection: "users"` in `<profile>.mmex-sync.json`).
+3. **Fallback Attempt (`_superusers` collection):**
    - If the `users` attempt fails for any reason, logs a debug message and retries against:
      `POST {base_url}/api/collections/_superusers/auth-with-password`
-   - On HTTP 2xx: stores `self.token = Some(token)` and `self.auth_collection = Some("_superusers")`.
-   - On failure: returns `SyncError::RemoteAuth`.
-3. **Token Refresh (`refresh_token`):**
+   - On HTTP 2xx: stores `self.token = Some(token)` and `self.auth_collection = Some("_superusers")`, returning `AuthResponse` (which the caller persists as `pbAuthCollection: "_superusers"` in `<profile>.mmex-sync.json`).
+   - On failure: keeps `self.auth_collection = Some("users")` internally and returns `SyncError::RemoteAuth`.
+4. **Token Refresh (`refresh_token`):**
    - Uses `self.auth_collection.as_deref().unwrap_or("users")`.
    - `POST {base_url}/api/collections/{collection}/auth-refresh` with `auth_headers()`.
    - Updates `self.token` with the newly issued token.
-4. **Local JWT Expiration Check (`is_token_valid`):**
+5. **Local JWT Expiration Check (`is_token_valid`):**
    - Splits token on `'.'`. If at least 2 parts exist, Base64URL-decodes (`BASE64_URL_SAFE_NO_PAD`) `parts[1]`, parses JSON, and checks if `"exp"` (i64 Unix timestamp) is strictly greater than `Utc::now().timestamp()`.
    - If the token is non-empty but does not contain a parseable `"exp"` claim, returns `true`.
 

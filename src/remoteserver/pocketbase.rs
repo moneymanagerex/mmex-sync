@@ -57,7 +57,7 @@ impl PocketBaseClient {
             client,
             base_url: trimmed_url,
             token: None,
-            auth_collection: None,
+            auth_collection: Some("users".to_string()),
         })
     }
 
@@ -162,12 +162,16 @@ impl RemoteServer for PocketBaseClient {
         }
 
         // Tentativo 2: collezione fallback '_superusers'
-        let auth = self.try_auth("_superusers", user, pass).await.map_err(|e| {
-            SyncError::RemoteAuth(crate::i18n::t_fmt(
-                "remote.auth_failed_user",
-                &[("user", user), ("error", &e.to_string())],
-            ))
-        })?;
+        let auth = match self.try_auth("_superusers", user, pass).await {
+            Ok(a) => a,
+            Err(e) => {
+                self.auth_collection = Some("users".to_string());
+                return Err(SyncError::RemoteAuth(crate::i18n::t_fmt(
+                    "remote.auth_failed_user",
+                    &[("user", user), ("error", &e.to_string())],
+                )));
+            }
+        };
 
         self.token = Some(auth.token.clone());
         self.auth_collection = Some("_superusers".to_string());

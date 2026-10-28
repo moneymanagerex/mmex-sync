@@ -17,7 +17,7 @@ Do not invent or guess behaviors. Code evolution is strictly driven by documenta
 5. **Documentation Alignment:** 
    - **Internal:** Update the relevant files in `specs/as-is/` so they accurately reflect the newly implemented code behavior. Use english as default language for this files.
    - **Public:** If the CR introduces user-facing changes, cautiously update the public manual in `docs/` to help the end-users. Use english as default language for this files too.
-6. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE`.
+6. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE` and move into subfolder `specs/1-changes/done/`.
 
 ## Tech Stack & Architectural Rules
 - **No Panics Allowed:** It is **STRICTLY FORBIDDEN** to use `.unwrap()` or `.expect()` in production code (only allowed in tests). Handle all errors gracefully by propagating them with `?` using `thiserror` (`SyncError`) and `anyhow`.

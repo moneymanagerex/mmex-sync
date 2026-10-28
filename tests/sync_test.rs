@@ -290,3 +290,59 @@ async fn test_sync_engine_soft_delete_flow() {
     let remote_rec = lock.records.get("TAG_V1").and_then(|m| m.get("pb_tag_001")).expect("remote tag");
     assert!(remote_rec.is_deleted, "Il record remoto deve risultare marcato come cancellato (_is_deleted=true)");
 }
+
+#[tokio::test]
+async fn test_sync_engine_push_only_flushes_emb_on_disk() {
+    let dir = tempdir().expect("tempdir");
+    let emb_path = dir.path().join("push_only_vault.emb");
+    let password = "EmbPushOnlyPassword!";
+
+    // 1. Crea database .emb, inizializza e inserisci un record locale (dirty=1, pb_id=NULL)
+    {
+        let mut db = DatabaseService::connect(&emb_path, false, Some(password), true)
+            .expect("connect create emb");
+        db.init_schema().expect("init_schema");
+        db.raw_conn()
+            .execute("INSERT INTO TAG_V1 (TAGNAME, ACTIVE) VALUES ('Casa', 1)", [])
+            .expect("insert local tag");
+        db.flush().expect("initial flush");
+    }
+
+    // 2. Riapri il database .emb ed esegui SOLO un ciclo di PUSH (pull = false)
+    let remote_state = Arc::new(Mutex::new(MockRemoteState::default()));
+    let mut remote = MockRemoteServer::new(remote_state.clone());
+    {
+        let mut db = DatabaseService::connect(&emb_path, false, Some(password), false)
+            .expect("reopen emb for push");
+        let options = SyncOptions {
+            init: false,
+            push: true,
+            pull: false,
+            force: false,
+            verbose: false,
+        };
+        let mut engine = SyncEngine::new(&mut db, &mut remote, options, None);
+        let (stats, ts) = engine.run_cycle().await.expect("run push-only cycle");
+        assert_eq!(stats.pushed_records, 1);
+        assert!(ts.is_none(), "Push-only non deve generare timestamp di pull");
+    }
+
+    // 3. Riapri il file .emb da disco e verifica che il nuovo pb_id e pb_is_dirty=0 siano stati salvati!
+    {
+        let db = DatabaseService::connect(&emb_path, false, Some(password), false)
+            .expect("reopen emb after push-only");
+        let dirty_tags = db.get_dirty_records("TAG_V1", false).expect("get dirty tags");
+        assert!(
+            dirty_tags.is_empty(),
+            "Il file .emb su disco deve avere pb_is_dirty = 0 dopo un ciclo push-only"
+        );
+        let all_tags = db.get_dirty_records("TAG_V1", true).expect("get all tags");
+        assert_eq!(all_tags.len(), 1);
+        assert_eq!(
+            all_tags[0].pb_id.as_deref(),
+            Some("pb_TAG_V1_1"),
+            "Il pb_id assegnato durante il push deve essere persistito nel file .emb su disco"
+        );
+    }
+}
+

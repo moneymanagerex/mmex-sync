@@ -114,6 +114,7 @@ impl Language {
 
     pub fn menu_edit(&self) -> &'static str { self.t("gui.menu.edit") }
     pub fn menu_edit_db(&self) -> &'static str { self.t("gui.menu.edit.db") }
+    pub fn menu_edit_new_db(&self) -> &'static str { self.t("gui.menu.edit.new_db") }
     pub fn menu_edit_db_pwd(&self) -> &'static str { self.t("gui.menu.edit.db_pwd") }
     pub fn menu_edit_exe(&self) -> &'static str { self.t("gui.menu.edit.exe") }
     pub fn menu_edit_remote(&self) -> &'static str { self.t("gui.menu.edit.remote") }
@@ -164,6 +165,7 @@ impl Language {
 
     // Pulsanti
     pub fn btn_browse(&self) -> &'static str { self.t("gui.btn.browse") }
+    pub fn btn_new_db(&self) -> &'static str { self.t("gui.btn.new_db") }
     pub fn btn_stop_watch(&self) -> &'static str { self.t("gui.btn.stop_watch") }
     pub fn btn_sync_full(&self) -> &'static str { self.t("gui.btn.sync_full") }
     pub fn btn_push_only(&self) -> &'static str { self.t("gui.btn.push_only") }
@@ -180,6 +182,8 @@ impl Language {
 
     // Dialoghi
     pub fn dialog_new_profile_title(&self) -> &'static str { self.t("gui.dialog.new_profile.title") }
+    pub fn dialog_new_emb_pwd_title(&self) -> &'static str { self.t("gui.dialog.new_emb_pwd.title") }
+    pub fn dialog_new_emb_pwd_prompt(&self) -> &'static str { self.t("gui.dialog.new_emb_pwd.prompt") }
     pub fn dialog_save_as_title(&self) -> &'static str { self.t("gui.dialog.save_as.title") }
     pub fn dialog_rename_title(&self) -> &'static str { self.t("gui.dialog.rename.title") }
     pub fn dialog_name_prompt(&self) -> &'static str { self.t("gui.dialog.name_prompt") }

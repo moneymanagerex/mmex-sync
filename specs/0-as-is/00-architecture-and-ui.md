@@ -96,12 +96,12 @@ When `mmex-sync` starts, `main()` executes the following sequential steps:
      - `--setDefaultMode=<mode>` (persists `defaultMode` to `<profile>.mmex-sync.json`, and exits immediately unless combined with `--cli` or an execution flag).
    - Resolves `EffectiveConfig` via `config_mgr.get_effective_config(&args)`.
    - Connects to the local database via `DatabaseService::connect(&config.db_path, config.verbose, config.file_password.as_deref(), args.create)`.
-   - If `--clearDb` is set, runs `db.clear_technical()` and exits.
+   - If `--clearDb` is set, runs `db.clear_technical()`, flushes via `db.flush()` (ensuring `.emb` changes are persisted), and exits.
    - Instantiates the remote server via `create_remote_server(&config.server_type, &config.url)`.
-   - If `--clearServer` is set, runs `remote.clear_remote_server(SYNC_ORDER).await` and exits (note: in current AS-IS `main.rs`, `--clearServer` runs before the authentication block).
    - **Remote Authentication Flow in CLI:**
-     - If both `config.user` and `config.pass` are provided, calls `remote.authenticate(user, pass).await`. On success, encrypts the returned JWT token with `protect(&auth.token, None)` and saves `encrypted_token` to `<profile>.mmex-sync.json`.
-     - Otherwise, if `current_profile.encrypted_token` exists, decrypts it with `unprotect(enc_token, None)`, calls `remote.set_token(tok, config.auth_collection.clone())`, and attempts `remote.refresh_token().await` (logging an error without aborting if refresh fails).
+     - If both `config.user` and `config.pass` are provided, calls `remote.authenticate(user, pass).await`. On success, encrypts the returned JWT token with `protect(&auth.token, None)` and saves both `encrypted_token` and the resolved `pb_auth_collection` (`"users"` or `"_superusers"`) to `<profile>.mmex-sync.json`.
+     - Otherwise, if `current_profile.encrypted_token` exists, decrypts it with `unprotect(enc_token, None)`, calls `remote.set_token(tok, config.auth_collection.clone())`, and attempts `remote.refresh_token().await` (updating `encrypted_token` and `pb_auth_collection` in the profile on success, or logging an error without aborting if refresh fails).
+   - If `--clearServer` is set (evaluated *after* the remote authentication block so the client carries an active authorization token), runs `remote.clear_remote_server(SYNC_ORDER).await` and exits.
    - Constructs `SyncOptions` and `SyncRunner` and executes `runner.run(requested_mode).await`.
 
 ---
@@ -215,15 +215,15 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 ### GUI Sections & Menus
 1. **Top Menu Bar:**
    - **Profiles:** New Profile, Open Profile (auto-saves current profile before switching), Save Profile, Save As (`<active>_copy`), Rename Profile, Set as Default (disabled if already default), Delete Profile (with confirmation modal), Exit.
-   - **Edit:** Select Database (`rfd` filter: `mmb`, `emb`), Select MMEX Executable (`rfd`).
+   - **Edit:** Select Database (`rfd::FileDialog::pick_file` filter: `mmb`, `emb`), Create New MMEX Database (`rfd::FileDialog::save_file` filter: `mmb`, `emb`), Select MMEX Executable (`rfd`).
    - **Synchronization:** Full Sync (`push=true, pull=true`), Push Only (`push=true, pull=false`), Pull Only (`push=false, pull=true`), Test Connection, Force Mode checkbox.
    - **Preferences:** Language switcher (`🇮🇹 Italiano` / `🇬🇧 English`), which immediately updates `self.lang`, `CURRENT_LOCALE`, and saves `"language"` to `mmex-sync.config.json`.
    - **Tools:** Clear Local DB (confirmation modal), Clear Remote Server (confirmation modal).
    - **Help:** About modal.
 2. **Central Panel:**
    - Active profile heading + `[DEFAULT]` badge.
-   - Collapsible **Local MMEX Database** section: DB path input + Browse button; if path ends with `.emb` (case-insensitive), displays password input and "Save encrypted password in profile" checkbox.
-   - Collapsible **Remote Server** section: Server Type combo (`PocketBase`), Server URL, User/Email, Password (masked), Auth Collection.
+   - Collapsible **Local MMEX Database** section: DB path input + Browse button + **➕ New DB...** button (`prompt_create_new_db`: opens `rfd::FileDialog::save_file()`, defaults extension to `.mmb` if omitted; for `.mmb` immediately saves the profile and initializes the schema on a background thread via `trigger_create_db_async()`; for `.emb` clears `file_password` and opens a dedicated password modal before initializing and encrypting the new `.emb` file); if path ends with `.emb` (case-insensitive), displays password input and "Save encrypted password in profile" checkbox.
+   - Collapsible **Remote Server** section: Server Type combo (`PocketBase`), Server URL, User/Email, Password (masked). *(Note: `pbAuthCollection` is managed automatically in the profile and is not exposed in the UI).*
    - Collapsible **Runner & Execution** section: MMEX Executable path + Browse, Default Mode combo (`run`, `sync`, `watch`), Auto-Start on Launch (`autoStart`) checkbox, Force Mode checkbox, Verbose checkbox.
    - **Auto-Start Countdown Banner:** When launched without `--gui` (`allow_auto_start == true`), if `autoStart == true` and the profile is ready (`dbPath` exists, `.emb` password present if `.emb`, `pbUrl` non-empty, and credentials or `encryptedToken` present), displays a 3-second animated countdown bar that can be cancelled via `Esc`, clicking `Cancel Auto-Start (Esc)`, or modifying any profile field; upon completion it launches `trigger_default_mode_async()` (`run`, `sync`, or `watch`).
    - Primary action buttons bar: `Run (<DEFAULT_MODE>)` (or `Stop Watch` while `watch` mode is active), `Full Sync`, `Push Only`, `Pull Only`, `Test Connection`, `Save Profile`.

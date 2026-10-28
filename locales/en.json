@@ -11,6 +11,7 @@
 
   "gui.menu.edit": "Edit",
   "gui.menu.edit.db": "MMEX Database...",
+  "gui.menu.edit.new_db": "Create New MMEX Database...",
   "gui.menu.edit.db_pwd": "Database Password (.emb)...",
   "gui.menu.edit.exe": "Money Manager Ex Executable...",
   "gui.menu.edit.remote": "Remote Server & Credentials...",
@@ -62,6 +63,7 @@
   "gui.autostart.cancelled": "Auto-start countdown cancelled by user.",
 
   "gui.btn.browse": "Browse...",
+  "gui.btn.new_db": "➕ New DB...",
   "gui.btn.run_default": "▶️ Run ({mode})",
   "gui.btn.stop_watch": "⏹️ Stop Watch",
   "gui.btn.sync_full": "🔄 Sync (Push + Pull)",
@@ -93,8 +95,11 @@
   "gui.log.test_error": "❌ Connection test error: {error}",
   "gui.log.clear_db_success": "Local technical schema removed.",
   "gui.log.clear_server_success": "Remote server cleared successfully.",
+  "gui.log.create_db_success": "✅ New MMEX database created and initialized: {path}",
 
   "gui.dialog.new_profile.title": "Create New Profile",
+  "gui.dialog.new_emb_pwd.title": "Set New Encrypted Database Password (.emb)",
+  "gui.dialog.new_emb_pwd.prompt": "Enter a password to encrypt the new .emb database:",
   "gui.dialog.save_as.title": "Save Profile As",
   "gui.dialog.rename.title": "Rename Profile",
   "gui.dialog.name_prompt": "Enter profile name:",
@@ -118,6 +123,8 @@
   "gui.msg.test_in_progress": "Testing remote connection...",
   "gui.msg.clear_db_success": "Local technical schema removed successfully.",
   "gui.msg.clear_server_success": "Remote server cleared successfully.",
+  "gui.msg.create_db_success": "New MMEX database created and initialized.",
+  "gui.msg.emb_password_required": "A non-empty password is required for .emb databases.",
   "gui.msg.operation_in_progress": "Operation in progress...",
   "gui.msg.ready": "Ready.",
 

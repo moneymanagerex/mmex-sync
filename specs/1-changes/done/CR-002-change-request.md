@@ -1,6 +1,6 @@
 # CR-002: Risoluzione Bug Ciclo di Sync, Trigger Recursion e Ordine di Autenticazione
-- **Stato:** READY
-- **Spec impattate:** `specs/as-is/00-architecture-and-ui.md`, `specs/as-is/01-db-and-crypto.md`, `specs/as-is/03-sync-engine.md`
+- **Stato:** DONE
+- **Spec impattate:** `specs/0-as-is/00-architecture-and-ui.md`, `specs/0-as-is/01-db-and-crypto.md`, `specs/0-as-is/03-sync-engine.md`
 
 ---
 
@@ -38,10 +38,10 @@ Per evitare che l'eliminazione innescata dal PULL finisca nel log delle eliminaz
 ---
 
 ## 4. Criteri di Accettazione & Test
-- [ ] L'eliminazione locale di un record remoto non inserisce record in `pb_DELETED_RECORDS_LOG`.
-- [ ] Eseguendo una sincronizzazione `--sync=push` su un file `.emb`, il file originale su disco viene correttamente aggiornato con i nuovi `pb_id`.
-- [ ] Il comando `--clearServer` esegue le API HTTP con il token di autorizzazione attivo e non restituisce errore di autenticazione.
-- [ ] Gli unit test esistenti rimangono verdi e coprono il bypass del trigger `DELETE`.
-- [ ] verifica che tutta la documentazione prodotta sia in inglese
-- [ ] Le specifiche `specs/as-is/` (00, 01, 03) sono state aggiornate col nuovo flusso, sempre in inglese.
-- [ ] Stato di questo documento impostato a `DONE`.
+- [x] L'eliminazione locale di un record remoto non inserisce record in `pb_DELETED_RECORDS_LOG`.
+- [x] Eseguendo una sincronizzazione `--sync=push` su un file `.emb`, il file originale su disco viene correttamente aggiornato con i nuovi `pb_id`.
+- [x] Il comando `--clearServer` esegue le API HTTP con il token di autorizzazione attivo e non restituisce errore di autenticazione.
+- [x] Gli unit test esistenti rimangono verdi e coprono il bypass del trigger `DELETE`.
+- [x] verifica che tutta la documentazione prodotta sia in inglese
+- [x] Le specifiche `specs/as-is/` (00, 01, 03) sono state aggiornate col nuovo flusso, sempre in inglese.
+- [x] Stato di questo documento impostato a `DONE`.

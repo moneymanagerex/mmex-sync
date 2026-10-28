@@ -126,10 +126,11 @@ impl<'a> SyncEngine<'a> {
                 self.pull_table(table, &mut stats).await?;
             }
 
-            // Ricifra e salva su disco se il DB è .emb
-            self.db.flush()?;
             new_sync_time = Some(cycle_start_time);
         }
+
+        // 4. FLUSH: Ricifra e salva su disco se il DB è .emb ed è stato modificato (anche in Push-Only o Init-Only)
+        self.db.flush()?;
 
         info!(
             "{}",

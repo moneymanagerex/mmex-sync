@@ -185,3 +185,93 @@ fn test_database_service_with_encrypted_emb() {
         assert!(wrong_open.is_err(), "L'apertura con password errata deve fallire");
     }
 }
+
+#[test]
+fn test_apply_remote_delete_bypasses_delete_trigger() {
+    let dir = tempdir().expect("tempdir");
+    let db_path = dir.path().join("remote_del_trigger_test.mmb");
+
+    let mut db = DatabaseService::connect(&db_path, false, None, true).expect("connect create");
+    db.init_schema().expect("init_schema");
+
+    // 1. Inserisce un tag proveniente dal remoto (o sincronizzato)
+    let mut remote_tag = RemoteRecord {
+        id: "pb_tag_remote_1".to_string(),
+        is_deleted: false,
+        updated_at: Some("2026-10-28T10:00:00Z".to_string()),
+        fields: std::collections::HashMap::new(),
+    };
+    remote_tag.fields.insert("TAGID".to_string(), serde_json::json!(1));
+    remote_tag.fields.insert("TAGNAME".to_string(), serde_json::json!("Vacanze"));
+    remote_tag.fields.insert("ACTIVE".to_string(), serde_json::json!(1));
+
+    db.apply_remote_changes("TAG_V1", &remote_tag).expect("insert remote tag");
+
+    // Verifica che il tag esista localmente
+    let all_tags = db.get_dirty_records("TAG_V1", true).expect("get all tags");
+    assert_eq!(all_tags.len(), 1);
+    assert_eq!(all_tags[0].pb_id.as_deref(), Some("pb_tag_remote_1"));
+
+    // 2. Simula la ricezione in PULL di una cancellazione remota (is_deleted = true)
+    let deleted_remote_tag = RemoteRecord {
+        id: "pb_tag_remote_1".to_string(),
+        is_deleted: true,
+        updated_at: Some("2026-10-28T11:00:00Z".to_string()),
+        fields: std::collections::HashMap::new(),
+    };
+    db.apply_remote_changes("TAG_V1", &deleted_remote_tag).expect("apply remote delete");
+
+    // 3. Il record locale deve essere stato rimosso
+    let remaining_tags = db.get_dirty_records("TAG_V1", true).expect("get remaining tags");
+    assert!(remaining_tags.is_empty(), "Il record locale deve essere stato eliminato dal PULL");
+
+    // 4. CR-002: TRG_TAG_V1_DELETE NON deve aver inserito il record in pb_DELETED_RECORDS_LOG
+    let deleted_log = db.get_deleted_log().expect("get_deleted_log");
+    assert!(
+        deleted_log.is_empty(),
+        "L'eliminazione innescata da PULL non deve scrivere in pb_DELETED_RECORDS_LOG"
+    );
+}
+
+#[test]
+fn test_create_flag_recreates_existing_mmb_and_flushes_emb_immediately() {
+    let dir = tempdir().expect("tempdir");
+
+    // 1. Verifica che create = true su un file .mmb già esistente lo ricrei vuoto da zero
+    let mmb_path = dir.path().join("recreate_test.mmb");
+    {
+        let mut db = DatabaseService::connect(&mmb_path, false, None, true).expect("create 1");
+        db.init_schema().expect("init_schema 1");
+        db.raw_conn()
+            .execute("INSERT INTO TAG_V1 (TAGNAME, ACTIVE) VALUES ('VecchioTag', 1)", [])
+            .expect("insert old tag");
+    }
+    {
+        let mut db = DatabaseService::connect(&mmb_path, false, None, true).expect("recreate 2");
+        db.init_schema().expect("init_schema 2");
+        let tags = db.get_dirty_records("TAG_V1", true).expect("get tags after recreate");
+        assert!(
+            tags.is_empty(),
+            "create = true deve ricreare da zero il file .mmb rimuovendo i dati preesistenti"
+        );
+    }
+
+    // 2. Verifica che create = true su un file .emb cifrato scriva subito il file .emb su disco
+    let emb_path = dir.path().join("immediate_create.emb");
+    let pwd = "ImmediateCreatePwd!";
+    {
+        let _db = DatabaseService::connect(&emb_path, false, Some(pwd), true)
+            .expect("create emb with immediate flush");
+        assert!(
+            emb_path.exists(),
+            "Il file .emb deve essere immediatamente persistito su disco da connect(..., true)"
+        );
+    }
+    // Riapertura senza ulteriore flush per verificare che il file .emb su disco sia valido e decifrabile
+    {
+        let _reopened = DatabaseService::connect(&emb_path, false, Some(pwd), false)
+            .expect("reopen created emb");
+    }
+}
+
+

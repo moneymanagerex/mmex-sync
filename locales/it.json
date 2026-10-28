@@ -11,6 +11,7 @@
 
   "gui.menu.edit": "Modifica",
   "gui.menu.edit.db": "Database MMEX...",
+  "gui.menu.edit.new_db": "Crea Nuovo Database MMEX...",
   "gui.menu.edit.db_pwd": "Password Database (.emb)...",
   "gui.menu.edit.exe": "Eseguibile Money Manager Ex...",
   "gui.menu.edit.remote": "Server Remoto & Credenziali...",
@@ -62,6 +63,7 @@
   "gui.autostart.cancelled": "Countdown di avvio automatico annullato dall'utente.",
 
   "gui.btn.browse": "Sfoglia...",
+  "gui.btn.new_db": "➕ Nuovo DB...",
   "gui.btn.run_default": "▶️ Avvia ({mode})",
   "gui.btn.stop_watch": "⏹️ Ferma Watch",
   "gui.btn.sync_full": "🔄 Sincronizza (Push + Pull)",
@@ -93,8 +95,11 @@
   "gui.log.test_error": "❌ Errore test connessione: {error}",
   "gui.log.clear_db_success": "Schema tecnico locale rimosso.",
   "gui.log.clear_server_success": "Server remoto ripulito con successo.",
+  "gui.log.create_db_success": "✅ Nuovo database MMEX creato e inizializzato: {path}",
 
   "gui.dialog.new_profile.title": "Crea Nuovo Profilo",
+  "gui.dialog.new_emb_pwd.title": "Imposta Password Nuovo Database (.emb)",
+  "gui.dialog.new_emb_pwd.prompt": "Inserisci una password per cifrare il nuovo database .emb:",
   "gui.dialog.save_as.title": "Salva Profilo Con Nome",
   "gui.dialog.rename.title": "Rinomina Profilo",
   "gui.dialog.name_prompt": "Inserisci il nome del profilo:",
@@ -118,6 +123,8 @@
   "gui.msg.test_in_progress": "Verifica connessione remota in corso...",
   "gui.msg.clear_db_success": "Schema tecnico locale rimosso con successo.",
   "gui.msg.clear_server_success": "Server remoto ripulito con successo.",
+  "gui.msg.create_db_success": "Nuovo database MMEX creato e inizializzato.",
+  "gui.msg.emb_password_required": "È richiesta una password non vuota per i database .emb.",
   "gui.msg.operation_in_progress": "Operazione in corso...",
   "gui.msg.ready": "Pronto.",
 

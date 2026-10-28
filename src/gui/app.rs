@@ -24,7 +24,11 @@ const AUTOSTART_COUNTDOWN_SECS: f32 = 3.0;
 pub enum GuiEvent {
     Log(String),
     Status { message: String, is_error: bool },
-    TokenUpdated(String),
+    TokenUpdated {
+        encrypted_token: String,
+        auth_collection: String,
+    },
+    AuthCollectionReset,
     LastSyncUpdated(String),
     SyncFinished { last_sync: Option<String> },
     TestFinished { success: bool, message: String },
@@ -88,6 +92,8 @@ pub struct MmexSyncGuiApp {
     // Dialoghi modali
     dialog_new_profile: bool,
     new_profile_name: String,
+    dialog_new_emb_password: bool,
+    new_emb_password_input: String,
     dialog_save_as: bool,
     save_as_name: String,
     dialog_rename_profile: bool,
@@ -159,6 +165,8 @@ impl MmexSyncGuiApp {
             rx,
             dialog_new_profile: false,
             new_profile_name: String::new(),
+            dialog_new_emb_password: false,
+            new_emb_password_input: String::new(),
             dialog_save_as: false,
             save_as_name: String::new(),
             dialog_rename_profile: false,
@@ -703,7 +711,10 @@ impl MmexSyncGuiApp {
                 match remote.authenticate(&user, &pass).await {
                     Ok(auth) => {
                         if let Ok(enc_tok) = protect(&auth.token, None) {
-                            let _ = tx.send(GuiEvent::TokenUpdated(enc_tok));
+                            let _ = tx.send(GuiEvent::TokenUpdated {
+                                encrypted_token: enc_tok,
+                                auth_collection: auth.collection.clone(),
+                            });
                         }
                         let uid = auth.user_id.as_deref().unwrap_or("-");
                         let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
@@ -716,6 +727,7 @@ impl MmexSyncGuiApp {
                         });
                     }
                     Err(e) => {
+                        let _ = tx.send(GuiEvent::AuthCollectionReset);
                         let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
                             "gui.log.test_error",
                             &[("error", &e.to_string())],
@@ -729,6 +741,83 @@ impl MmexSyncGuiApp {
                         });
                     }
                 }
+            });
+        });
+    }
+
+    fn prompt_create_new_db(&mut self) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
+
+        if let Some(mut file) = rfd::FileDialog::new()
+            .add_filter("MMEX Database", &["mmb", "emb"])
+            .set_file_name("new_database.mmb")
+            .save_file()
+        {
+            if file.extension().is_none() {
+                file.set_extension("mmb");
+            }
+            self.db_path = file.to_string_lossy().to_string();
+
+            if self.db_path.to_lowercase().ends_with(".emb") {
+                self.file_password.clear();
+                self.new_emb_password_input.clear();
+                self.dialog_new_emb_password = true;
+            } else {
+                self.save_current_profile();
+                self.trigger_create_db_async();
+            }
+        }
+    }
+
+    fn trigger_create_db_async(&mut self) {
+        self.cancel_autostart_countdown();
+        if self.is_working || self.db_path.trim().is_empty() {
+            return;
+        }
+        self.is_working = true;
+        let tx = self.tx.clone();
+        let db_path = expand_tilde(Path::new(self.db_path.trim()));
+        let file_password = if self.file_password.is_empty() {
+            None
+        } else {
+            Some(self.file_password.clone())
+        };
+
+        std::thread::spawn(move || {
+            let mut db = match DatabaseService::connect(
+                &db_path,
+                false,
+                file_password.as_deref(),
+                true,
+            ) {
+                Ok(d) => d,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                    });
+                    return;
+                }
+            };
+
+            if let Err(e) = db.init_schema().and_then(|_| db.flush()) {
+                let _ = tx.send(GuiEvent::ClearFinished {
+                    success: false,
+                    message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                });
+                return;
+            }
+
+            let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                "gui.log.create_db_success",
+                &[("path", &db_path.display().to_string())],
+            )));
+            let _ = tx.send(GuiEvent::ClearFinished {
+                success: true,
+                message: crate::i18n::t("gui.msg.create_db_success").to_string(),
             });
         });
     }
@@ -792,6 +881,12 @@ impl MmexSyncGuiApp {
         let url = self.pb_url.trim().to_string();
         let user = self.pb_user.trim().to_string();
         let pass = self.pb_pass.clone();
+        let encrypted_token = self.encrypted_token.clone();
+        let auth_collection = if self.pb_auth_collection.trim().is_empty() {
+            None
+        } else {
+            Some(self.pb_auth_collection.trim().to_string())
+        };
 
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_current_thread()
@@ -820,12 +915,37 @@ impl MmexSyncGuiApp {
                     }
                 };
 
-                if let Err(e) = remote.authenticate(&user, &pass).await {
-                    let _ = tx.send(GuiEvent::ClearFinished {
-                        success: false,
-                        message: format!("Autenticazione fallita: {}", e),
-                    });
-                    return;
+                if !user.is_empty() && !pass.is_empty() {
+                    match remote.authenticate(&user, &pass).await {
+                        Ok(auth) => {
+                            if let Ok(enc_tok) = protect(&auth.token, None) {
+                                let _ = tx.send(GuiEvent::TokenUpdated {
+                                    encrypted_token: enc_tok,
+                                    auth_collection: auth.collection,
+                                });
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx.send(GuiEvent::AuthCollectionReset);
+                            let _ = tx.send(GuiEvent::ClearFinished {
+                                success: false,
+                                message: format!("Autenticazione fallita: {}", e),
+                            });
+                            return;
+                        }
+                    }
+                } else if let Some(enc_token) = &encrypted_token {
+                    if let Ok(Some(tok)) = unprotect(enc_token, None) {
+                        remote.set_token(tok, auth_collection);
+                        if let Ok(refreshed) = remote.refresh_token().await {
+                            if let Ok(enc_tok) = protect(&refreshed.token, None) {
+                                let _ = tx.send(GuiEvent::TokenUpdated {
+                                    encrypted_token: enc_tok,
+                                    auth_collection: refreshed.collection,
+                                });
+                            }
+                        }
+                    }
                 }
 
                 match remote.clear_remote_server(SYNC_ORDER).await {
@@ -856,12 +976,20 @@ impl MmexSyncGuiApp {
                 GuiEvent::Status { message, is_error } => {
                     self.status_message = Some((message, is_error));
                 }
-                GuiEvent::TokenUpdated(enc_tok) => {
-                    self.encrypted_token = Some(enc_tok.clone());
+                GuiEvent::TokenUpdated {
+                    encrypted_token,
+                    auth_collection,
+                } => {
+                    self.encrypted_token = Some(encrypted_token.clone());
+                    self.pb_auth_collection = auth_collection.clone();
                     if let Ok(mut p) = self.config_mgr.load_profile(&self.active_profile) {
-                        p.encrypted_token = Some(enc_tok);
+                        p.encrypted_token = Some(encrypted_token);
+                        p.pb_auth_collection = Some(auth_collection);
                         let _ = self.config_mgr.save_profile(&self.active_profile, &p);
                     }
+                }
+                GuiEvent::AuthCollectionReset => {
+                    self.pb_auth_collection = "users".to_string();
                 }
                 GuiEvent::LastSyncUpdated(ts) => {
                     self.last_sync = Some(ts.clone());
@@ -949,10 +1077,14 @@ async fn execute_single_sync_step(
         match remote.authenticate(u, p).await {
             Ok(auth) => {
                 if let Ok(enc_tok) = protect(&auth.token, None) {
-                    let _ = tx.send(GuiEvent::TokenUpdated(enc_tok));
+                    let _ = tx.send(GuiEvent::TokenUpdated {
+                        encrypted_token: enc_tok,
+                        auth_collection: auth.collection,
+                    });
                 }
             }
             Err(e) => {
+                let _ = tx.send(GuiEvent::AuthCollectionReset);
                 let _ = tx.send(GuiEvent::Status {
                     message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
                     is_error: true,
@@ -969,7 +1101,10 @@ async fn execute_single_sync_step(
             remote.set_token(tok, ctx.auth_collection.clone());
             if let Ok(refreshed) = remote.refresh_token().await {
                 if let Ok(enc_tok) = protect(&refreshed.token, None) {
-                    let _ = tx.send(GuiEvent::TokenUpdated(enc_tok));
+                    let _ = tx.send(GuiEvent::TokenUpdated {
+                        encrypted_token: enc_tok,
+                        auth_collection: refreshed.collection,
+                    });
                 }
             }
         }
@@ -1136,6 +1271,17 @@ impl eframe::App for MmexSyncGuiApp {
                         {
                             self.db_path = file.to_string_lossy().to_string();
                         }
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_edit_new_db()),
+                        )
+                        .clicked()
+                    {
+                        self.prompt_create_new_db();
                         ui.close_menu();
                     }
 
@@ -1363,6 +1509,15 @@ impl eframe::App for MmexSyncGuiApp {
                                 self.db_path = file.to_string_lossy().to_string();
                             }
                         }
+                        if ui
+                            .add_enabled(
+                                !self.is_working,
+                                egui::Button::new(self.lang.btn_new_db()),
+                            )
+                            .clicked()
+                        {
+                            self.prompt_create_new_db();
+                        }
                     });
 
                     let is_emb = self.db_path.to_lowercase().ends_with(".emb");
@@ -1420,12 +1575,6 @@ impl eframe::App for MmexSyncGuiApp {
                                 .add(egui::TextEdit::singleline(&mut self.pb_pass).password(true))
                                 .changed()
                             {
-                                self.cancel_autostart_countdown();
-                            }
-                            ui.end_row();
-
-                            ui.label(self.lang.field_auth_collection());
-                            if ui.text_edit_singleline(&mut self.pb_auth_collection).changed() {
                                 self.cancel_autostart_countdown();
                             }
                             ui.end_row();
@@ -1627,6 +1776,40 @@ impl MmexSyncGuiApp {
                         }
                         if ui.button(self.lang.btn_cancel()).clicked() {
                             self.dialog_new_profile = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Password Nuovo Database Cifrato (.emb)
+        if self.dialog_new_emb_password {
+            egui::Window::new(self.lang.dialog_new_emb_pwd_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.dialog_new_emb_pwd_prompt());
+                    ui.add(egui::TextEdit::singleline(&mut self.new_emb_password_input).password(true));
+                    ui.checkbox(
+                        &mut self.save_file_password,
+                        self.lang.field_save_password(),
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            if self.new_emb_password_input.is_empty() {
+                                self.status_message = Some((
+                                    self.lang.t("gui.msg.emb_password_required").to_string(),
+                                    true,
+                                ));
+                            } else {
+                                self.file_password = self.new_emb_password_input.clone();
+                                self.dialog_new_emb_password = false;
+                                self.save_current_profile();
+                                self.trigger_create_db_async();
+                            }
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_new_emb_password = false;
                         }
                     });
                 });

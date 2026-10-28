@@ -384,7 +384,12 @@ impl ConfigManager {
             user,
             pass,
             token: None, // Verrà popolato dopo decrittazione o auth
-            auth_collection: profile.pb_auth_collection,
+            auth_collection: Some(
+                profile
+                    .pb_auth_collection
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| "users".to_string()),
+            ),
             mmex_exe,
             default_mode,
             auto_start: profile.auto_start,

@@ -54,7 +54,7 @@ When triggered via the 3-second auto-start countdown or the `▶️ Run (<MODE>)
 
 ## 3. Step-by-Step Synchronization Cycle (`SyncEngine::run_cycle`)
 
-A synchronization cycle consists of three sequential phases executed in strict order: **INIT -> PUSH -> PULL**.
+A synchronization cycle consists of three sequential phases executed in strict order: **INIT -> PUSH -> PULL**, followed by an unconditional **FLUSH** (`self.db.flush()`) at the end of the cycle.
 
 ```mermaid
 flowchart TD
@@ -67,10 +67,12 @@ flowchart TD
     CheckPush -- No --> CheckPull{"options.pull?"}
     PushTables --> CheckPull
     CheckPull -- Yes --> CaptureTS["Capture cycle_start_time = Utc::now().to_rfc3339()"]
-    CaptureTS --> PullTables["3a. PULL Remote Records across SYNC_ORDER (1..22)"]
-    PullTables --> FlushDB["3b. db.flush() (WAL checkpoint + .emb re-encryption)"]
-    FlushDB --> ReturnTS["Return (stats, Some(cycle_start_time))"]
-    CheckPull -- No --> ReturnNone["Return (stats, None)"]
+    CaptureTS --> PullTables["3. PULL Remote Records across SYNC_ORDER (1..22)"]
+    PullTables --> SetTS["new_sync_timestamp = Some(cycle_start_time)"]
+    CheckPull -- No --> SetNone["new_sync_timestamp = None"]
+    SetTS --> FlushDB["4. FLUSH: db.flush() (WAL checkpoint + .emb re-encryption if modified)"]
+    SetNone --> FlushDB
+    FlushDB --> ReturnRes["Return (stats, new_sync_timestamp)"]
 ```
 
 ### Phase 1: INIT (`self.options.init == true`)
@@ -146,8 +148,14 @@ When `create` or `update` fails during PUSH:
      - Calls `self.db.apply_remote_changes(table, remote)?`.
      - Increments `stats.pulled_records`.
    - Calls `self.db.reset_unfinished_ops(table)?` (`UPDATE <table> SET pb_is_dirty = 1 WHERE pb_is_dirty = 2`).
-3. **Database Flush:** Calls `self.db.flush()?` (note: in AS-IS `run_cycle`, `self.db.flush()` is called inside the `if self.options.pull` block).
-4. **Return Value:** Returns `Ok((stats, Some(cycle_start_time)))`.
+3. **Timestamp Recording:** Sets `new_sync_timestamp = Some(cycle_start_time)`.
+
+---
+
+### Phase 4: Unconditional Database Flush (`self.db.flush()`)
+At the end of `run_cycle()`, regardless of which subset of `init`, `push`, or `pull` was enabled:
+1. Calls `self.db.flush()?` (which executes `PRAGMA wal_checkpoint(TRUNCATE)` and atomically re-encrypts the temporary SQLite file into the target `.emb` file whenever `is_modified == true`).
+2. Returns `Ok((stats, new_sync_timestamp))`.
 
 ---
 
@@ -158,8 +166,9 @@ For each incoming `RemoteRecord` on `table`:
 2. Starts a SQLite transaction (`let tx = self.conn.transaction()?`).
 3. **Branch 1: Record with matching `pb_id` already exists locally (`Some(rowid)`):**
    - **If `remote.is_deleted == true`**:
-     - Executes `DELETE FROM <table> WHERE ROWID = ?`.
-     - *(Note: `TRG_<table>_DELETE` fires on this delete and inserts `(table, pb_id)` into `pb_DELETED_RECORDS_LOG` because `OLD.pb_id IS NOT NULL`.)*
+     - First executes `UPDATE <table> SET pb_id = NULL WHERE ROWID = ?`.
+     - Then executes `DELETE FROM <table> WHERE ROWID = ?` within the same transaction.
+     - *(Setting `pb_id = NULL` before `DELETE` intentionally bypasses `TRG_<table>_DELETE`, whose condition is `WHEN OLD.pb_id IS NOT NULL`, preventing remote deletions from being re-logged into `pb_DELETED_RECORDS_LOG`.)*
    - **If `remote.is_deleted == false`**:
      - Builds `UPDATE <table> SET <field1> = ?, ..., pb_is_dirty = 2, pb_updated_at = ? WHERE ROWID = ?`.
      - Immediately executes `UPDATE <table> SET pb_is_dirty = 0 WHERE ROWID = ?` within the same transaction.

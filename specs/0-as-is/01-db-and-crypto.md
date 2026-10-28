@@ -73,11 +73,13 @@ If all three attempts fail to produce a valid `SQLite format 3\0` header, `SyncE
 ## 3. SQLite Connection Pragma & Initialization (`src/db/repository.rs`, `src/db/schema.rs`)
 
 When `DatabaseService::connect` opens a SQLite connection:
+- If `create == true` and `!is_emb` and `db_path.exists()`, removes the existing `.mmb` file (along with any `-wal` and `-shm` sidecar files) before opening the SQLite connection so the database is recreated cleanly from scratch.
 - Sets `conn.busy_timeout(Duration::from_secs(10))` (10,000 ms busy wait for lock contention with MMEX Desktop).
 - Executes `PRAGMA journal_mode = WAL`.
 - If `create == true` or (`!db_path.exists() && !is_emb`):
   - Executes the embedded DDL script `tables_v1_for_sync.sql` (`DEFAULT_SCHEMA_SQL`).
   - Executes `PRAGMA user_version = 21`.
+  - Marks the database modified (`service.mark_modified()`) and immediately calls `service.flush()?` so newly created `.emb` databases are encrypted and persisted to disk right away.
 - Calls `refresh_schemas()` to inspect all tables in `SYNC_ORDER` via `PRAGMA table_info(<table>)`.
 
 ---
@@ -147,6 +149,7 @@ For every table in `SYNC_ORDER`, three triggers are created:
        INSERT OR REPLACE INTO pb_DELETED_RECORDS_LOG (table_name, pb_id) VALUES ('<table>', OLD.pb_id);
    END;
    ```
+   - **Intentional Trigger Bypass on Remote Deletions:** When `DatabaseService::apply_remote_changes` processes a remote deletion (`remote.is_deleted == true`) for a matching local `rowid`, it first executes `UPDATE <table> SET pb_id = NULL WHERE ROWID = ?` and then `DELETE FROM <table> WHERE ROWID = ?` within the same transaction. Because `TRG_<table>_UPDATE` only watches domain columns, setting `pb_id = NULL` does not fire the update trigger, and `OLD.pb_id IS NOT NULL` evaluates to `false` on `DELETE`, preventing remote deletions from being re-logged into `pb_DELETED_RECORDS_LOG`.
 
 ### 4.4 Schema Cleanup (`clear_technical_schema` / `--clearDb`)
 Inside a single transaction, for all 22 tables in `SYNC_ORDER`:
@@ -212,6 +215,6 @@ When a conflict resolution changes a record's Primary Key (`old_pk != new_pk`), 
 2. **Crash Recovery of Pending Records (`reset_unfinished_ops`):** Any record left in state `pb_is_dirty = 2` after a table pull MUST be reset to `pb_is_dirty = 1` (`UPDATE <table> SET pb_is_dirty = 1 WHERE pb_is_dirty = 2`) so interrupted operations are not silently lost.
 3. **Atomic `.emb` Persistence & WAL Checkpoint:** Before re-encrypting a temporary SQLite database back to `.emb`, `PRAGMA wal_checkpoint(TRUNCATE)` MUST be executed so that no data remains trapped in the `-wal` file, and the encrypted output MUST be written to a temporary file in the same directory and atomically persisted (`NamedTempFile::persist`).
 4. **SQLite Magic Header Verification:** Decryption of `.emb` files and pre-encryption validation in `flush_to_emb` MUST always verify the 16-byte header `b"SQLite format 3\0"` to prevent overwriting a user's `.emb` database with corrupted or uninitialized data.
-5. **Trigger Scope on Domain Columns Only:** `TRG_<table>_UPDATE` MUST only watch domain columns (`AFTER UPDATE OF <non_tech_cols>`), never `pb_id`, `pb_is_dirty`, or `pb_updated_at`, preventing infinite trigger recursion when `set_synced_status` updates `pb_id` and `pb_is_dirty = 0`.
+5. **Trigger Scope on Domain Columns Only & Remote Deletion Bypass:** `TRG_<table>_UPDATE` MUST only watch domain columns (`AFTER UPDATE OF <non_tech_cols>`), never `pb_id`, `pb_is_dirty`, or `pb_updated_at`, preventing infinite trigger recursion when `set_synced_status` updates `pb_id` and `pb_is_dirty = 0`. Similarly, when `apply_remote_changes` deletes a local row due to `remote.is_deleted == true`, it MUST first set `pb_id = NULL` before executing `DELETE` in the same transaction so `TRG_<table>_DELETE` (`WHEN OLD.pb_id IS NOT NULL`) is bypassed and does not re-queue the remote deletion into `pb_DELETED_RECORDS_LOG`.
 6. **Foreign Key Referential Integrity on PK Realignment:** Whenever a local record is merged with a remote record that has a different integer Primary Key (`old_pk != new_pk`), `replace_record_and_references` MUST update both the record's PK and all referencing FK columns across `SYNC_ORDER` within the same SQLite transaction.
 
