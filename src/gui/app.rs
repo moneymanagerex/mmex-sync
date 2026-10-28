@@ -1,0 +1,1172 @@
+use std::path::Path;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::SystemTime;
+
+use chrono::{DateTime, Local};
+use eframe::egui;
+
+use crate::config::{expand_tilde, ConfigManager, ProfileConfig};
+use crate::crypto::credentials::{protect, unprotect};
+use crate::db::repository::DatabaseService;
+use crate::domain::sync_order::SYNC_ORDER;
+use crate::gui::i18n::Language;
+use crate::remoteserver::create_remote_server;
+use crate::sync::engine::{SyncEngine, SyncOptions};
+
+/// Eventi inviati dai thread di lavoro asincroni alla GUI
+#[derive(Debug)]
+pub enum GuiEvent {
+    Log(String),
+    Status { message: String, is_error: bool },
+    SyncFinished { last_sync: Option<String> },
+    TestFinished { success: bool, message: String },
+    ClearFinished { success: bool, message: String },
+}
+
+/// Applicazione desktop nativa MMEX-Sync con eframe/egui
+pub struct MmexSyncGuiApp {
+    config_mgr: ConfigManager,
+    active_profile: String,
+    available_profiles: Vec<String>,
+    default_profile: String,
+
+    // Dati del profilo attivo
+    db_path: String,
+    file_password: String,
+    save_file_password: bool,
+    server_type: String,
+    pb_url: String,
+    pb_user: String,
+    pb_pass: String,
+    pb_auth_collection: String,
+    mmex_exe: String,
+    default_mode: String,
+    last_sync: Option<String>,
+    force_mode: bool,
+    verbose: bool,
+
+    // Stato UI
+    pub lang: Language,
+    status_message: Option<(String, bool)>,
+    logs: Vec<String>,
+    is_working: bool,
+
+    // Canali asincroni
+    tx: Sender<GuiEvent>,
+    rx: Receiver<GuiEvent>,
+
+    // Dialoghi modali
+    dialog_new_profile: bool,
+    new_profile_name: String,
+    dialog_save_as: bool,
+    save_as_name: String,
+    dialog_rename_profile: bool,
+    rename_profile_name: String,
+    dialog_delete_confirm: bool,
+    dialog_clear_db_confirm: bool,
+    dialog_clear_server_confirm: bool,
+    dialog_about: bool,
+}
+
+impl MmexSyncGuiApp {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Personalizzazione del tema visivo scuro e moderno
+        let mut visuals = egui::Visuals::dark();
+        visuals.window_rounding = 8.0.into();
+        visuals.menu_rounding = 6.0.into();
+        cc.egui_ctx.set_visuals(visuals);
+
+        let (tx, rx) = channel();
+        let config_mgr = ConfigManager::new().unwrap_or_else(|_| {
+            let fallback_dir = dirs::home_dir().unwrap_or_default().join(".mmex-sync");
+            let _ = std::fs::create_dir_all(&fallback_dir);
+            ConfigManager::new().expect("Fallback config dir creation failed")
+        });
+
+        let saved_lang = config_mgr.get_saved_language();
+        let lang = crate::i18n::detect_best_locale(saved_lang.as_deref());
+
+        let default_profile = config_mgr
+            .get_default_profile()
+            .unwrap_or_else(|_| "default".to_string());
+        let available_profiles = config_mgr.list_profiles().unwrap_or_default();
+
+        let mut app = Self {
+            config_mgr,
+            active_profile: default_profile.clone(),
+            available_profiles,
+            default_profile,
+            db_path: String::new(),
+            file_password: String::new(),
+            save_file_password: true,
+            server_type: "pocketbase".to_string(),
+            pb_url: "http://127.0.0.1:8090".to_string(),
+            pb_user: String::new(),
+            pb_pass: String::new(),
+            pb_auth_collection: "users".to_string(),
+            mmex_exe: String::new(),
+            default_mode: "run".to_string(),
+            last_sync: None,
+            force_mode: false,
+            verbose: false,
+            lang,
+            status_message: None,
+            logs: Vec::new(),
+            is_working: false,
+            tx,
+            rx,
+            dialog_new_profile: false,
+            new_profile_name: String::new(),
+            dialog_save_as: false,
+            save_as_name: String::new(),
+            dialog_rename_profile: false,
+            rename_profile_name: String::new(),
+            dialog_delete_confirm: false,
+            dialog_clear_db_confirm: false,
+            dialog_clear_server_confirm: false,
+            dialog_about: false,
+        };
+
+        app.load_profile_data(&app.active_profile.clone());
+        app.add_log(format!(
+            "Benvenuto in MMEX-Sync v0.3.0. Profilo attivo: {}",
+            app.active_profile
+        ));
+
+        app
+    }
+
+    pub fn set_language(&mut self, lang: Language) {
+        self.lang = lang;
+        crate::i18n::set_current_locale(lang);
+        let _ = self.config_mgr.set_language(lang.code());
+        self.add_log(self.lang.t_fmt("gui.log.language_changed", &[("lang", lang.display_name())]));
+    }
+
+    fn add_log(&mut self, text: String) {
+        let now: DateTime<Local> = SystemTime::now().into();
+        let formatted = format!("[{}] {}", now.format("%H:%M:%S"), text);
+        self.logs.push(formatted);
+        if self.logs.len() > 300 {
+            self.logs.remove(0);
+        }
+    }
+
+    fn refresh_profile_list(&mut self) {
+        self.available_profiles = self.config_mgr.list_profiles().unwrap_or_default();
+        if let Ok(def) = self.config_mgr.get_default_profile() {
+            self.default_profile = def;
+        }
+    }
+
+    fn load_profile_data(&mut self, profile_name: &str) {
+        if let Ok(p) = self.config_mgr.load_profile(profile_name) {
+            self.active_profile = profile_name.to_string();
+            self.db_path = p.db_path.unwrap_or_default();
+            self.server_type = p.server_type.unwrap_or_else(|| "pocketbase".to_string());
+            self.pb_url = p.pb_url.unwrap_or_else(|| "http://127.0.0.1:8090".to_string());
+            self.pb_user = p.pb_user.unwrap_or_default();
+            self.pb_auth_collection = p
+                .pb_auth_collection
+                .unwrap_or_else(|| "users".to_string());
+            self.mmex_exe = p.mmex_exe.unwrap_or_default();
+            self.default_mode = p.default_mode.unwrap_or_else(|| "run".to_string());
+            self.last_sync = p.last_sync;
+
+            self.save_file_password = p
+                .save_password
+                .as_deref()
+                .map(|v| !matches!(v.to_lowercase().as_str(), "no" | "false" | "n"))
+                .unwrap_or(true);
+
+            if let Some(enc_pwd) = p.encrypted_file_password {
+                self.file_password = unprotect(&enc_pwd, None).ok().flatten().unwrap_or_default();
+            } else {
+                self.file_password.clear();
+            }
+
+            self.pb_pass.clear();
+            self.add_log(self.lang.t_fmt("gui.log.profile_loaded", &[("name", profile_name)]));
+        } else {
+            self.add_log(self.lang.t_fmt("gui.log.profile_load_failed", &[("name", profile_name)]));
+        }
+    }
+
+    fn save_current_profile(&mut self) {
+        let mut p = self
+            .config_mgr
+            .load_profile(&self.active_profile)
+            .unwrap_or_default();
+
+        p.db_path = if self.db_path.trim().is_empty() {
+            None
+        } else {
+            Some(self.db_path.trim().to_string())
+        };
+
+        p.server_type = Some(self.server_type.clone());
+        p.pb_url = Some(self.pb_url.trim().to_string());
+        p.pb_user = if self.pb_user.trim().is_empty() {
+            None
+        } else {
+            Some(self.pb_user.trim().to_string())
+        };
+        p.pb_auth_collection = if self.pb_auth_collection.trim().is_empty() {
+            None
+        } else {
+            Some(self.pb_auth_collection.trim().to_string())
+        };
+        p.mmex_exe = if self.mmex_exe.trim().is_empty() {
+            None
+        } else {
+            Some(self.mmex_exe.trim().to_string())
+        };
+        p.default_mode = Some(self.default_mode.clone());
+        p.save_password = Some(if self.save_file_password { "yes" } else { "no" }.to_string());
+
+        if self.save_file_password && !self.file_password.is_empty() {
+            if let Ok(enc) = protect(&self.file_password, None) {
+                p.encrypted_file_password = Some(enc);
+            }
+        } else if !self.save_file_password {
+            p.encrypted_file_password = None;
+        }
+
+        match self.config_mgr.save_profile(&self.active_profile, &p) {
+            Ok(_) => {
+                self.status_message = Some((
+                    self.lang.msg_profile_saved().to_string(),
+                    false,
+                ));
+                self.add_log(self.lang.t_fmt("gui.log.profile_saved", &[("name", &self.active_profile)]));
+                self.refresh_profile_list();
+            }
+            Err(e) => {
+                self.status_message = Some((format!("{}: {}", self.lang.msg_error(), e), true));
+                self.add_log(self.lang.t_fmt("gui.log.profile_save_failed", &[("error", &e.to_string())]));
+            }
+        }
+    }
+
+    fn trigger_sync_async(&mut self, push: bool, pull: bool) {
+        if self.is_working {
+            return;
+        }
+
+        if self.db_path.trim().is_empty() {
+            self.status_message = Some((
+                self.lang.t("gui.msg.db_path_required").to_string(),
+                true,
+            ));
+            return;
+        }
+
+        self.save_current_profile();
+        self.is_working = true;
+        self.status_message = Some((self.lang.msg_sync_running().to_string(), false));
+
+        let tx = self.tx.clone();
+        let db_path = expand_tilde(Path::new(self.db_path.trim()));
+        let file_password = if self.file_password.is_empty() {
+            None
+        } else {
+            Some(self.file_password.clone())
+        };
+        let server_type = self.server_type.clone();
+        let url = self.pb_url.trim().to_string();
+        let user = if self.pb_user.trim().is_empty() {
+            None
+        } else {
+            Some(self.pb_user.trim().to_string())
+        };
+        let pass = if self.pb_pass.is_empty() {
+            None
+        } else {
+            Some(self.pb_pass.clone())
+        };
+        let last_sync = self.last_sync.clone();
+        let force = self.force_mode;
+        let verbose = self.verbose;
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::Status {
+                        message: crate::i18n::t_fmt("gui.msg.tokio_runtime_error", &[("error", &e.to_string())]),
+                        is_error: true,
+                    });
+                    let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                    "gui.log.db_open",
+                    &[("path", &db_path.display().to_string())],
+                )));
+
+                let mut db = match DatabaseService::connect(
+                    &db_path,
+                    verbose,
+                    file_password.as_deref(),
+                    false,
+                ) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::Status {
+                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                            is_error: true,
+                        });
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.db_open_error", &[("error", &e.to_string())])));
+                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                        return;
+                    }
+                };
+
+                let mut remote = match create_remote_server(&server_type, &url) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::Status {
+                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                            is_error: true,
+                        });
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.remote_error", &[("error", &e.to_string())])));
+                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                        return;
+                    }
+                };
+
+                if let (Some(u), Some(p)) = (&user, &pass) {
+                    let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.remote_auth", &[("user", u)])));
+                    if let Err(e) = remote.authenticate(u, p).await {
+                        let _ = tx.send(GuiEvent::Status {
+                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                            is_error: true,
+                        });
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.remote_auth_failed", &[("error", &e.to_string())])));
+                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                        return;
+                    }
+                }
+
+                let options = SyncOptions {
+                    init: true,
+                    push,
+                    pull,
+                    force,
+                    verbose,
+                };
+
+                let mut engine = SyncEngine::new(&mut db, remote.as_mut(), options, last_sync);
+
+                match engine.run_cycle().await {
+                    Ok((stats, new_ts)) => {
+                        let summary = crate::i18n::t_fmt(
+                            "gui.log.sync_success",
+                            &[
+                                ("pushed", &stats.pushed_records.to_string()),
+                                ("pulled", &stats.pulled_records.to_string()),
+                                ("deleted", &stats.deleted_records.to_string()),
+                                ("conflicts", &stats.conflicts_resolved.to_string()),
+                            ],
+                        );
+                        let _ = tx.send(GuiEvent::Log(format!("✅ {}", summary)));
+                        let _ = tx.send(GuiEvent::Status {
+                            message: summary,
+                            is_error: false,
+                        });
+                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: new_ts });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.sync_error", &[("error", &e.to_string())])));
+                        let _ = tx.send(GuiEvent::Status {
+                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                            is_error: true,
+                        });
+                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                    }
+                }
+            });
+        });
+    }
+
+    fn trigger_test_connection_async(&mut self) {
+        if self.is_working {
+            return;
+        }
+
+        self.is_working = true;
+        self.status_message = Some((self.lang.t("gui.msg.test_in_progress").to_string(), false));
+
+        let tx = self.tx.clone();
+        let server_type = self.server_type.clone();
+        let url = self.pb_url.trim().to_string();
+        let user = self.pb_user.trim().to_string();
+        let pass = self.pb_pass.clone();
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::TestFinished {
+                        success: false,
+                        message: format!("Runtime error: {}", e),
+                    });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let mut remote = match create_remote_server(&server_type, &url) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::TestFinished {
+                            success: false,
+                            message: format!("Errore configurazione client: {}", e),
+                        });
+                        return;
+                    }
+                };
+
+                let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.test_endpoint", &[("url", &url)])));
+
+                if user.is_empty() || pass.is_empty() {
+                    let _ = tx.send(GuiEvent::TestFinished {
+                        success: false,
+                        message: crate::i18n::t("gui.msg.test_credentials_required").to_string(),
+                    });
+                    return;
+                }
+
+                match remote.authenticate(&user, &pass).await {
+                    Ok(auth) => {
+                        let uid = auth.user_id.as_deref().unwrap_or("-");
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                            "gui.log.remote_auth_success",
+                            &[("uid", uid)],
+                        )));
+                        let _ = tx.send(GuiEvent::TestFinished {
+                            success: true,
+                            message: crate::i18n::t_fmt("gui.msg.test_success", &[("uid", uid)]),
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.test_error", &[("error", &e.to_string())])));
+                        let _ = tx.send(GuiEvent::TestFinished {
+                            success: false,
+                            message: crate::i18n::t_fmt("gui.log.remote_auth_failed", &[("error", &e.to_string())]),
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    fn trigger_clear_db_async(&mut self) {
+        if self.is_working || self.db_path.trim().is_empty() {
+            return;
+        }
+        self.is_working = true;
+        let tx = self.tx.clone();
+        let db_path = expand_tilde(Path::new(self.db_path.trim()));
+        let file_password = if self.file_password.is_empty() {
+            None
+        } else {
+            Some(self.file_password.clone())
+        };
+
+        std::thread::spawn(move || {
+            let mut db = match DatabaseService::connect(&db_path, false, file_password.as_deref(), false) {
+                Ok(d) => d,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("Errore apertura DB: {}", e),
+                    });
+                    return;
+                }
+            };
+
+            match db.clear_technical() {
+                Ok(_) => {
+                    let _ = tx.send(GuiEvent::Log(crate::i18n::t("gui.log.clear_db_success").to_string()));
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: true,
+                        message: crate::i18n::t("gui.msg.clear_db_success").to_string(),
+                    });
+                }
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                    });
+                }
+            }
+        });
+    }
+
+    fn trigger_clear_server_async(&mut self) {
+        if self.is_working {
+            return;
+        }
+        self.is_working = true;
+        let tx = self.tx.clone();
+        let server_type = self.server_type.clone();
+        let url = self.pb_url.trim().to_string();
+        let user = self.pb_user.trim().to_string();
+        let pass = self.pb_pass.clone();
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("Runtime error: {}", e),
+                    });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let mut remote = match create_remote_server(&server_type, &url) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::ClearFinished {
+                            success: false,
+                            message: format!("Errore client: {}", e),
+                        });
+                        return;
+                    }
+                };
+
+                if let Err(e) = remote.authenticate(&user, &pass).await {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("Autenticazione fallita: {}", e),
+                    });
+                    return;
+                }
+
+                match remote.clear_remote_server(SYNC_ORDER).await {
+                    Ok(_) => {
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t("gui.log.clear_server_success").to_string()));
+                        let _ = tx.send(GuiEvent::ClearFinished {
+                            success: true,
+                            message: crate::i18n::t("gui.msg.clear_server_success").to_string(),
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::ClearFinished {
+                            success: false,
+                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    fn drain_events(&mut self) {
+        while let Ok(event) = self.rx.try_recv() {
+            match event {
+                GuiEvent::Log(msg) => self.add_log(msg),
+                GuiEvent::Status { message, is_error } => {
+                    self.status_message = Some((message, is_error));
+                }
+                GuiEvent::SyncFinished { last_sync } => {
+                    self.is_working = false;
+                    if let Some(ts) = last_sync {
+                        self.last_sync = Some(ts.clone());
+                        if let Ok(mut p) = self.config_mgr.load_profile(&self.active_profile) {
+                            p.last_sync = Some(ts);
+                            let _ = self.config_mgr.save_profile(&self.active_profile, &p);
+                        }
+                    }
+                }
+                GuiEvent::TestFinished { success, message } => {
+                    self.is_working = false;
+                    self.status_message = Some((message, !success));
+                }
+                GuiEvent::ClearFinished { success, message } => {
+                    self.is_working = false;
+                    self.status_message = Some((message, !success));
+                }
+            }
+        }
+    }
+}
+
+impl eframe::App for MmexSyncGuiApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.drain_events();
+
+        // 1. TOP MENU BAR (Classica Desktop)
+        egui::TopBottomPanel::top("top_menu_bar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                // MENU PROFILI
+                ui.menu_button(self.lang.menu_profiles(), |ui| {
+                    if ui.button(self.lang.menu_profile_new()).clicked() {
+                        self.new_profile_name.clear();
+                        self.dialog_new_profile = true;
+                        ui.close_menu();
+                    }
+
+                    ui.menu_button(self.lang.menu_profile_open(), |ui| {
+                        let profiles = self.available_profiles.clone();
+                        for prof in profiles {
+                            let is_current = prof == self.active_profile;
+                            let label = if is_current {
+                                format!("✓ {}", prof)
+                            } else {
+                                format!("  {}", prof)
+                            };
+                            if ui.button(label).clicked() {
+                                self.save_current_profile();
+                                self.load_profile_data(&prof);
+                                ui.close_menu();
+                            }
+                        }
+                    });
+
+                    ui.separator();
+
+                    if ui.button(self.lang.menu_profile_save()).clicked() {
+                        self.save_current_profile();
+                        ui.close_menu();
+                    }
+
+                    if ui.button(self.lang.menu_profile_save_as()).clicked() {
+                        self.save_as_name = format!("{}_copy", self.active_profile);
+                        self.dialog_save_as = true;
+                        ui.close_menu();
+                    }
+
+                    if ui.button(self.lang.menu_profile_rename()).clicked() {
+                        self.rename_profile_name = self.active_profile.clone();
+                        self.dialog_rename_profile = true;
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    let is_already_default = self.active_profile == self.default_profile;
+                    if ui
+                        .add_enabled(!is_already_default, egui::Button::new(self.lang.menu_profile_set_default()))
+                        .clicked()
+                    {
+                        let _ = self.config_mgr.set_default_profile(&self.active_profile);
+                        self.default_profile = self.active_profile.clone();
+                        self.add_log(self.lang.t_fmt("gui.log.profile_default_set", &[("name", &self.active_profile)]));
+                        ui.close_menu();
+                    }
+
+                    if ui.button(self.lang.menu_profile_delete()).clicked() {
+                        self.dialog_delete_confirm = true;
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    if ui.button(self.lang.menu_profile_exit()).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+
+                // MENU MODIFICA
+                ui.menu_button(self.lang.menu_edit(), |ui| {
+                    if ui.button(self.lang.menu_edit_db()).clicked() {
+                        if let Some(file) = rfd::FileDialog::new()
+                            .add_filter("MMEX Database", &["mmb", "emb"])
+                            .pick_file()
+                        {
+                            self.db_path = file.to_string_lossy().to_string();
+                        }
+                        ui.close_menu();
+                    }
+
+                    if ui.button(self.lang.menu_edit_exe()).clicked() {
+                        if let Some(file) = rfd::FileDialog::new().pick_file() {
+                            self.mmex_exe = file.to_string_lossy().to_string();
+                        }
+                        ui.close_menu();
+                    }
+                });
+
+                // MENU SINCRONIZZAZIONE (con switch "Force Mode")
+                ui.menu_button(self.lang.menu_sync(), |ui| {
+                    if ui
+                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_all()))
+                        .clicked()
+                    {
+                        self.trigger_sync_async(true, true);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_push()))
+                        .clicked()
+                    {
+                        self.trigger_sync_async(true, false);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_pull()))
+                        .clicked()
+                    {
+                        self.trigger_sync_async(false, true);
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    if ui
+                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_test()))
+                        .clicked()
+                    {
+                        self.trigger_test_connection_async();
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    // Switch "Usa Modalità Forzata (Force Mode)"
+                    ui.checkbox(&mut self.force_mode, self.lang.menu_sync_force_mode());
+                });
+
+                // MENU PREFERENZE (Selezione Lingua IT / EN)
+                ui.menu_button(self.lang.menu_preferences(), |ui| {
+                    ui.label(self.lang.menu_preferences_lang());
+                    ui.separator();
+
+                    if ui
+                        .selectable_label(self.lang == Language::It, "🇮🇹 Italiano")
+                        .clicked()
+                    {
+                        self.set_language(Language::It);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .selectable_label(self.lang == Language::En, "🇬🇧 English")
+                        .clicked()
+                    {
+                        self.set_language(Language::En);
+                        ui.close_menu();
+                    }
+                });
+
+                // MENU STRUMENTI
+                ui.menu_button(self.lang.menu_tools(), |ui| {
+                    if ui
+                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_tools_clear_db()))
+                        .clicked()
+                    {
+                        self.dialog_clear_db_confirm = true;
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_tools_clear_server()))
+                        .clicked()
+                    {
+                        self.dialog_clear_server_confirm = true;
+                        ui.close_menu();
+                    }
+                });
+
+                // MENU AIUTO
+                ui.menu_button(self.lang.menu_help(), |ui| {
+                    if ui.button(self.lang.menu_help_about()).clicked() {
+                        self.dialog_about = true;
+                        ui.close_menu();
+                    }
+                });
+            });
+        });
+
+        // 2. STATUS BOTTOM BAR
+        egui::TopBottomPanel::bottom("bottom_status_bar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if self.is_working {
+                    ui.spinner();
+                    ui.label(self.lang.msg_operation_in_progress());
+                } else if let Some((msg, is_error)) = &self.status_message {
+                    if *is_error {
+                        ui.colored_label(egui::Color32::from_rgb(255, 90, 90), format!("⚠ {}", msg));
+                    } else {
+                        ui.colored_label(egui::Color32::from_rgb(90, 255, 120), format!("✓ {}", msg));
+                    }
+                } else {
+                    ui.label(self.lang.msg_ready());
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let ts_display = self.last_sync.as_deref().unwrap_or(self.lang.never());
+                    ui.label(format!("{} {}", self.lang.last_sync_label(), ts_display));
+                });
+            });
+        });
+
+        // 3. CENTRAL PANEL
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                // Header Profilo
+                ui.horizontal(|ui| {
+                    ui.heading(format!("{} {}", self.lang.active_profile_label(), self.active_profile));
+                    if self.active_profile == self.default_profile {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(100, 200, 255),
+                            format!("[{}]", self.lang.default_badge()),
+                        );
+                    }
+                });
+                ui.separator();
+
+                // Sezione 1: Database MMEX
+                ui.collapsing(self.lang.section_db(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(self.lang.field_db_path());
+                        ui.text_edit_singleline(&mut self.db_path);
+                        if ui.button(self.lang.btn_browse()).clicked() {
+                            if let Some(file) = rfd::FileDialog::new()
+                                .add_filter("MMEX Database", &["mmb", "emb"])
+                                .pick_file()
+                            {
+                                self.db_path = file.to_string_lossy().to_string();
+                            }
+                        }
+                    });
+
+                    let is_emb = self.db_path.to_lowercase().ends_with(".emb");
+                    if is_emb {
+                        ui.horizontal(|ui| {
+                            ui.label(self.lang.field_db_password());
+                            ui.add(egui::TextEdit::singleline(&mut self.file_password).password(true));
+                            ui.checkbox(&mut self.save_file_password, self.lang.field_save_password());
+                        });
+                    }
+                });
+
+                ui.add_space(6.0);
+
+                // Sezione 2: Server Remoto
+                ui.collapsing(self.lang.section_remote(), |ui| {
+                    egui::Grid::new("remote_grid")
+                        .num_columns(2)
+                        .spacing([12.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.label(self.lang.field_server_type());
+                            egui::ComboBox::from_id_salt("server_type_combo")
+                                .selected_text(&self.server_type)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.server_type,
+                                        "pocketbase".to_string(),
+                                        "PocketBase",
+                                    );
+                                });
+                            ui.end_row();
+
+                            ui.label(self.lang.field_server_url());
+                            ui.text_edit_singleline(&mut self.pb_url);
+                            ui.end_row();
+
+                            ui.label(self.lang.field_server_user());
+                            ui.text_edit_singleline(&mut self.pb_user);
+                            ui.end_row();
+
+                            ui.label(self.lang.field_server_password());
+                            ui.add(egui::TextEdit::singleline(&mut self.pb_pass).password(true));
+                            ui.end_row();
+
+                            ui.label(self.lang.field_auth_collection());
+                            ui.text_edit_singleline(&mut self.pb_auth_collection);
+                            ui.end_row();
+                        });
+                });
+
+                ui.add_space(6.0);
+
+                // Sezione 3: Runner & Esecuzione
+                ui.collapsing(self.lang.section_runner(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(self.lang.field_mmex_exe());
+                        ui.text_edit_singleline(&mut self.mmex_exe);
+                        if ui.button(self.lang.btn_browse()).clicked() {
+                            if let Some(file) = rfd::FileDialog::new().pick_file() {
+                                self.mmex_exe = file.to_string_lossy().to_string();
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label(self.lang.field_default_mode());
+                        egui::ComboBox::from_id_salt("default_mode_combo")
+                            .selected_text(&self.default_mode)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.default_mode, "run".to_string(), "Run (MMEX Launcher)");
+                                ui.selectable_value(&mut self.default_mode, "sync".to_string(), "Sync Only");
+                                ui.selectable_value(&mut self.default_mode, "watch".to_string(), "Watch File");
+                            });
+
+                        ui.checkbox(&mut self.force_mode, self.lang.toggle_force_mode());
+                        ui.checkbox(&mut self.verbose, self.lang.toggle_verbose());
+                    });
+                });
+
+                ui.add_space(10.0);
+
+                // Barra dei pulsanti primari
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .add_sized([180.0, 32.0], egui::Button::new(self.lang.btn_sync_full()))
+                        .clicked()
+                    {
+                        self.trigger_sync_async(true, true);
+                    }
+
+                    if ui
+                        .add_sized([120.0, 32.0], egui::Button::new(self.lang.btn_push_only()))
+                        .clicked()
+                    {
+                        self.trigger_sync_async(true, false);
+                    }
+
+                    if ui
+                        .add_sized([120.0, 32.0], egui::Button::new(self.lang.btn_pull_only()))
+                        .clicked()
+                    {
+                        self.trigger_sync_async(false, true);
+                    }
+
+                    if ui
+                        .add_sized([140.0, 32.0], egui::Button::new(self.lang.btn_test_conn()))
+                        .clicked()
+                    {
+                        self.trigger_test_connection_async();
+                    }
+
+                    if ui
+                        .add_sized([120.0, 32.0], egui::Button::new(self.lang.btn_save()))
+                        .clicked()
+                    {
+                        self.save_current_profile();
+                    }
+                });
+
+                ui.add_space(10.0);
+                ui.separator();
+
+                // Console di Log in tempo reale
+                ui.horizontal(|ui| {
+                    ui.label(self.lang.log_console_title());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button(self.lang.btn_clear_logs()).clicked() {
+                            self.logs.clear();
+                        }
+                    });
+                });
+
+                egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(160.0)
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
+                            for line in &self.logs {
+                                if line.contains("❌") || line.contains("Errore") {
+                                    ui.colored_label(egui::Color32::from_rgb(255, 100, 100), line);
+                                } else if line.contains("✅") {
+                                    ui.colored_label(egui::Color32::from_rgb(100, 255, 130), line);
+                                } else {
+                                    ui.monospace(line);
+                                }
+                            }
+                        });
+                });
+            });
+        });
+
+        // 4. DIALOGHI MODALI
+        self.render_dialogs(ctx);
+
+        if self.is_working {
+            ctx.request_repaint();
+        }
+    }
+}
+
+impl MmexSyncGuiApp {
+    fn render_dialogs(&mut self, ctx: &egui::Context) {
+        // Dialog Nuovo Profilo
+        if self.dialog_new_profile {
+            egui::Window::new(self.lang.dialog_new_profile_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.dialog_name_prompt());
+                    ui.text_edit_singleline(&mut self.new_profile_name);
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            let name = self.new_profile_name.trim().to_string();
+                            if !name.is_empty() {
+                                let empty_profile = ProfileConfig::default();
+                                if self.config_mgr.save_profile(&name, &empty_profile).is_ok() {
+                                    self.refresh_profile_list();
+                                    self.load_profile_data(&name);
+                                }
+                            }
+                            self.dialog_new_profile = false;
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_new_profile = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Salva con nome
+        if self.dialog_save_as {
+            egui::Window::new(self.lang.dialog_save_as_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.dialog_name_prompt());
+                    ui.text_edit_singleline(&mut self.save_as_name);
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            let name = self.save_as_name.trim().to_string();
+                            if !name.is_empty() {
+                                self.active_profile = name;
+                                self.save_current_profile();
+                            }
+                            self.dialog_save_as = false;
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_save_as = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Rinomina Profilo
+        if self.dialog_rename_profile {
+            egui::Window::new(self.lang.dialog_rename_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.dialog_name_prompt());
+                    ui.text_edit_singleline(&mut self.rename_profile_name);
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            let new_name = self.rename_profile_name.trim().to_string();
+                            if !new_name.is_empty()
+                                && new_name != self.active_profile
+                                && self.config_mgr.rename_profile(&self.active_profile, &new_name).is_ok()
+                            {
+                                self.active_profile = new_name;
+                                self.refresh_profile_list();
+                            }
+                            self.dialog_rename_profile = false;
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_rename_profile = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Conferma Eliminazione
+        if self.dialog_delete_confirm {
+            egui::Window::new(self.lang.dialog_delete_confirm_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.dialog_delete_confirm_msg(&self.active_profile));
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            let _ = self.config_mgr.delete_profile(&self.active_profile);
+                            self.refresh_profile_list();
+                            let fallback = self.default_profile.clone();
+                            self.load_profile_data(&fallback);
+                            self.dialog_delete_confirm = false;
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_delete_confirm = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Conferma Pulizia DB Locale
+        if self.dialog_clear_db_confirm {
+            egui::Window::new(self.lang.dialog_clear_db_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.dialog_clear_db_msg());
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            self.dialog_clear_db_confirm = false;
+                            self.trigger_clear_db_async();
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_clear_db_confirm = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Conferma Pulizia Server Remoto
+        if self.dialog_clear_server_confirm {
+            egui::Window::new(self.lang.dialog_clear_server_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.colored_label(egui::Color32::from_rgb(255, 90, 90), self.lang.dialog_clear_server_msg());
+                    ui.horizontal(|ui| {
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            self.dialog_clear_server_confirm = false;
+                            self.trigger_clear_server_async();
+                        }
+                        if ui.button(self.lang.btn_cancel()).clicked() {
+                            self.dialog_clear_server_confirm = false;
+                        }
+                    });
+                });
+        }
+
+        // Dialog Informazioni (About)
+        if self.dialog_about {
+            egui::Window::new(self.lang.about_title())
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(self.lang.about_content());
+                    ui.separator();
+                    if ui.button(self.lang.btn_close()).clicked() {
+                        self.dialog_about = false;
+                    }
+                });
+        }
+    }
+}

@@ -5,24 +5,32 @@ on:
     branches:
       - main
       - stable
+      - rust
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Execute Automated Test Suite
+    name: Execute Automated Rust Test Suite
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout del codice
         uses: actions/checkout@v4
 
-      - name: Configurazione Node.js (v22 LTS)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22 # Aggiornato alla versione LTS stabile con pieno supporto a node:sqlite
-          cache: 'npm'
+      - name: Install Linux GUI & C dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libgtk-3-dev
 
-      - name: Installazione dipendenze (Rigorosa per CI)
-        run: npm ci
+      - name: Configurazione Toolchain Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Esecuzione Test Suite (Jest)
-        run: npm test
+      - name: Cache dipendenze Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verifica compilazione e Test Suite (Cargo)
+        run: cargo test --all-targets --locked
