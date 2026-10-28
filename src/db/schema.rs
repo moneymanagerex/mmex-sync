@@ -31,10 +31,7 @@ pub fn inspect_table_columns(
             pk = name.clone();
         }
 
-        if matches!(
-            name.as_str(),
-            "pb_id" | "pb_is_dirty" | "pb_updated_at"
-        ) {
+        if matches!(name.as_str(), "pb_id" | "pb_is_dirty" | "pb_updated_at") {
             tech_fields.push(name);
         } else if is_pk != 1 {
             fields.push(name);
@@ -90,7 +87,10 @@ pub fn init_sync_schema(conn: &mut Connection) -> Result<(), SyncError> {
             "{}",
             crate::i18n::t_fmt(
                 "db.schema_upgrading",
-                &[("current", &current_v_num.to_string()), ("target", &target_v_num.to_string())]
+                &[
+                    ("current", &current_v_num.to_string()),
+                    ("target", &target_v_num.to_string())
+                ]
             )
         );
         for table in SYNC_ORDER {
@@ -101,7 +101,13 @@ pub fn init_sync_schema(conn: &mut Connection) -> Result<(), SyncError> {
             "UPDATE pb_sync_info SET VAL = ? WHERE KEY = 'VERSION'",
             [CURRENT_SYNC_VERSION],
         )?;
-        info!("{}", crate::i18n::t_fmt("db.schema_updated", &[("target", &target_v_num.to_string())]));
+        info!(
+            "{}",
+            crate::i18n::t_fmt(
+                "db.schema_updated",
+                &[("target", &target_v_num.to_string())]
+            )
+        );
     }
 
     // 2. Tabella di log delle cancellazioni locali
@@ -215,8 +221,14 @@ pub fn clear_technical_schema(conn: &mut Connection) -> Result<(), SyncError> {
 
         // 2. Rimozione colonne tecniche
         let _ = tx.execute(&format!("ALTER TABLE {} DROP COLUMN pb_id", table), []);
-        let _ = tx.execute(&format!("ALTER TABLE {} DROP COLUMN pb_is_dirty", table), []);
-        let _ = tx.execute(&format!("ALTER TABLE {} DROP COLUMN pb_updated_at", table), []);
+        let _ = tx.execute(
+            &format!("ALTER TABLE {} DROP COLUMN pb_is_dirty", table),
+            [],
+        );
+        let _ = tx.execute(
+            &format!("ALTER TABLE {} DROP COLUMN pb_updated_at", table),
+            [],
+        );
     }
 
     // 3. Rimozione tabelle tecniche

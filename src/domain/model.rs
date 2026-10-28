@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Stato di sincronizzazione della colonna pb_is_dirty
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

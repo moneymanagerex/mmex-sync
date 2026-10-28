@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 use crate::cli::CliArgs;
 use crate::error::SyncError;
@@ -46,7 +46,10 @@ pub struct ProfileConfig {
     #[serde(rename = "encryptedToken", skip_serializing_if = "Option::is_none")]
     pub encrypted_token: Option<String>,
 
-    #[serde(rename = "encryptedFilePassword", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "encryptedFilePassword",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub encrypted_file_password: Option<String>,
 
     #[serde(rename = "mmexExe", skip_serializing_if = "Option::is_none")]
@@ -120,9 +123,8 @@ pub struct EffectiveConfig {
 
 /// Restituisce la directory di configurazione dell'utente
 pub fn get_config_dir() -> Result<PathBuf, SyncError> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        SyncError::Config(crate::i18n::t("errors.home_not_found").to_string())
-    })?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| SyncError::Config(crate::i18n::t("errors.home_not_found").to_string()))?;
 
     let dir = if cfg!(target_os = "windows") {
         dirs::data_dir()
@@ -259,7 +261,11 @@ impl ConfigManager {
         Ok(profile)
     }
 
-    pub fn save_profile(&self, profile_name: &str, config: &ProfileConfig) -> Result<(), SyncError> {
+    pub fn save_profile(
+        &self,
+        profile_name: &str,
+        config: &ProfileConfig,
+    ) -> Result<(), SyncError> {
         let path = self.profile_path(profile_name);
         let content = serde_json::to_string_pretty(config)?;
         fs::write(path, content)?;
@@ -322,9 +328,7 @@ impl ConfigManager {
             .clone()
             .or_else(|| profile.db_path.map(PathBuf::from))
             .ok_or_else(|| {
-                SyncError::Config(
-                    crate::i18n::t("errors.db_path_not_specified").to_string(),
-                )
+                SyncError::Config(crate::i18n::t("errors.db_path_not_specified").to_string())
             })?;
         let db_path = expand_tilde(&db_path_raw);
 
@@ -429,7 +433,8 @@ mod tests {
         assert!(!args_default.cli);
         assert!(!args_default.gui);
 
-        let args_cli = CliArgs::try_parse_from(["mmex-sync", "--cli", "--sync"]).expect("parse --cli");
+        let args_cli =
+            CliArgs::try_parse_from(["mmex-sync", "--cli", "--sync"]).expect("parse --cli");
         assert!(args_cli.cli);
         assert!(!args_cli.gui);
 

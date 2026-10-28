@@ -30,7 +30,9 @@ impl fmt::Display for SyncError {
             SyncError::Network(err) => {
                 crate::i18n::t_fmt("errors.network", &[("error", &err.to_string())])
             }
-            SyncError::Json(err) => crate::i18n::t_fmt("errors.json", &[("error", &err.to_string())]),
+            SyncError::Json(err) => {
+                crate::i18n::t_fmt("errors.json", &[("error", &err.to_string())])
+            }
             SyncError::Crypto(err) => crate::i18n::t_fmt("errors.crypto", &[("error", err)]),
             SyncError::RemoteAuth(err) => {
                 crate::i18n::t_fmt("errors.remote_auth", &[("error", err)])

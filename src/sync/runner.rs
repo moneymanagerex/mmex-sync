@@ -58,8 +58,13 @@ impl<'a> SyncRunner<'a> {
 
     /// Esegue la modalità operativa richiesta
     pub async fn run(mut self, requested_mode: Option<&str>) -> Result<(), SyncError> {
-        let mode = requested_mode.unwrap_or(self.default_mode.as_str()).to_lowercase();
-        info!("{}", crate::i18n::t_fmt("sync.runner_start_mode", &[("mode", &mode.to_uppercase())]));
+        let mode = requested_mode
+            .unwrap_or(self.default_mode.as_str())
+            .to_lowercase();
+        info!(
+            "{}",
+            crate::i18n::t_fmt("sync.runner_start_mode", &[("mode", &mode.to_uppercase())])
+        );
 
         match mode.as_str() {
             "run" => self.execute_run_mode().await,
@@ -102,13 +107,28 @@ impl<'a> SyncRunner<'a> {
         info!("{}", crate::i18n::t("sync.pre_sync_start"));
         self.execute_sync_mode().await?;
 
-        info!("{}", crate::i18n::t_fmt("sync.mmex_process_start", &[("exe", &exe.display().to_string()), ("db", &self.db_path.display().to_string())]));
+        info!(
+            "{}",
+            crate::i18n::t_fmt(
+                "sync.mmex_process_start",
+                &[
+                    ("exe", &exe.display().to_string()),
+                    ("db", &self.db_path.display().to_string())
+                ]
+            )
+        );
         let status = Command::new(exe)
             .arg(self.db_path)
             .status()
             .map_err(SyncError::Io)?;
 
-        info!("{}", crate::i18n::t_fmt("sync.mmex_process_finished", &[("status", &status.to_string())]));
+        info!(
+            "{}",
+            crate::i18n::t_fmt(
+                "sync.mmex_process_finished",
+                &[("status", &status.to_string())]
+            )
+        );
         self.execute_sync_mode().await?;
 
         Ok(())
@@ -128,13 +148,17 @@ impl<'a> SyncRunner<'a> {
 
         info!("{}", crate::i18n::t("sync.watch_active"));
 
-        let mut last_modified = std::fs::metadata(self.db_path).and_then(|m| m.modified()).ok();
+        let mut last_modified = std::fs::metadata(self.db_path)
+            .and_then(|m| m.modified())
+            .ok();
         let check_interval = Duration::from_secs(3);
 
         loop {
             sleep(check_interval).await;
 
-            let current_mod = std::fs::metadata(self.db_path).and_then(|m| m.modified()).ok();
+            let current_mod = std::fs::metadata(self.db_path)
+                .and_then(|m| m.modified())
+                .ok();
             if current_mod != last_modified && current_mod.is_some() {
                 info!("{}", crate::i18n::t("sync.watch_file_changed"));
                 last_modified = current_mod;

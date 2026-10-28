@@ -8,10 +8,7 @@ pub enum ConflictResolutionAction {
     /// Mantieni la versione locale (es. timestamp locale più recente)
     KeepLocal,
     /// Sostituisci il record locale riallineando il Primary Key e propagando a cascata le Foreign Key
-    ReplaceAndCascadeFk {
-        old_pk: i64,
-        new_pk: i64,
-    },
+    ReplaceAndCascadeFk { old_pk: i64, new_pk: i64 },
 }
 
 /// Helper di risoluzione conflitti basato su timestamp ISO-8601 UTC

@@ -5,7 +5,8 @@ use std::path::PathBuf;
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "macos" {
-        let has_system_cf = PathBuf::from("/System/Library/Frameworks/CoreFoundation.framework").exists();
+        let has_system_cf =
+            PathBuf::from("/System/Library/Frameworks/CoreFoundation.framework").exists();
         let has_sdkroot = env::var_os("SDKROOT").is_some();
 
         // Quando si effettua cross-compilazione da Linux/Windows verso macOS con cargo-zigbuild
@@ -14,7 +15,8 @@ fn main() {
         if !has_system_cf && !has_sdkroot {
             let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR non impostato"));
             let cf_dir = out_dir.join("Frameworks").join("CoreFoundation.framework");
-            fs::create_dir_all(&cf_dir).expect("Impossibile creare directory CoreFoundation.framework");
+            fs::create_dir_all(&cf_dir)
+                .expect("Impossibile creare directory CoreFoundation.framework");
 
             let tbd_content = "--- !tapi-tbd
 tbd-version:     4
@@ -49,4 +51,3 @@ exports:
         }
     }
 }
-

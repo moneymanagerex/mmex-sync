@@ -1,11 +1,11 @@
-use std::fs::{self, OpenOptions};
-use std::path::{Path, PathBuf};
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::prelude::*;
 use rand::{rngs::OsRng, RngCore};
+use std::fs::{self, OpenOptions};
+use std::path::{Path, PathBuf};
 
 use crate::config::get_config_dir;
 use crate::error::SyncError;
@@ -72,17 +72,26 @@ pub fn protect(text: &str, config_dir: Option<&Path>) -> Result<String, SyncErro
     let mut iv = [0u8; IV_LENGTH];
     OsRng.fill_bytes(&mut iv);
 
-    let cipher = Aes256Gcm::new_from_slice(&master_key)
-        .map_err(|e| SyncError::Crypto(crate::i18n::t_fmt("crypto.aes_gcm_init_failed", &[("error", &e.to_string())])))?;
+    let cipher = Aes256Gcm::new_from_slice(&master_key).map_err(|e| {
+        SyncError::Crypto(crate::i18n::t_fmt(
+            "crypto.aes_gcm_init_failed",
+            &[("error", &e.to_string())],
+        ))
+    })?;
 
     let nonce = Nonce::from_slice(&iv);
-    let ciphertext_with_tag = cipher
-        .encrypt(nonce, text.as_bytes())
-        .map_err(|e| SyncError::Crypto(crate::i18n::t_fmt("crypto.gcm_encryption_failed", &[("error", &e.to_string())])))?;
+    let ciphertext_with_tag = cipher.encrypt(nonce, text.as_bytes()).map_err(|e| {
+        SyncError::Crypto(crate::i18n::t_fmt(
+            "crypto.gcm_encryption_failed",
+            &[("error", &e.to_string())],
+        ))
+    })?;
 
     // In aes-gcm il tag di 16 byte è accodato al ciphertext
     if ciphertext_with_tag.len() < TAG_LENGTH {
-        return Err(SyncError::Crypto(crate::i18n::t("crypto.invalid_ciphertext_len").to_string()));
+        return Err(SyncError::Crypto(
+            crate::i18n::t("crypto.invalid_ciphertext_len").to_string(),
+        ));
     }
 
     let split_pos = ciphertext_with_tag.len() - TAG_LENGTH;
@@ -93,7 +102,10 @@ pub fn protect(text: &str, config_dir: Option<&Path>) -> Result<String, SyncErro
     let tag_b64 = BASE64_STANDARD.encode(tag);
     let data_b64 = BASE64_STANDARD.encode(ciphertext);
 
-    Ok(format!("{}:{}:{}:{}", PAYLOAD_PREFIX, iv_b64, tag_b64, data_b64))
+    Ok(format!(
+        "{}:{}:{}:{}",
+        PAYLOAD_PREFIX, iv_b64, tag_b64, data_b64
+    ))
 }
 
 /// Decifra un payload cifrato `v1:<iv_b64>:<tag_b64>:<ciphertext_b64>`
@@ -123,8 +135,12 @@ pub fn unprotect(payload: &str, config_dir: Option<&Path>) -> Result<Option<Stri
     };
 
     let master_key = get_or_create_master_key(config_dir)?;
-    let cipher = Aes256Gcm::new_from_slice(&master_key)
-        .map_err(|e| SyncError::Crypto(crate::i18n::t_fmt("crypto.aes_gcm_init_failed", &[("error", &e.to_string())])))?;
+    let cipher = Aes256Gcm::new_from_slice(&master_key).map_err(|e| {
+        SyncError::Crypto(crate::i18n::t_fmt(
+            "crypto.aes_gcm_init_failed",
+            &[("error", &e.to_string())],
+        ))
+    })?;
 
     let nonce = Nonce::from_slice(&iv);
 
@@ -181,14 +197,8 @@ mod tests {
         let enc2 = protect(secret, Some(dir.path())).expect("protect 2");
         assert_ne!(enc1, enc2);
 
-        assert_eq!(
-            unprotect(&enc1, Some(dir.path())).unwrap().unwrap(),
-            secret
-        );
-        assert_eq!(
-            unprotect(&enc2, Some(dir.path())).unwrap().unwrap(),
-            secret
-        );
+        assert_eq!(unprotect(&enc1, Some(dir.path())).unwrap().unwrap(), secret);
+        assert_eq!(unprotect(&enc2, Some(dir.path())).unwrap().unwrap(), secret);
     }
 
     #[test]

@@ -21,19 +21,16 @@ pub const SYNC_ORDER: &[&str] = &[
     "TAG_V1",
     "BUDGETYEAR_V1",
     "CUSTOMFIELD_V1",
-
     // Livello 2: Anagrafiche primarie (dipendono dal Livello 1)
     "CATEGORY_V1",
     "PAYEE_V1",
     "ACCOUNTLIST_V1",
-
     // Livello 3: Entità principali e asset (dipendono dal Livello 2)
     "ASSETS_V1",
     "STOCK_V1",
     "CHECKINGACCOUNT_V1",
     "BILLSDEPOSITS_V1",
     "BUDGETTABLE_V1",
-
     // Livello 4: Dettagli transazioni e storico (dipendono dal Livello 3)
     "SPLITTRANSACTIONS_V1",
     "BUDGETSPLITTRANSACTIONS_V1",
@@ -87,7 +84,13 @@ pub fn get_table_config(table: &str) -> Option<TableConfig> {
         "PAYEE_V1" => Some(TableConfig {
             pk: "PAYEEID",
             fields: &[
-                "PAYEENAME", "CATEGID", "NUMBER", "WEBSITE", "NOTES", "ACTIVE", "PATTERN",
+                "PAYEENAME",
+                "CATEGID",
+                "NUMBER",
+                "WEBSITE",
+                "NOTES",
+                "ACTIVE",
+                "PATTERN",
             ],
             unique: &[UniqueConstraint::Single("PAYEENAME")],
         }),

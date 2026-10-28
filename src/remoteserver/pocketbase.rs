@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use async_trait::async_trait;
 use base64::prelude::*;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
+use std::collections::HashMap;
 use tracing::{debug, info};
 
 use crate::domain::model::RemoteRecord;
@@ -49,9 +49,7 @@ pub struct PocketBaseClient {
 impl PocketBaseClient {
     pub fn new(url: &str) -> Result<Self, SyncError> {
         let trimmed_url = url.trim_end_matches('/').to_string();
-        let client = Client::builder()
-            .build()
-            .map_err(SyncError::Network)?;
+        let client = Client::builder().build().map_err(SyncError::Network)?;
 
         Ok(Self {
             client,
@@ -95,7 +93,15 @@ impl PocketBaseClient {
 
         let mut fields = HashMap::new();
         for (k, v) in obj {
-            if !matches!(k.as_str(), "id" | "collectionId" | "collectionName" | "created" | "updated" | "_is_deleted" | "_updated_at") {
+            if !matches!(
+                k.as_str(),
+                "id" | "collectionId"
+                    | "collectionName"
+                    | "created"
+                    | "updated"
+                    | "_is_deleted"
+                    | "_updated_at"
+            ) {
                 fields.insert(k.clone(), v.clone());
             }
         }
@@ -115,18 +121,16 @@ impl PocketBaseClient {
         user: &str,
         pass: &str,
     ) -> Result<AuthResponse, SyncError> {
-        let url = format!("{}/api/collections/{}/auth-with-password", self.base_url, collection);
+        let url = format!(
+            "{}/api/collections/{}/auth-with-password",
+            self.base_url, collection
+        );
         let body = serde_json::json!({
             "identity": user,
             "password": pass
         });
 
-        let res = self
-            .client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
+        let res = self.client.post(&url).json(&body).send().await?;
 
         let status = res.status();
         if !status.is_success() {
@@ -157,7 +161,10 @@ impl RemoteServer for PocketBaseClient {
                 return Ok(auth);
             }
             Err(e) => {
-                debug!("Autenticazione su 'users' fallita, tentativo fallback su '_superusers': {}", e);
+                debug!(
+                    "Autenticazione su 'users' fallita, tentativo fallback su '_superusers': {}",
+                    e
+                );
             }
         }
 
@@ -179,12 +186,12 @@ impl RemoteServer for PocketBaseClient {
     }
 
     async fn refresh_token(&mut self) -> Result<AuthResponse, SyncError> {
-        let collection = self
-            .auth_collection
-            .as_deref()
-            .unwrap_or("users");
+        let collection = self.auth_collection.as_deref().unwrap_or("users");
 
-        let url = format!("{}/api/collections/{}/auth-refresh", self.base_url, collection);
+        let url = format!(
+            "{}/api/collections/{}/auth-refresh",
+            self.base_url, collection
+        );
         let res = self
             .client
             .post(&url)
@@ -385,8 +392,15 @@ impl RemoteServer for PocketBaseClient {
         }
     }
 
-    async fn get_by_id(&self, collection: &str, id: &str) -> Result<Option<RemoteRecord>, SyncError> {
-        let url = format!("{}/api/collections/{}/records/{}", self.base_url, collection, id);
+    async fn get_by_id(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<RemoteRecord>, SyncError> {
+        let url = format!(
+            "{}/api/collections/{}/records/{}",
+            self.base_url, collection, id
+        );
         let res = self
             .client
             .get(&url)
@@ -436,7 +450,10 @@ impl RemoteServer for PocketBaseClient {
             }
             return Err(SyncError::RemoteApi {
                 status: 400,
-                message: format!("create su '{}' fallita per validazione: {}", collection, err_json),
+                message: format!(
+                    "create su '{}' fallita per validazione: {}",
+                    collection, err_json
+                ),
             });
         }
 
@@ -449,11 +466,9 @@ impl RemoteServer for PocketBaseClient {
         }
 
         let val: serde_json::Value = res.json().await?;
-        Self::parse_pb_record(val).ok_or_else(|| {
-            SyncError::RemoteApi {
-                status: 200,
-                message: "Record creato ma formato non valido da PocketBase".to_string(),
-            }
+        Self::parse_pb_record(val).ok_or_else(|| SyncError::RemoteApi {
+            status: 200,
+            message: "Record creato ma formato non valido da PocketBase".to_string(),
         })
     }
 
@@ -463,7 +478,10 @@ impl RemoteServer for PocketBaseClient {
         id: &str,
         data: &HashMap<String, serde_json::Value>,
     ) -> Result<RemoteRecord, SyncError> {
-        let url = format!("{}/api/collections/{}/records/{}", self.base_url, collection, id);
+        let url = format!(
+            "{}/api/collections/{}/records/{}",
+            self.base_url, collection, id
+        );
         let res = self
             .client
             .patch(&url)
@@ -510,16 +528,17 @@ impl RemoteServer for PocketBaseClient {
         }
 
         let val: serde_json::Value = res.json().await?;
-        Self::parse_pb_record(val).ok_or_else(|| {
-            SyncError::RemoteApi {
-                status: 200,
-                message: "Record aggiornato ma formato non valido da PocketBase".to_string(),
-            }
+        Self::parse_pb_record(val).ok_or_else(|| SyncError::RemoteApi {
+            status: 200,
+            message: "Record aggiornato ma formato non valido da PocketBase".to_string(),
         })
     }
 
     async fn delete(&self, collection: &str, id: &str) -> Result<(), SyncError> {
-        let url = format!("{}/api/collections/{}/records/{}", self.base_url, collection, id);
+        let url = format!(
+            "{}/api/collections/{}/records/{}",
+            self.base_url, collection, id
+        );
         let res = self
             .client
             .delete(&url)
@@ -552,7 +571,13 @@ impl RemoteServer for PocketBaseClient {
             match self.get_full_list(table, None).await {
                 Ok(records) => {
                     if !records.is_empty() {
-                        info!("{}", crate::i18n::t_fmt("remote.cleaning_table", &[("table", table), ("count", &records.len().to_string())]));
+                        info!(
+                            "{}",
+                            crate::i18n::t_fmt(
+                                "remote.cleaning_table",
+                                &[("table", table), ("count", &records.len().to_string())]
+                            )
+                        );
                         for r in records {
                             let _ = self.delete(table, &r.id).await;
                         }

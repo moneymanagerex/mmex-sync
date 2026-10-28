@@ -23,16 +23,27 @@ const AUTOSTART_COUNTDOWN_SECS: f32 = 3.0;
 #[derive(Debug)]
 pub enum GuiEvent {
     Log(String),
-    Status { message: String, is_error: bool },
+    Status {
+        message: String,
+        is_error: bool,
+    },
     TokenUpdated {
         encrypted_token: String,
         auth_collection: String,
     },
     AuthCollectionReset,
     LastSyncUpdated(String),
-    SyncFinished { last_sync: Option<String> },
-    TestFinished { success: bool, message: String },
-    ClearFinished { success: bool, message: String },
+    SyncFinished {
+        last_sync: Option<String>,
+    },
+    TestFinished {
+        success: bool,
+        message: String,
+    },
+    ClearFinished {
+        success: bool,
+        message: String,
+    },
 }
 
 /// Parametri raccolti per l'esecuzione asincrona in background
@@ -280,11 +291,11 @@ impl MmexSyncGuiApp {
             self.active_profile = profile_name.to_string();
             self.db_path = p.db_path.unwrap_or_default();
             self.server_type = p.server_type.unwrap_or_else(|| "pocketbase".to_string());
-            self.pb_url = p.pb_url.unwrap_or_else(|| "http://127.0.0.1:8090".to_string());
+            self.pb_url = p
+                .pb_url
+                .unwrap_or_else(|| "http://127.0.0.1:8090".to_string());
             self.pb_user = p.pb_user.unwrap_or_default();
-            self.pb_auth_collection = p
-                .pb_auth_collection
-                .unwrap_or_else(|| "users".to_string());
+            self.pb_auth_collection = p.pb_auth_collection.unwrap_or_else(|| "users".to_string());
             self.encrypted_token = p.encrypted_token;
             self.mmex_exe = p.mmex_exe.unwrap_or_default();
             self.default_mode = p.default_mode.unwrap_or_else(|| "run".to_string());
@@ -494,7 +505,8 @@ impl MmexSyncGuiApp {
             self.is_watching = true;
         }
 
-        let start_msg = crate::i18n::t_fmt("sync.runner_start_mode", &[("mode", &mode.to_uppercase())]);
+        let start_msg =
+            crate::i18n::t_fmt("sync.runner_start_mode", &[("mode", &mode.to_uppercase())]);
         self.add_log(start_msg.clone());
         self.status_message = Some((start_msg, false));
 
@@ -524,7 +536,9 @@ impl MmexSyncGuiApp {
             rt.block_on(async move {
                 match mode.as_str() {
                     "run" => {
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t("sync.pre_sync_start").to_string()));
+                        let _ = tx.send(GuiEvent::Log(
+                            crate::i18n::t("sync.pre_sync_start").to_string(),
+                        ));
                         if let Some(ts) = execute_single_sync_step(&tx, &ctx, true, true).await {
                             ctx.last_sync = Some(ts.clone());
                             let _ = tx.send(GuiEvent::LastSyncUpdated(ts));
@@ -560,7 +574,11 @@ impl MmexSyncGuiApp {
                                     }
                                     Err(e) => {
                                         let _ = tx.send(GuiEvent::Status {
-                                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                                            message: format!(
+                                                "{}: {}",
+                                                crate::i18n::t("gui.msg.error"),
+                                                e
+                                            ),
                                             is_error: true,
                                         });
                                         let _ = tx.send(GuiEvent::SyncFinished {
@@ -787,21 +805,17 @@ impl MmexSyncGuiApp {
         };
 
         std::thread::spawn(move || {
-            let mut db = match DatabaseService::connect(
-                &db_path,
-                false,
-                file_password.as_deref(),
-                true,
-            ) {
-                Ok(d) => d,
-                Err(e) => {
-                    let _ = tx.send(GuiEvent::ClearFinished {
-                        success: false,
-                        message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                    });
-                    return;
-                }
-            };
+            let mut db =
+                match DatabaseService::connect(&db_path, false, file_password.as_deref(), true) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::ClearFinished {
+                            success: false,
+                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                        });
+                        return;
+                    }
+                };
 
             if let Err(e) = db.init_schema().and_then(|_| db.flush()) {
                 let _ = tx.send(GuiEvent::ClearFinished {
@@ -1442,7 +1456,8 @@ impl eframe::App for MmexSyncGuiApp {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 // Banner Countdown Auto-Start (se attivo)
                 if let Some(start) = self.countdown_start {
-                    let remaining = (AUTOSTART_COUNTDOWN_SECS - start.elapsed().as_secs_f32()).max(0.0);
+                    let remaining =
+                        (AUTOSTART_COUNTDOWN_SECS - start.elapsed().as_secs_f32()).max(0.0);
                     let progress = (remaining / AUTOSTART_COUNTDOWN_SECS).clamp(0.0, 1.0);
                     let banner_text = self.lang.t_fmt(
                         "gui.autostart.banner",
@@ -1525,7 +1540,10 @@ impl eframe::App for MmexSyncGuiApp {
                         ui.horizontal(|ui| {
                             ui.label(self.lang.field_db_password());
                             if ui
-                                .add(egui::TextEdit::singleline(&mut self.file_password).password(true))
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.file_password)
+                                        .password(true),
+                                )
                                 .changed()
                             {
                                 self.cancel_autostart_countdown();
@@ -1636,9 +1654,10 @@ impl eframe::App for MmexSyncGuiApp {
 
                 // Barra dei pulsanti primari
                 ui.horizontal_wrapped(|ui| {
-                    let run_btn_label = self
-                        .lang
-                        .t_fmt("gui.btn.run_default", &[("mode", &self.default_mode.to_uppercase())]);
+                    let run_btn_label = self.lang.t_fmt(
+                        "gui.btn.run_default",
+                        &[("mode", &self.default_mode.to_uppercase())],
+                    );
 
                     if self.is_watching {
                         if ui
@@ -1789,7 +1808,9 @@ impl MmexSyncGuiApp {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.label(self.lang.dialog_new_emb_pwd_prompt());
-                    ui.add(egui::TextEdit::singleline(&mut self.new_emb_password_input).password(true));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.new_emb_password_input).password(true),
+                    );
                     ui.checkbox(
                         &mut self.save_file_password,
                         self.lang.field_save_password(),

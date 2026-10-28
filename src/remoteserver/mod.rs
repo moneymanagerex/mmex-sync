@@ -66,7 +66,11 @@ pub trait RemoteServer: Send + Sync {
     ) -> Result<Option<RemoteRecord>, SyncError>;
 
     /// Recupera un singolo record remoto tramite il suo id remoto univoco
-    async fn get_by_id(&self, collection: &str, id: &str) -> Result<Option<RemoteRecord>, SyncError>;
+    async fn get_by_id(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<RemoteRecord>, SyncError>;
 
     /// Crea un nuovo record sul server remoto
     async fn create(

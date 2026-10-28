@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
+use rusqlite::types::ValueRef;
+use rusqlite::{params_from_iter, Connection, ToSql};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use rusqlite::types::ValueRef;
-use rusqlite::{params_from_iter, Connection, ToSql};
 use tracing::{debug, info, warn};
 
 use crate::crypto::emb::{is_emb_path, EmbDatabaseHandler};
@@ -14,7 +14,9 @@ use crate::db::schema::{
 use crate::domain::model::{
     DeletedRecordEntry, LocalRecord, RecordValue, RemoteRecord, SyncStatus, TableSchemaInfo,
 };
-use crate::domain::sync_order::{get_referencing_fk_columns, get_table_config, UniqueConstraint, SYNC_ORDER};
+use crate::domain::sync_order::{
+    get_referencing_fk_columns, get_table_config, UniqueConstraint, SYNC_ORDER,
+};
 use crate::error::SyncError;
 
 /// Servizio di accesso e gestione del database MMEX (.mmb e .emb)
@@ -68,7 +70,13 @@ impl DatabaseService {
         };
 
         if create || (!db_path.exists() && !is_emb) {
-            info!("{}", crate::i18n::t_fmt("db.init_new_db", &[("path", &db_path.display().to_string())]));
+            info!(
+                "{}",
+                crate::i18n::t_fmt(
+                    "db.init_new_db",
+                    &[("path", &db_path.display().to_string())]
+                )
+            );
             create_empty_database(&service.conn, None)?;
             service.mark_modified();
             service.flush()?;
@@ -227,7 +235,12 @@ impl DatabaseService {
     }
 
     /// Imposta lo stato pb_is_dirty = 0 (Synced) e memorizza il pb_id remoto
-    pub fn set_synced_status(&mut self, table: &str, rowid: i64, pb_id: &str) -> Result<(), SyncError> {
+    pub fn set_synced_status(
+        &mut self,
+        table: &str,
+        rowid: i64,
+        pb_id: &str,
+    ) -> Result<(), SyncError> {
         let sql = format!(
             "UPDATE {} SET pb_is_dirty = 0, pb_id = ? WHERE ROWID = ?",
             table
@@ -307,7 +320,11 @@ impl DatabaseService {
                     for col in *cols {
                         if let Some(val) = remote.fields.get(*col) {
                             if !val.is_null() {
-                                parts.push(format!("{} = '{}'", col, val.to_string().trim_matches('"')));
+                                parts.push(format!(
+                                    "{} = '{}'",
+                                    col,
+                                    val.to_string().trim_matches('"')
+                                ));
                             }
                         }
                     }
@@ -345,7 +362,10 @@ impl DatabaseService {
         remote: &RemoteRecord,
     ) -> Result<(), SyncError> {
         let schema = self.schemas.get(table).cloned().ok_or_else(|| {
-            SyncError::NotFound(crate::i18n::t_fmt("db.schema_not_found", &[("table", table)]))
+            SyncError::NotFound(crate::i18n::t_fmt(
+                "db.schema_not_found",
+                &[("table", table)],
+            ))
         })?;
 
         let existing_rowid = self.find_rowid_by_pb_id(table, &remote.id)?;
@@ -389,7 +409,10 @@ impl DatabaseService {
                         table,
                         set_clauses.join(", ")
                     );
-                    tx.execute(&update_sql, params_from_iter(params.iter().map(|b| b.as_ref())))?;
+                    tx.execute(
+                        &update_sql,
+                        params_from_iter(params.iter().map(|b| b.as_ref())),
+                    )?;
 
                     // Reset a 0 (Sincronizzato)
                     tx.execute(
@@ -434,7 +457,10 @@ impl DatabaseService {
                 placeholders.join(", ")
             );
 
-            let insert_result = tx.execute(&insert_sql, params_from_iter(params.iter().map(|b| b.as_ref())));
+            let insert_result = tx.execute(
+                &insert_sql,
+                params_from_iter(params.iter().map(|b| b.as_ref())),
+            );
 
             match insert_result {
                 Ok(_) => {
@@ -455,7 +481,9 @@ impl DatabaseService {
                     );
                     drop(tx); // Rilasciamo la transazione corrente per cercare e sostituire
 
-                    if let Some((conflict_rowid, conflict_pk)) = self.find_rowid_by_unique_keys(table, remote)? {
+                    if let Some((conflict_rowid, conflict_pk)) =
+                        self.find_rowid_by_unique_keys(table, remote)?
+                    {
                         self.replace_record_and_references(
                             table,
                             conflict_rowid,
@@ -466,7 +494,10 @@ impl DatabaseService {
                     } else {
                         return Err(SyncError::UniqueConstraintViolation {
                             table: table.to_string(),
-                            details: crate::i18n::t_fmt("db.unique_constraint_detected", &[("table", table)]),
+                            details: crate::i18n::t_fmt(
+                                "db.unique_constraint_detected",
+                                &[("table", table)],
+                            ),
                         });
                     }
                 }
@@ -489,7 +520,10 @@ impl DatabaseService {
         remote: &RemoteRecord,
     ) -> Result<(), SyncError> {
         let schema = self.schemas.get(table).cloned().ok_or_else(|| {
-            SyncError::NotFound(crate::i18n::t_fmt("db.schema_not_found", &[("table", table)]))
+            SyncError::NotFound(crate::i18n::t_fmt(
+                "db.schema_not_found",
+                &[("table", table)],
+            ))
         })?;
 
         let new_pk = remote
@@ -530,7 +564,10 @@ impl DatabaseService {
             table,
             set_clauses.join(", ")
         );
-        tx.execute(&update_sql, params_from_iter(params.iter().map(|b| b.as_ref())))?;
+        tx.execute(
+            &update_sql,
+            params_from_iter(params.iter().map(|b| b.as_ref())),
+        )?;
 
         // Imposta a 0 (Sincronizzato)
         tx.execute(
@@ -545,11 +582,10 @@ impl DatabaseService {
                 if let Ok((_, dep_fields, _)) = inspect_table_columns(&tx, dep_table) {
                     for col in &dep_fields {
                         if referencing_cols.contains(&col.as_str()) {
-                            let cascade_sql = format!(
-                                "UPDATE {} SET {} = ? WHERE {} = ?",
-                                dep_table, col, col
-                            );
-                            let affected = tx.execute(&cascade_sql, rusqlite::params![new_pk, old_pk])?;
+                            let cascade_sql =
+                                format!("UPDATE {} SET {} = ? WHERE {} = ?", dep_table, col, col);
+                            let affected =
+                                tx.execute(&cascade_sql, rusqlite::params![new_pk, old_pk])?;
                             if affected > 0 {
                                 debug!(
                                     "Propagata FK {} -> {} su {} (record aggiornati: {})",
@@ -601,7 +637,11 @@ impl DatabaseService {
     }
 
     /// Rimuove una voce sincronizzata dal log delle cancellazioni
-    pub fn remove_deleted_record_log(&mut self, table_name: &str, pb_id: &str) -> Result<(), SyncError> {
+    pub fn remove_deleted_record_log(
+        &mut self,
+        table_name: &str,
+        pb_id: &str,
+    ) -> Result<(), SyncError> {
         self.conn.execute(
             "DELETE FROM pb_DELETED_RECORDS_LOG WHERE table_name = ? AND pb_id = ?",
             rusqlite::params![table_name, pb_id],
@@ -612,7 +652,8 @@ impl DatabaseService {
 
     /// Svuota l'intero log delle cancellazioni
     pub fn clear_deleted_log(&mut self) -> Result<(), SyncError> {
-        self.conn.execute("DELETE FROM pb_DELETED_RECORDS_LOG", [])?;
+        self.conn
+            .execute("DELETE FROM pb_DELETED_RECORDS_LOG", [])?;
         self.mark_modified();
         Ok(())
     }

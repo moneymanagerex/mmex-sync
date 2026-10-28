@@ -38,10 +38,12 @@ fn main() -> Result<()> {
         .with_target(false)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber)
-        .context(t("cli.context_logger_init"))?;
+    tracing::subscriber::set_global_default(subscriber).context(t("cli.context_logger_init"))?;
 
-    info!("{}", t_fmt("cli.banner", &[("version", env!("CARGO_PKG_VERSION"))]));
+    info!(
+        "{}",
+        t_fmt("cli.banner", &[("version", env!("CARGO_PKG_VERSION"))])
+    );
 
     // 5. Determinazione deterministica della modalità di esecuzione: Desktop GUI vs CLI Headless
     let is_profile_cmd = args.list_profile
@@ -140,7 +142,10 @@ async fn run_cli(args: CliArgs) -> Result<()> {
         config_mgr
             .set_default_profile(new_default)
             .with_context(|| t_fmt("cli.context_set_default", &[("name", new_default)]))?;
-        info!("{}", t_fmt("cli.profile_default_set", &[("name", new_default)]));
+        info!(
+            "{}",
+            t_fmt("cli.profile_default_set", &[("name", new_default)])
+        );
         return Ok(());
     }
 
@@ -153,8 +158,19 @@ async fn run_cli(args: CliArgs) -> Result<()> {
         };
         config_mgr
             .rename_profile(&current, new_name)
-            .with_context(|| t_fmt("cli.context_rename_profile", &[("old", &current), ("new", new_name)]))?;
-        info!("{}", t_fmt("cli.profile_renamed", &[("old", &current), ("new", new_name)]));
+            .with_context(|| {
+                t_fmt(
+                    "cli.context_rename_profile",
+                    &[("old", &current), ("new", new_name)],
+                )
+            })?;
+        info!(
+            "{}",
+            t_fmt(
+                "cli.profile_renamed",
+                &[("old", &current), ("new", new_name)]
+            )
+        );
         return Ok(());
     }
 
@@ -170,7 +186,13 @@ async fn run_cli(args: CliArgs) -> Result<()> {
             .with_context(|| t_fmt("cli.context_load_profile", &[("name", &current)]))?;
         prof.default_mode = Some(new_mode.trim().to_lowercase());
         config_mgr.save_profile(&current, &prof)?;
-        if !args.cli && !args.run && !args.watch && args.sync.is_none() && !args.clear_db && !args.clear_server {
+        if !args.cli
+            && !args.run
+            && !args.watch
+            && args.sync.is_none()
+            && !args.clear_db
+            && !args.clear_server
+        {
             return Ok(());
         }
     }
@@ -179,14 +201,32 @@ async fn run_cli(args: CliArgs) -> Result<()> {
     let config = match config_mgr.get_effective_config(&args) {
         Ok(c) => c,
         Err(err) => {
-            error!("{}", t_fmt("cli.config_error", &[("error", &err.to_string())]));
+            error!(
+                "{}",
+                t_fmt("cli.config_error", &[("error", &err.to_string())])
+            );
             return Err(err.into());
         }
     };
 
-    info!("{}", t_fmt("cli.active_profile", &[("name", &config.profile)]));
-    info!("{}", t_fmt("cli.db_path", &[("path", &config.db_path.display().to_string())]));
-    info!("{}", t_fmt("cli.remote_provider", &[("provider", &config.server_type), ("url", &config.url)]));
+    info!(
+        "{}",
+        t_fmt("cli.active_profile", &[("name", &config.profile)])
+    );
+    info!(
+        "{}",
+        t_fmt(
+            "cli.db_path",
+            &[("path", &config.db_path.display().to_string())]
+        )
+    );
+    info!(
+        "{}",
+        t_fmt(
+            "cli.remote_provider",
+            &[("provider", &config.server_type), ("url", &config.url)]
+        )
+    );
     if let Some(user) = &config.user {
         info!("{}", t_fmt("cli.remote_user", &[("user", user)]));
     }
@@ -203,8 +243,7 @@ async fn run_cli(args: CliArgs) -> Result<()> {
     // Gestione comandi di pulizia
     if args.clear_db {
         info!("{}", t("cli.cleaning_db_start"));
-        db.clear_technical()
-            .context(t("cli.context_clear_db"))?;
+        db.clear_technical().context(t("cli.context_clear_db"))?;
         db.flush()?;
         info!("{}", t("cli.cleaning_db_done"));
         return Ok(());
@@ -230,7 +269,10 @@ async fn run_cli(args: CliArgs) -> Result<()> {
                 let _ = config_mgr.save_profile(&config.profile, &current_profile);
             }
             Err(e) => {
-                error!("{}", t_fmt("cli.remote_auth_failed", &[("error", &e.to_string())]));
+                error!(
+                    "{}",
+                    t_fmt("cli.remote_auth_failed", &[("error", &e.to_string())])
+                );
                 return Err(e.into());
             }
         }
@@ -246,7 +288,13 @@ async fn run_cli(args: CliArgs) -> Result<()> {
                     let _ = config_mgr.save_profile(&config.profile, &current_profile);
                 }
                 Err(e) => {
-                    error!("{}", t_fmt("cli.remote_token_refresh_failed", &[("error", &e.to_string())]));
+                    error!(
+                        "{}",
+                        t_fmt(
+                            "cli.remote_token_refresh_failed",
+                            &[("error", &e.to_string())]
+                        )
+                    );
                 }
             }
         }
@@ -274,7 +322,11 @@ async fn run_cli(args: CliArgs) -> Result<()> {
     };
 
     let sync_options = if args.sync.is_some() || args.run || args.watch {
-        SyncOptions::from_cli_sync(args.sync.as_ref().or(Some(&None)), config.force, config.verbose)
+        SyncOptions::from_cli_sync(
+            args.sync.as_ref().or(Some(&None)),
+            config.force,
+            config.verbose,
+        )
     } else {
         SyncOptions {
             init: true,

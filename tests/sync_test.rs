@@ -1,6 +1,6 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use async_trait::async_trait;
 use tempfile::tempdir;
 
 use mmex_sync::db::DatabaseService;
@@ -99,7 +99,11 @@ impl RemoteServer for MockRemoteServer {
         Ok(None)
     }
 
-    async fn get_by_id(&self, collection: &str, id: &str) -> Result<Option<RemoteRecord>, SyncError> {
+    async fn get_by_id(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<RemoteRecord>, SyncError> {
         let lock = self.state.lock().unwrap();
         if let Some(col_map) = lock.records.get(collection) {
             Ok(col_map.get(id).cloned())
@@ -143,7 +147,10 @@ impl RemoteServer for MockRemoteServer {
 
         let rec = RemoteRecord {
             id: id.to_string(),
-            is_deleted: data.get("_is_deleted").and_then(|v| v.as_bool()).unwrap_or(false),
+            is_deleted: data
+                .get("_is_deleted")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             updated_at: Some("2026-10-27T23:00:00Z".to_string()),
             fields: data.clone(),
         };
@@ -203,12 +210,24 @@ async fn test_sync_engine_push_and_pull_cycle() {
     let mut engine = SyncEngine::new(&mut db, &mut remote, options.clone(), None);
     let (stats, timestamp) = engine.run_cycle().await.expect("run cycle");
 
-    assert!(stats.pushed_records >= 1, "La valuta locale deve essere inviata in push");
-    assert!(timestamp.is_some(), "Il timestamp deve essere generato al termine del ciclo");
+    assert!(
+        stats.pushed_records >= 1,
+        "La valuta locale deve essere inviata in push"
+    );
+    assert!(
+        timestamp.is_some(),
+        "Il timestamp deve essere generato al termine del ciclo"
+    );
 
     // Verifica che in locale la valuta abbia ora pb_is_dirty = 0
-    let dirty_curr = db.get_dirty_records("CURRENCYFORMATS_V1", false).expect("get_dirty");
-    assert_eq!(dirty_curr.len(), 0, "Dopo il push tutti i record devono essere synchronized (dirty=0)");
+    let dirty_curr = db
+        .get_dirty_records("CURRENCYFORMATS_V1", false)
+        .expect("get_dirty");
+    assert_eq!(
+        dirty_curr.len(),
+        0,
+        "Dopo il push tutti i record devono essere synchronized (dirty=0)"
+    );
 
     // 4. Simuliamo l'aggiunta di una categoria sul server remoto
     {
@@ -225,21 +244,32 @@ async fn test_sync_engine_push_and_pull_cycle() {
             updated_at: Some("2026-10-27T23:30:00Z".to_string()),
             fields: cat_fields,
         };
-        lock.records.entry("CATEGORY_V1".to_string()).or_default().insert(rec.id.clone(), rec);
+        lock.records
+            .entry("CATEGORY_V1".to_string())
+            .or_default()
+            .insert(rec.id.clone(), rec);
     }
 
     // 5. Esecuzione secondo ciclo di sync (PULL)
     let mut engine2 = SyncEngine::new(&mut db, &mut remote, options, timestamp);
     let (stats2, _) = engine2.run_cycle().await.expect("run cycle 2");
 
-    assert!(stats2.pulled_records >= 1, "La categoria remota deve essere scaricata in pull");
+    assert!(
+        stats2.pulled_records >= 1,
+        "La categoria remota deve essere scaricata in pull"
+    );
 
     // Verifica che in locale la categoria esista con pb_id corrispondente
-    let categories = db.get_dirty_records("CATEGORY_V1", true).expect("get all categories");
+    let categories = db
+        .get_dirty_records("CATEGORY_V1", true)
+        .expect("get all categories");
     assert_eq!(categories.len(), 1);
     assert_eq!(categories[0].pb_id.as_deref(), Some("pb_cat_50"));
     assert_eq!(
-        categories[0].fields.get("CATEGNAME").and_then(|v| v.as_str()),
+        categories[0]
+            .fields
+            .get("CATEGNAME")
+            .and_then(|v| v.as_str()),
         Some("Alimentari")
     );
 }
@@ -253,10 +283,16 @@ async fn test_sync_engine_soft_delete_flow() {
     db.init_schema().expect("init_schema");
 
     // Inserisce e sincronizza un tag
-    db.raw_conn().execute("INSERT INTO TAG_V1 (TAGNAME, ACTIVE) VALUES ('Lavoro', 1)", []).expect("insert tag");
+    db.raw_conn()
+        .execute(
+            "INSERT INTO TAG_V1 (TAGNAME, ACTIVE) VALUES ('Lavoro', 1)",
+            [],
+        )
+        .expect("insert tag");
     let tags = db.get_dirty_records("TAG_V1", false).expect("get tag");
     let tag_rowid = tags[0].rowid;
-    db.set_synced_status("TAG_V1", tag_rowid, "pb_tag_001").expect("set synced");
+    db.set_synced_status("TAG_V1", tag_rowid, "pb_tag_001")
+        .expect("set synced");
 
     // Cancella il tag in locale: scatta TRG_TAG_V1_DELETE
     db.remove_record("TAG_V1", tag_rowid).expect("remove tag");
@@ -279,7 +315,10 @@ async fn test_sync_engine_soft_delete_flow() {
     let mut engine = SyncEngine::new(&mut db, &mut remote, options, None);
     let (stats, _) = engine.run_cycle().await.expect("run delete sync");
 
-    assert_eq!(stats.deleted_records, 1, "Deve aver sincronizzato 1 cancellazione");
+    assert_eq!(
+        stats.deleted_records, 1,
+        "Deve aver sincronizzato 1 cancellazione"
+    );
 
     // Verifica che il log locale sia stato svuotato
     let deleted_log_after = db.get_deleted_log().expect("get log after");
@@ -287,8 +326,15 @@ async fn test_sync_engine_soft_delete_flow() {
 
     // Verifica che sul server remoto sia stato impostato _is_deleted = true
     let lock = remote_state.lock().unwrap();
-    let remote_rec = lock.records.get("TAG_V1").and_then(|m| m.get("pb_tag_001")).expect("remote tag");
-    assert!(remote_rec.is_deleted, "Il record remoto deve risultare marcato come cancellato (_is_deleted=true)");
+    let remote_rec = lock
+        .records
+        .get("TAG_V1")
+        .and_then(|m| m.get("pb_tag_001"))
+        .expect("remote tag");
+    assert!(
+        remote_rec.is_deleted,
+        "Il record remoto deve risultare marcato come cancellato (_is_deleted=true)"
+    );
 }
 
 #[tokio::test]
@@ -303,7 +349,10 @@ async fn test_sync_engine_push_only_flushes_emb_on_disk() {
             .expect("connect create emb");
         db.init_schema().expect("init_schema");
         db.raw_conn()
-            .execute("INSERT INTO TAG_V1 (TAGNAME, ACTIVE) VALUES ('Casa', 1)", [])
+            .execute(
+                "INSERT INTO TAG_V1 (TAGNAME, ACTIVE) VALUES ('Casa', 1)",
+                [],
+            )
             .expect("insert local tag");
         db.flush().expect("initial flush");
     }
@@ -324,14 +373,19 @@ async fn test_sync_engine_push_only_flushes_emb_on_disk() {
         let mut engine = SyncEngine::new(&mut db, &mut remote, options, None);
         let (stats, ts) = engine.run_cycle().await.expect("run push-only cycle");
         assert_eq!(stats.pushed_records, 1);
-        assert!(ts.is_none(), "Push-only non deve generare timestamp di pull");
+        assert!(
+            ts.is_none(),
+            "Push-only non deve generare timestamp di pull"
+        );
     }
 
     // 3. Riapri il file .emb da disco e verifica che il nuovo pb_id e pb_is_dirty=0 siano stati salvati!
     {
         let db = DatabaseService::connect(&emb_path, false, Some(password), false)
             .expect("reopen emb after push-only");
-        let dirty_tags = db.get_dirty_records("TAG_V1", false).expect("get dirty tags");
+        let dirty_tags = db
+            .get_dirty_records("TAG_V1", false)
+            .expect("get dirty tags");
         assert!(
             dirty_tags.is_empty(),
             "Il file .emb su disco deve avere pb_is_dirty = 0 dopo un ciclo push-only"
@@ -345,4 +399,3 @@ async fn test_sync_engine_push_only_flushes_emb_on_disk() {
         );
     }
 }
-

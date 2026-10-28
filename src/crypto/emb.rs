@@ -1,10 +1,10 @@
-use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use pbkdf2::pbkdf2_hmac;
 use rand::{rngs::OsRng, RngCore};
 use sha2::{Sha256, Sha512};
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 use crate::error::SyncError;
@@ -50,14 +50,23 @@ pub fn encrypt_sqlite_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>,
     // Iterazioni PBKDF2 (compatibile e robusto)
     let key = derive_key(password, &salt, 64_000);
 
-    let encryptor = Aes256CbcEnc::new_from_slices(&key, &iv)
-        .map_err(|e| SyncError::Crypto(crate::i18n::t_fmt("crypto.aes_cbc_init_failed", &[("error", &e.to_string())])))?;
+    let encryptor = Aes256CbcEnc::new_from_slices(&key, &iv).map_err(|e| {
+        SyncError::Crypto(crate::i18n::t_fmt(
+            "crypto.aes_cbc_init_failed",
+            &[("error", &e.to_string())],
+        ))
+    })?;
 
     // Calcolo dimensione con padding PKCS#7
     let mut ciphertext = vec![0u8; plaintext.len() + 16];
     let encrypted_len = encryptor
         .encrypt_padded_b2b_mut::<Pkcs7>(plaintext, &mut ciphertext)
-        .map_err(|e| SyncError::Crypto(crate::i18n::t_fmt("crypto.db_encryption_failed", &[("error", &e.to_string())])))?
+        .map_err(|e| {
+            SyncError::Crypto(crate::i18n::t_fmt(
+                "crypto.db_encryption_failed",
+                &[("error", &e.to_string())],
+            ))
+        })?
         .len();
     ciphertext.truncate(encrypted_len);
 
@@ -131,7 +140,11 @@ pub struct EmbDatabaseHandler {
 
 impl EmbDatabaseHandler {
     /// Inizializza l'handler decifrando il file .emb esistente o creando un file temporaneo per nuovo DB
-    pub fn open_or_create(emb_path: &Path, password: Option<&str>, create: bool) -> Result<Self, SyncError> {
+    pub fn open_or_create(
+        emb_path: &Path,
+        password: Option<&str>,
+        create: bool,
+    ) -> Result<Self, SyncError> {
         let temp_file = NamedTempFile::new()?;
 
         if emb_path.exists() && !create {
@@ -261,8 +274,8 @@ mod tests {
         assert!(emb_path.exists());
 
         // 2. Riapertura del file .emb
-        let reopen_handler = EmbDatabaseHandler::open_or_create(&emb_path, Some(password), false)
-            .expect("reopen");
+        let reopen_handler =
+            EmbDatabaseHandler::open_or_create(&emb_path, Some(password), false).expect("reopen");
         let read_back = fs::read(reopen_handler.temp_db_path()).expect("read temp");
         assert_eq!(read_back, initial_db);
     }

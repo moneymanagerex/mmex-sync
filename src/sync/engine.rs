@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use std::collections::HashMap;
 use tracing::{debug, error, info, warn};
 
 use crate::db::DatabaseService;
@@ -154,7 +154,10 @@ impl<'a> SyncEngine<'a> {
             return Ok(());
         }
 
-        debug!("Sincronizzazione di {} cancellazioni verso il server...", deleted_log.len());
+        debug!(
+            "Sincronizzazione di {} cancellazioni verso il server...",
+            deleted_log.len()
+        );
         for entry in deleted_log {
             let mut payload = HashMap::new();
             payload.insert("_is_deleted".to_string(), serde_json::json!(true));
@@ -163,14 +166,20 @@ impl<'a> SyncEngine<'a> {
                 serde_json::json!(entry.deleted_at.unwrap_or_else(|| Utc::now().to_rfc3339())),
             );
 
-            match self.remote.update(&entry.table_name, &entry.pb_id, &payload).await {
+            match self
+                .remote
+                .update(&entry.table_name, &entry.pb_id, &payload)
+                .await
+            {
                 Ok(_) => {
-                    self.db.remove_deleted_record_log(&entry.table_name, &entry.pb_id)?;
+                    self.db
+                        .remove_deleted_record_log(&entry.table_name, &entry.pb_id)?;
                     stats.deleted_records += 1;
                 }
                 Err(SyncError::NotFound(_)) => {
                     // Record già assente sul server remoto
-                    self.db.remove_deleted_record_log(&entry.table_name, &entry.pb_id)?;
+                    self.db
+                        .remove_deleted_record_log(&entry.table_name, &entry.pb_id)?;
                     stats.deleted_records += 1;
                 }
                 Err(err) => {
@@ -199,7 +208,11 @@ impl<'a> SyncEngine<'a> {
             return Ok(());
         }
 
-        debug!("Push {}: elaborazione di {} record...", table, dirty_records.len());
+        debug!(
+            "Push {}: elaborazione di {} record...",
+            table,
+            dirty_records.len()
+        );
         for record in dirty_records {
             let mut payload = local_record_to_json(&record);
             let updated_at = record
@@ -219,7 +232,8 @@ impl<'a> SyncEngine<'a> {
                         // Se non esiste sul server (404), ricrea
                         match self.remote.create(table, &payload).await {
                             Ok(created) => {
-                                self.db.set_synced_status(table, record.rowid, &created.id)?;
+                                self.db
+                                    .set_synced_status(table, record.rowid, &created.id)?;
                                 stats.pushed_records += 1;
                             }
                             Err(e) => {
@@ -264,7 +278,10 @@ impl<'a> SyncEngine<'a> {
         stats: &mut SyncStats,
     ) -> Result<(), SyncError> {
         if matches!(error, SyncError::UniqueConstraintViolation { .. }) {
-            debug!("Violazione unicità remota su {}. Ricerca record esistente...", table);
+            debug!(
+                "Violazione unicità remota su {}. Ricerca record esistente...",
+                table
+            );
             let mut resolved_remote: Option<RemoteRecord> = None;
 
             // 1. Ricerca per row_id
@@ -304,9 +321,14 @@ impl<'a> SyncEngine<'a> {
 
             if let Some(remote_rec) = resolved_remote {
                 let schema_pk = get_table_config(table).map(|c| c.pk).unwrap_or("ROWID");
-                let old_pk = record.fields.get(schema_pk).and_then(|v| v.as_i64()).unwrap_or(record.rowid);
+                let old_pk = record
+                    .fields
+                    .get(schema_pk)
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(record.rowid);
 
-                self.db.replace_record_and_references(table, record.rowid, old_pk, &remote_rec)?;
+                self.db
+                    .replace_record_and_references(table, record.rowid, old_pk, &remote_rec)?;
                 stats.conflicts_resolved += 1;
                 return Ok(());
             }
@@ -342,12 +364,19 @@ impl<'a> SyncEngine<'a> {
             None
         };
 
-        let remote_records = self.remote.get_full_list(table, filter_str.as_deref()).await?;
+        let remote_records = self
+            .remote
+            .get_full_list(table, filter_str.as_deref())
+            .await?;
         if remote_records.is_empty() {
             return Ok(());
         }
 
-        debug!("Pull {}: elaborazione di {} record...", table, remote_records.len());
+        debug!(
+            "Pull {}: elaborazione di {} record...",
+            table,
+            remote_records.len()
+        );
         for remote in &remote_records {
             self.db.apply_remote_changes(table, remote)?;
             stats.pulled_records += 1;
