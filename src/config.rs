@@ -26,7 +26,7 @@ fn default_profile_name() -> String {
 }
 
 /// Contenuto salvato nel file di profilo <profile>.mmex-sync.json
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileConfig {
     #[serde(rename = "dbPath", skip_serializing_if = "Option::is_none")]
     pub db_path: Option<String>,
@@ -55,6 +55,9 @@ pub struct ProfileConfig {
     #[serde(rename = "defaultMode", skip_serializing_if = "Option::is_none")]
     pub default_mode: Option<String>,
 
+    #[serde(rename = "autoStart", default = "default_auto_start_fn")]
+    pub auto_start: bool,
+
     #[serde(rename = "lastSync", skip_serializing_if = "Option::is_none")]
     pub last_sync: Option<String>,
 
@@ -65,8 +68,32 @@ pub struct ProfileConfig {
     pub save_password: Option<String>,
 }
 
+impl Default for ProfileConfig {
+    fn default() -> Self {
+        Self {
+            db_path: None,
+            server_type: default_server_type_fn(),
+            pb_url: None,
+            pb_auth_collection: None,
+            pb_user: None,
+            encrypted_token: None,
+            encrypted_file_password: None,
+            mmex_exe: None,
+            default_mode: None,
+            auto_start: true,
+            last_sync: None,
+            is_running: false,
+            save_password: None,
+        }
+    }
+}
+
 fn default_server_type_fn() -> Option<String> {
     Some(DEFAULT_SERVER_TYPE.to_string())
+}
+
+fn default_auto_start_fn() -> bool {
+    true
 }
 
 /// Configurazione finale risolta (CLI > ENV > Profilo JSON > Default)
@@ -84,6 +111,7 @@ pub struct EffectiveConfig {
     pub auth_collection: Option<String>,
     pub mmex_exe: Option<PathBuf>,
     pub default_mode: String,
+    pub auto_start: bool,
     pub last_sync: Option<String>,
     pub is_running: bool,
     pub verbose: bool,
@@ -339,7 +367,12 @@ impl ConfigManager {
                     .unwrap_or(true)
             });
 
-        let file_password = args.file_password.clone();
+        let file_password = args.file_password.clone().or_else(|| {
+            profile
+                .encrypted_file_password
+                .as_deref()
+                .and_then(|enc| crate::crypto::unprotect(enc, None).ok().flatten())
+        });
 
         Ok(EffectiveConfig {
             profile: profile_name,
@@ -354,10 +387,53 @@ impl ConfigManager {
             auth_collection: profile.pb_auth_collection,
             mmex_exe,
             default_mode,
+            auto_start: profile.auto_start,
             last_sync: profile.last_sync,
             is_running: profile.is_running,
             verbose: args.verbose,
             force: args.force,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_profile_config_auto_start_default_and_serde() {
+        let def = ProfileConfig::default();
+        assert!(def.auto_start);
+
+        // JSON legacy senza campo autoStart -> deve deserializzare auto_start = true
+        let legacy_json = r#"{"dbPath": "/tmp/test.mmb", "pbUrl": "http://127.0.0.1:8090"}"#;
+        let parsed: ProfileConfig = serde_json::from_str(legacy_json).expect("deserialize legacy");
+        assert!(parsed.auto_start);
+
+        // JSON con autoStart = false -> deve deserializzare auto_start = false
+        let disabled_json = r#"{"dbPath": "/tmp/test.mmb", "autoStart": false}"#;
+        let parsed_disabled: ProfileConfig =
+            serde_json::from_str(disabled_json).expect("deserialize disabled");
+        assert!(!parsed_disabled.auto_start);
+    }
+
+    #[test]
+    fn test_cli_args_flags_cr001() {
+        let args_default = CliArgs::try_parse_from(["mmex-sync"]).expect("parse empty");
+        assert!(!args_default.cli);
+        assert!(!args_default.gui);
+
+        let args_cli = CliArgs::try_parse_from(["mmex-sync", "--cli", "--sync"]).expect("parse --cli");
+        assert!(args_cli.cli);
+        assert!(!args_cli.gui);
+
+        let args_gui = CliArgs::try_parse_from(["mmex-sync", "--gui"]).expect("parse --gui");
+        assert!(args_gui.gui);
+        assert!(!args_gui.cli);
+
+        // --nogui è stato rimosso e deve fallire il parsing
+        let args_nogui = CliArgs::try_parse_from(["mmex-sync", "--nogui"]);
+        assert!(args_nogui.is_err());
     }
 }

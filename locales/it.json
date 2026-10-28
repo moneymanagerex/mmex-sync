@@ -55,8 +55,15 @@
 
   "gui.toggle.force_mode": "⚡ Modalità Forzata (Force Mode)",
   "gui.toggle.verbose": "📝 Log Dettagliato (Verbose)",
+  "gui.toggle.auto_start": "🚀 Avvio Automatico all'Apertura",
+
+  "gui.autostart.banner": "⏳ Avvio automatico modalità '{mode}' tra {seconds}s... (Premi Esc per annullare)",
+  "gui.autostart.btn_cancel": "✖ Annulla Auto-Start (Esc)",
+  "gui.autostart.cancelled": "Countdown di avvio automatico annullato dall'utente.",
 
   "gui.btn.browse": "Sfoglia...",
+  "gui.btn.run_default": "▶️ Avvia ({mode})",
+  "gui.btn.stop_watch": "⏹️ Ferma Watch",
   "gui.btn.sync_full": "🔄 Sincronizza (Push + Pull)",
   "gui.btn.push_only": "⬆️ Solo Push",
   "gui.btn.pull_only": "⬇️ Solo Pull",

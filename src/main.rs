@@ -43,35 +43,28 @@ fn main() -> Result<()> {
 
     info!("{}", t_fmt("cli.banner", &[("version", env!("CARGO_PKG_VERSION"))]));
 
-    // 5. Determinazione della modalità di esecuzione: Desktop GUI vs CLI Headless
-    let has_cli_action = args.run
-        || args.watch
-        || args.sync.is_some()
-        || args.clear_db
-        || args.clear_server
-        || args.list_profile
+    // 5. Determinazione deterministica della modalità di esecuzione: Desktop GUI vs CLI Headless
+    let is_profile_cmd = args.list_profile
         || args.show_profile.is_some()
         || args.delete_profile.is_some()
         || args.set_default_profile.is_some()
         || args.rename_profile_to.is_some()
-        || args.set_default_mode.is_some()
-        || args.create;
+        || args.set_default_mode.is_some();
 
-    #[cfg(feature = "gui")]
-    {
-        let should_launch_gui = args.gui || (!args.nogui && !has_cli_action);
-        if should_launch_gui {
+    if !args.cli && !is_profile_cmd {
+        #[cfg(feature = "gui")]
+        {
             info!("{}", t("cli.gui_launch"));
-            return mmex_sync::gui::run_gui().context(t("cli.context_gui_error"));
+            let allow_auto_start = !args.gui;
+            return mmex_sync::gui::run_gui(args, allow_auto_start)
+                .context(t("cli.context_gui_error"));
         }
-    }
 
-    #[cfg(not(feature = "gui"))]
-    {
-        if args.gui {
-            anyhow::bail!("{}", t("cli.no_gui_compiled"));
-        }
-        if !has_cli_action {
+        #[cfg(not(feature = "gui"))]
+        {
+            if args.gui {
+                anyhow::bail!("{}", t("cli.no_gui_compiled"));
+            }
             use clap::CommandFactory;
             println!("{}", t("cli.cli_edition_help_1"));
             println!("{}", t("cli.cli_edition_help_2"));
@@ -163,6 +156,23 @@ async fn run_cli(args: CliArgs) -> Result<()> {
             .with_context(|| t_fmt("cli.context_rename_profile", &[("old", &current), ("new", new_name)]))?;
         info!("{}", t_fmt("cli.profile_renamed", &[("old", &current), ("new", new_name)]));
         return Ok(());
+    }
+
+    if let Some(new_mode) = &args.set_default_mode {
+        let current = match &args.profile {
+            Some(p) if !p.trim().is_empty() => p.trim().to_string(),
+            _ => config_mgr
+                .get_default_profile()
+                .context(t("cli.context_determine_default"))?,
+        };
+        let mut prof = config_mgr
+            .load_profile(&current)
+            .with_context(|| t_fmt("cli.context_load_profile", &[("name", &current)]))?;
+        prof.default_mode = Some(new_mode.trim().to_lowercase());
+        config_mgr.save_profile(&current, &prof)?;
+        if !args.cli && !args.run && !args.watch && args.sync.is_none() && !args.clear_db && !args.clear_server {
+            return Ok(());
+        }
     }
 
     // Risoluzione della configurazione effettiva

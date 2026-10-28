@@ -45,7 +45,7 @@ src/
 
 ### Cargo Features
 - `default = ["gui"]`
-- `gui = ["dep:eframe", "dep:rfd"]`: Enables the native desktop interface (`eframe` `0.30` with `default_fonts`, `glow`, `x11`, `wayland` and `rfd` `0.15` for native file dialogs).
+- `gui = ["dep:eframe", "dep:rfd"]`: Enables the native desktop interface (`eframe` `0.30` with `default_fonts`, `glow`, `x11`, `wayland` and `rfd` `0.15` with `default-features = false, features = ["gtk3"]` for direct GTK3 native file dialogs on Linux/WSL without requiring a D-Bus `xdg-desktop-portal` service).
 - Building with `--no-default-features` produces a headless CLI-only binary (used for cross-compiling to macOS from Linux when the Apple Cocoa SDK is unavailable).
 
 ---
@@ -67,36 +67,33 @@ When `mmex-sync` starts, `main()` executes the following sequential steps:
    - Sets log level to `Level::DEBUG` if `--verbose` (`MMEX_VERBOSE`) is true, otherwise `Level::INFO`.
    - Initializes a global `tracing_subscriber::FmtSubscriber` with `with_target(false)`.
    - Logs the startup banner (`cli.banner`) with `env!("CARGO_PKG_VERSION")`.
-5. **Execution Mode Dispatch (GUI vs. Headless CLI):**
-   - Computes `has_cli_action`:
+5. **Deterministic Execution Mode Dispatch (GUI vs. Headless CLI):**
+   - Computes `is_profile_cmd`:
      ```rust
-     let has_cli_action = args.run
-         || args.watch
-         || args.sync.is_some()
-         || args.clear_db
-         || args.clear_server
-         || args.list_profile
+     let is_profile_cmd = args.list_profile
          || args.show_profile.is_some()
          || args.delete_profile.is_some()
          || args.set_default_profile.is_some()
          || args.rename_profile_to.is_some()
-         || args.set_default_mode.is_some()
-         || args.create;
+         || args.set_default_mode.is_some();
      ```
-   - **When compiled with `#[cfg(feature = "gui")]`:**
-     - `should_launch_gui = args.gui || (!args.nogui && !has_cli_action)`.
-     - If `should_launch_gui` is `true`, calls `mmex_sync::gui::run_gui()` and exits upon window closure.
-   - **When compiled with `#[cfg(not(feature = "gui"))]`:**
-     - If `--gui` is passed, aborts with error `cli.no_gui_compiled`.
-     - If `!has_cli_action`, prints CLI edition help messages (`cli.cli_edition_help_1`, `cli.cli_edition_help_2`) and `CliArgs::command().print_help()`, then returns `Ok(())`.
+   - **If `args.cli == true` or `is_profile_cmd == true`:** Executes headless in the terminal via `run_cli(args)` without opening any GUI window.
+   - **If `!args.cli && !is_profile_cmd`:**
+     - **When compiled with `#[cfg(feature = "gui")]`:**
+       - If `args.gui == true`: Calls `mmex_sync::gui::run_gui(args, false)` (pure configuration mode, auto-start countdown disabled).
+       - If `args.gui == false` (no mode flag passed): Calls `mmex_sync::gui::run_gui(args, true)`. If the active profile is complete (`is_profile_ready_for_autostart()`) and `autoStart == true`, starts a 3-second interruptible countdown (`Esc` or Cancel button) before automatically executing the profile's `default_mode` (`run`, `sync`, or `watch`).
+     - **When compiled with `#[cfg(not(feature = "gui"))]`:**
+       - If `--gui` is passed, aborts with error `cli.no_gui_compiled`.
+       - Otherwise prints CLI edition help messages (`cli.cli_edition_help_1`, `cli.cli_edition_help_2`) and `CliArgs::command().print_help()`, then returns `Ok(())`.
 6. **Headless CLI Execution (`run_cli`):**
    - Builds a multi-threaded Tokio runtime (`Builder::new_multi_thread().enable_all().build()`) and blocks on `run_cli(args)`.
-   - Handles profile maintenance commands first (returning immediately after execution):
+   - Handles profile maintenance commands first:
      - `--listProfile`
      - `--showProfile[=<name>]`
      - `--deleteProfile[=<name>]`
      - `--setDefaultProfile=<name>`
      - `--renameProfileTo=<new_name>`
+     - `--setDefaultMode=<mode>` (persists `defaultMode` to `<profile>.mmex-sync.json`, and exits immediately unless combined with `--cli` or an execution flag).
    - Resolves `EffectiveConfig` via `config_mgr.get_effective_config(&args)`.
    - Connects to the local database via `DatabaseService::connect(&config.db_path, config.verbose, config.file_password.as_deref(), args.create)`.
    - If `--clearDb` is set, runs `db.clear_technical()` and exits.
@@ -140,8 +137,8 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 | `--clearServer` | `clear_server` | `bool` | — | Deletes all records from remote collections in reverse `SYNC_ORDER` |
 | `--verbose` | `verbose` | `bool` | `MMEX_VERBOSE` | Enables `DEBUG` level logging |
 | `--nowait` | `nowait` | `bool` | — | Parsed in `CliArgs` (currently unused in Rust execution flow) |
-| `--gui` | `gui` | `bool` | — | Forces launching the native desktop GUI |
-| `--nogui` | `nogui` | `bool` | — | Prevents launching the GUI when no CLI action flag is passed |
+| `--cli` | `cli` | `bool` | — | Forces headless CLI execution in the terminal |
+| `--gui` | `gui` | `bool` | — | Opens the native desktop GUI in configuration mode (blocks auto-start) |
 | `--checkForUpdate` | `check_for_update` | `bool` | — | Parsed in `CliArgs` (placeholder, not wired in `main.rs`) |
 | `--autoDownloadUpdate` | `auto_download_update` | `bool` | — | Parsed in `CliArgs` (placeholder, not wired in `main.rs`) |
 
@@ -176,6 +173,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
      "encryptedFilePassword": "v1:...",
      "mmexExe": "/usr/bin/mmex",
      "defaultMode": "run",
+     "autoStart": true,
      "lastSync": "2026-10-28T07:00:00Z",
      "isRunning": false,
      "savePassword": "yes"
@@ -226,8 +224,9 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
    - Active profile heading + `[DEFAULT]` badge.
    - Collapsible **Local MMEX Database** section: DB path input + Browse button; if path ends with `.emb` (case-insensitive), displays password input and "Save encrypted password in profile" checkbox.
    - Collapsible **Remote Server** section: Server Type combo (`PocketBase`), Server URL, User/Email, Password (masked), Auth Collection.
-   - Collapsible **Runner & Execution** section: MMEX Executable path + Browse, Default Mode combo (`run`, `sync`, `watch`), Force Mode checkbox, Verbose checkbox.
-   - Primary action buttons bar: `Full Sync`, `Push Only`, `Pull Only`, `Test Connection`, `Save Profile`.
+   - Collapsible **Runner & Execution** section: MMEX Executable path + Browse, Default Mode combo (`run`, `sync`, `watch`), Auto-Start on Launch (`autoStart`) checkbox, Force Mode checkbox, Verbose checkbox.
+   - **Auto-Start Countdown Banner:** When launched without `--gui` (`allow_auto_start == true`), if `autoStart == true` and the profile is ready (`dbPath` exists, `.emb` password present if `.emb`, `pbUrl` non-empty, and credentials or `encryptedToken` present), displays a 3-second animated countdown bar that can be cancelled via `Esc`, clicking `Cancel Auto-Start (Esc)`, or modifying any profile field; upon completion it launches `trigger_default_mode_async()` (`run`, `sync`, or `watch`).
+   - Primary action buttons bar: `Run (<DEFAULT_MODE>)` (or `Stop Watch` while `watch` mode is active), `Full Sync`, `Push Only`, `Pull Only`, `Test Connection`, `Save Profile`.
    - Real-time Log Console with `Clear Logs` button.
 3. **Bottom Status Bar:**
    - Left: Spinner when `is_working`, colored status message (`✓` green or `⚠` red), or `Ready`.

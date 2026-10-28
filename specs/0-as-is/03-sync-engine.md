@@ -33,6 +33,12 @@
      - If `current_mod != last_modified && current_mod.is_some()`, updates `last_modified = current_mod` and runs `SyncEngine::run_cycle().await`.
      - On `Ok((_stats, Some(ts)))`, updates both `self.last_sync` in memory and `profile.last_sync` on disk.
 
+### 1.4 GUI Execution of `sync`, `run`, and `watch` Modes (`MmexSyncGuiApp::trigger_default_mode_async`)
+When triggered via the 3-second auto-start countdown or the `▶️ Run (<MODE>)` button in the desktop GUI (`src/gui/app.rs`):
+- **`sync`**: Delegates to `trigger_sync_async(true, true)`.
+- **`run`**: Spawns a background worker thread that executes Pre-Sync (`execute_single_sync_step`), launches `mmex_exe` blocking on the worker thread (`Command::new(exe).arg(&ctx.db_path).status()`), and upon MMEX exit runs Post-Sync (`execute_single_sync_step`) and persists the updated `lastSync` timestamp. If `mmex_exe` is missing or not configured, logs `sync.mmex_not_configured_fallback` and finishes after Pre-Sync.
+- **`watch`**: Spawns a background worker thread that executes Pre-Sync, spawns `mmex_exe` in the background if configured, and polls `std::fs::metadata(&ctx.db_path).modified()` every 3 seconds (in 200ms slices checking `watch_stop_flag: Arc<AtomicBool>` so the user can stop monitoring at any time via the `⏹️ Stop Watch` button or `Esc`), running `execute_single_sync_step` whenever the database file changes.
+
 ---
 
 ## 2. `SyncOptions` Parsing (`src/sync/engine.rs`)

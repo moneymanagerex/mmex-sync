@@ -1,10 +1,14 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::time::SystemTime;
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime};
 
 use chrono::{DateTime, Local};
 use eframe::egui;
 
+use crate::cli::CliArgs;
 use crate::config::{expand_tilde, ConfigManager, ProfileConfig};
 use crate::crypto::credentials::{protect, unprotect};
 use crate::db::repository::DatabaseService;
@@ -13,14 +17,35 @@ use crate::gui::i18n::Language;
 use crate::remoteserver::create_remote_server;
 use crate::sync::engine::{SyncEngine, SyncOptions};
 
+const AUTOSTART_COUNTDOWN_SECS: f32 = 3.0;
+
 /// Eventi inviati dai thread di lavoro asincroni alla GUI
 #[derive(Debug)]
 pub enum GuiEvent {
     Log(String),
     Status { message: String, is_error: bool },
+    TokenUpdated(String),
+    LastSyncUpdated(String),
     SyncFinished { last_sync: Option<String> },
     TestFinished { success: bool, message: String },
     ClearFinished { success: bool, message: String },
+}
+
+/// Parametri raccolti per l'esecuzione asincrona in background
+#[derive(Clone)]
+struct WorkerSyncContext {
+    db_path: PathBuf,
+    file_password: Option<String>,
+    server_type: String,
+    url: String,
+    user: Option<String>,
+    pass: Option<String>,
+    encrypted_token: Option<String>,
+    auth_collection: Option<String>,
+    mmex_exe: Option<PathBuf>,
+    last_sync: Option<String>,
+    force: bool,
+    verbose: bool,
 }
 
 /// Applicazione desktop nativa MMEX-Sync con eframe/egui
@@ -39,17 +64,22 @@ pub struct MmexSyncGuiApp {
     pb_user: String,
     pb_pass: String,
     pb_auth_collection: String,
+    encrypted_token: Option<String>,
     mmex_exe: String,
     default_mode: String,
+    auto_start: bool,
     last_sync: Option<String>,
     force_mode: bool,
     verbose: bool,
 
-    // Stato UI
+    // Stato UI & Auto-Start Countdown
     pub lang: Language,
     status_message: Option<(String, bool)>,
     logs: Vec<String>,
     is_working: bool,
+    is_watching: bool,
+    watch_stop_flag: Arc<AtomicBool>,
+    countdown_start: Option<Instant>,
 
     // Canali asincroni
     tx: Sender<GuiEvent>,
@@ -69,7 +99,7 @@ pub struct MmexSyncGuiApp {
 }
 
 impl MmexSyncGuiApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, args: CliArgs, allow_auto_start: bool) -> Self {
         // Personalizzazione del tema visivo scuro e moderno
         let mut visuals = egui::Visuals::dark();
         visuals.window_rounding = 8.0.into();
@@ -89,11 +119,18 @@ impl MmexSyncGuiApp {
         let default_profile = config_mgr
             .get_default_profile()
             .unwrap_or_else(|_| "default".to_string());
+        let initial_profile = args
+            .profile
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .unwrap_or_else(|| default_profile.clone());
         let available_profiles = config_mgr.list_profiles().unwrap_or_default();
 
         let mut app = Self {
             config_mgr,
-            active_profile: default_profile.clone(),
+            active_profile: initial_profile.clone(),
             available_profiles,
             default_profile,
             db_path: String::new(),
@@ -104,15 +141,20 @@ impl MmexSyncGuiApp {
             pb_user: String::new(),
             pb_pass: String::new(),
             pb_auth_collection: "users".to_string(),
+            encrypted_token: None,
             mmex_exe: String::new(),
             default_mode: "run".to_string(),
+            auto_start: true,
             last_sync: None,
-            force_mode: false,
-            verbose: false,
+            force_mode: args.force,
+            verbose: args.verbose,
             lang,
             status_message: None,
             logs: Vec::new(),
             is_working: false,
+            is_watching: false,
+            watch_stop_flag: Arc::new(AtomicBool::new(false)),
+            countdown_start: None,
             tx,
             rx,
             dialog_new_profile: false,
@@ -127,20 +169,86 @@ impl MmexSyncGuiApp {
             dialog_about: false,
         };
 
-        app.load_profile_data(&app.active_profile.clone());
-        app.add_log(format!(
-            "Benvenuto in MMEX-Sync v0.3.0. Profilo attivo: {}",
-            app.active_profile
-        ));
+        app.load_profile_data(&initial_profile);
+
+        // Eventuali override da riga di comando passati all'avvio della GUI
+        if let Some(db) = &args.db {
+            app.db_path = db.to_string_lossy().to_string();
+        }
+        if let Some(pwd) = &args.file_password {
+            app.file_password = pwd.clone();
+        }
+        if let Some(st) = &args.server_type {
+            app.server_type = st.clone();
+        }
+        if let Some(url) = &args.url {
+            app.pb_url = url.clone();
+        }
+        if let Some(user) = &args.user {
+            app.pb_user = user.clone();
+        }
+        if let Some(pass) = &args.pass {
+            app.pb_pass = pass.clone();
+        }
+        if let Some(exe) = &args.exe {
+            app.mmex_exe = exe.to_string_lossy().to_string();
+        }
+
+        // Avvio eventuale del countdown di 3 secondi se allow_auto_start è true e il profilo è pronto
+        if allow_auto_start && app.auto_start && app.is_profile_ready_for_autostart() {
+            app.countdown_start = Some(Instant::now());
+        }
 
         app
+    }
+
+    /// Verifica se il profilo corrente possiede tutti i parametri minimi necessari per l'auto-start
+    pub fn is_profile_ready_for_autostart(&self) -> bool {
+        let db_trimmed = self.db_path.trim();
+        if db_trimmed.is_empty() {
+            return false;
+        }
+
+        let resolved_db = expand_tilde(Path::new(db_trimmed));
+        if !resolved_db.exists() {
+            return false;
+        }
+
+        if db_trimmed.to_lowercase().ends_with(".emb") && self.file_password.is_empty() {
+            return false;
+        }
+
+        if self.pb_url.trim().is_empty() {
+            return false;
+        }
+
+        let has_credentials = !self.pb_user.trim().is_empty() && !self.pb_pass.is_empty();
+        let has_token = self
+            .encrypted_token
+            .as_deref()
+            .map(|t| !t.trim().is_empty())
+            .unwrap_or(false);
+
+        has_credentials || has_token
+    }
+
+    /// Annulla il countdown di auto-start se attivo
+    pub fn cancel_autostart_countdown(&mut self) {
+        if self.countdown_start.take().is_some() {
+            let msg = self.lang.t("gui.autostart.cancelled").to_string();
+            self.status_message = Some((msg.clone(), false));
+            self.add_log(msg);
+        }
     }
 
     pub fn set_language(&mut self, lang: Language) {
         self.lang = lang;
         crate::i18n::set_current_locale(lang);
         let _ = self.config_mgr.set_language(lang.code());
-        self.add_log(self.lang.t_fmt("gui.log.language_changed", &[("lang", lang.display_name())]));
+        self.add_log(
+            self.lang
+                .t_fmt("gui.log.language_changed", &[("lang", lang.display_name())]),
+        );
     }
 
     fn add_log(&mut self, text: String) {
@@ -169,8 +277,10 @@ impl MmexSyncGuiApp {
             self.pb_auth_collection = p
                 .pb_auth_collection
                 .unwrap_or_else(|| "users".to_string());
+            self.encrypted_token = p.encrypted_token;
             self.mmex_exe = p.mmex_exe.unwrap_or_default();
             self.default_mode = p.default_mode.unwrap_or_else(|| "run".to_string());
+            self.auto_start = p.auto_start;
             self.last_sync = p.last_sync;
 
             self.save_file_password = p
@@ -186,9 +296,15 @@ impl MmexSyncGuiApp {
             }
 
             self.pb_pass.clear();
-            self.add_log(self.lang.t_fmt("gui.log.profile_loaded", &[("name", profile_name)]));
+            self.add_log(
+                self.lang
+                    .t_fmt("gui.log.profile_loaded", &[("name", profile_name)]),
+            );
         } else {
-            self.add_log(self.lang.t_fmt("gui.log.profile_load_failed", &[("name", profile_name)]));
+            self.add_log(
+                self.lang
+                    .t_fmt("gui.log.profile_load_failed", &[("name", profile_name)]),
+            );
         }
     }
 
@@ -216,12 +332,16 @@ impl MmexSyncGuiApp {
         } else {
             Some(self.pb_auth_collection.trim().to_string())
         };
+        if self.encrypted_token.is_some() {
+            p.encrypted_token = self.encrypted_token.clone();
+        }
         p.mmex_exe = if self.mmex_exe.trim().is_empty() {
             None
         } else {
             Some(self.mmex_exe.trim().to_string())
         };
         p.default_mode = Some(self.default_mode.clone());
+        p.auto_start = self.auto_start;
         p.save_password = Some(if self.save_file_password { "yes" } else { "no" }.to_string());
 
         if self.save_file_password && !self.file_password.is_empty() {
@@ -234,46 +354,30 @@ impl MmexSyncGuiApp {
 
         match self.config_mgr.save_profile(&self.active_profile, &p) {
             Ok(_) => {
-                self.status_message = Some((
-                    self.lang.msg_profile_saved().to_string(),
-                    false,
-                ));
-                self.add_log(self.lang.t_fmt("gui.log.profile_saved", &[("name", &self.active_profile)]));
+                self.status_message = Some((self.lang.msg_profile_saved().to_string(), false));
+                self.add_log(
+                    self.lang
+                        .t_fmt("gui.log.profile_saved", &[("name", &self.active_profile)]),
+                );
                 self.refresh_profile_list();
             }
             Err(e) => {
                 self.status_message = Some((format!("{}: {}", self.lang.msg_error(), e), true));
-                self.add_log(self.lang.t_fmt("gui.log.profile_save_failed", &[("error", &e.to_string())]));
+                self.add_log(
+                    self.lang
+                        .t_fmt("gui.log.profile_save_failed", &[("error", &e.to_string())]),
+                );
             }
         }
     }
 
-    fn trigger_sync_async(&mut self, push: bool, pull: bool) {
-        if self.is_working {
-            return;
-        }
-
-        if self.db_path.trim().is_empty() {
-            self.status_message = Some((
-                self.lang.t("gui.msg.db_path_required").to_string(),
-                true,
-            ));
-            return;
-        }
-
-        self.save_current_profile();
-        self.is_working = true;
-        self.status_message = Some((self.lang.msg_sync_running().to_string(), false));
-
-        let tx = self.tx.clone();
+    fn build_worker_context(&self) -> WorkerSyncContext {
         let db_path = expand_tilde(Path::new(self.db_path.trim()));
         let file_password = if self.file_password.is_empty() {
             None
         } else {
             Some(self.file_password.clone())
         };
-        let server_type = self.server_type.clone();
-        let url = self.pb_url.trim().to_string();
         let user = if self.pb_user.trim().is_empty() {
             None
         } else {
@@ -284,9 +388,51 @@ impl MmexSyncGuiApp {
         } else {
             Some(self.pb_pass.clone())
         };
-        let last_sync = self.last_sync.clone();
-        let force = self.force_mode;
-        let verbose = self.verbose;
+        let auth_collection = if self.pb_auth_collection.trim().is_empty() {
+            None
+        } else {
+            Some(self.pb_auth_collection.trim().to_string())
+        };
+        let mmex_exe = if self.mmex_exe.trim().is_empty() {
+            None
+        } else {
+            Some(expand_tilde(Path::new(self.mmex_exe.trim())))
+        };
+
+        WorkerSyncContext {
+            db_path,
+            file_password,
+            server_type: self.server_type.clone(),
+            url: self.pb_url.trim().to_string(),
+            user,
+            pass,
+            encrypted_token: self.encrypted_token.clone(),
+            auth_collection,
+            mmex_exe,
+            last_sync: self.last_sync.clone(),
+            force: self.force_mode,
+            verbose: self.verbose,
+        }
+    }
+
+    /// Esegue un singolo ciclo di sincronizzazione (Push e/o Pull) in background
+    fn trigger_sync_async(&mut self, push: bool, pull: bool) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
+
+        if self.db_path.trim().is_empty() {
+            self.status_message = Some((self.lang.t("gui.msg.db_path_required").to_string(), true));
+            return;
+        }
+
+        self.save_current_profile();
+        self.is_working = true;
+        self.status_message = Some((self.lang.msg_sync_running().to_string(), false));
+
+        let tx = self.tx.clone();
+        let ctx = self.build_worker_context();
 
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_current_thread()
@@ -296,7 +442,10 @@ impl MmexSyncGuiApp {
                 Ok(r) => r,
                 Err(e) => {
                     let _ = tx.send(GuiEvent::Status {
-                        message: crate::i18n::t_fmt("gui.msg.tokio_runtime_error", &[("error", &e.to_string())]),
+                        message: crate::i18n::t_fmt(
+                            "gui.msg.tokio_runtime_error",
+                            &[("error", &e.to_string())],
+                        ),
                         is_error: true,
                     });
                     let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
@@ -305,90 +454,191 @@ impl MmexSyncGuiApp {
             };
 
             rt.block_on(async move {
-                let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
-                    "gui.log.db_open",
-                    &[("path", &db_path.display().to_string())],
-                )));
+                let new_ts = execute_single_sync_step(&tx, &ctx, push, pull).await;
+                let _ = tx.send(GuiEvent::SyncFinished { last_sync: new_ts });
+            });
+        });
+    }
 
-                let mut db = match DatabaseService::connect(
-                    &db_path,
-                    verbose,
-                    file_password.as_deref(),
-                    false,
-                ) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        let _ = tx.send(GuiEvent::Status {
-                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                            is_error: true,
-                        });
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.db_open_error", &[("error", &e.to_string())])));
-                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
-                        return;
-                    }
-                };
+    /// Avvia l'esecuzione della modalità predefinita (`run`, `sync` o `watch`) all'interno della GUI
+    pub fn trigger_default_mode_async(&mut self) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
 
-                let mut remote = match create_remote_server(&server_type, &url) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let _ = tx.send(GuiEvent::Status {
-                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                            is_error: true,
-                        });
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.remote_error", &[("error", &e.to_string())])));
-                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
-                        return;
-                    }
-                };
+        if self.db_path.trim().is_empty() {
+            self.status_message = Some((self.lang.t("gui.msg.db_path_required").to_string(), true));
+            return;
+        }
 
-                if let (Some(u), Some(p)) = (&user, &pass) {
-                    let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.remote_auth", &[("user", u)])));
-                    if let Err(e) = remote.authenticate(u, p).await {
-                        let _ = tx.send(GuiEvent::Status {
-                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                            is_error: true,
-                        });
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.remote_auth_failed", &[("error", &e.to_string())])));
-                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
-                        return;
-                    }
+        self.save_current_profile();
+        let mode = self.default_mode.trim().to_lowercase();
+
+        if mode == "sync" {
+            self.trigger_sync_async(true, true);
+            return;
+        }
+
+        self.is_working = true;
+        self.watch_stop_flag.store(false, Ordering::SeqCst);
+        if mode == "watch" {
+            self.is_watching = true;
+        }
+
+        let start_msg = crate::i18n::t_fmt("sync.runner_start_mode", &[("mode", &mode.to_uppercase())]);
+        self.add_log(start_msg.clone());
+        self.status_message = Some((start_msg, false));
+
+        let tx = self.tx.clone();
+        let mut ctx = self.build_worker_context();
+        let stop_flag = Arc::clone(&self.watch_stop_flag);
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::Status {
+                        message: crate::i18n::t_fmt(
+                            "gui.msg.tokio_runtime_error",
+                            &[("error", &e.to_string())],
+                        ),
+                        is_error: true,
+                    });
+                    let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                    return;
                 }
+            };
 
-                let options = SyncOptions {
-                    init: true,
-                    push,
-                    pull,
-                    force,
-                    verbose,
-                };
+            rt.block_on(async move {
+                match mode.as_str() {
+                    "run" => {
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t("sync.pre_sync_start").to_string()));
+                        if let Some(ts) = execute_single_sync_step(&tx, &ctx, true, true).await {
+                            ctx.last_sync = Some(ts.clone());
+                            let _ = tx.send(GuiEvent::LastSyncUpdated(ts));
+                        }
 
-                let mut engine = SyncEngine::new(&mut db, remote.as_mut(), options, last_sync);
+                        match &ctx.mmex_exe {
+                            Some(exe) if exe.exists() => {
+                                let launch_msg = crate::i18n::t_fmt(
+                                    "sync.mmex_process_start",
+                                    &[
+                                        ("exe", &exe.display().to_string()),
+                                        ("db", &ctx.db_path.display().to_string()),
+                                    ],
+                                );
+                                let _ = tx.send(GuiEvent::Log(launch_msg.clone()));
+                                let _ = tx.send(GuiEvent::Status {
+                                    message: launch_msg,
+                                    is_error: false,
+                                });
 
-                match engine.run_cycle().await {
-                    Ok((stats, new_ts)) => {
-                        let summary = crate::i18n::t_fmt(
-                            "gui.log.sync_success",
-                            &[
-                                ("pushed", &stats.pushed_records.to_string()),
-                                ("pulled", &stats.pulled_records.to_string()),
-                                ("deleted", &stats.deleted_records.to_string()),
-                                ("conflicts", &stats.conflicts_resolved.to_string()),
-                            ],
-                        );
-                        let _ = tx.send(GuiEvent::Log(format!("✅ {}", summary)));
+                                match Command::new(exe).arg(&ctx.db_path).status() {
+                                    Ok(status) => {
+                                        let fin_msg = crate::i18n::t_fmt(
+                                            "sync.mmex_process_finished",
+                                            &[("status", &status.to_string())],
+                                        );
+                                        let _ = tx.send(GuiEvent::Log(fin_msg));
+                                        let final_ts =
+                                            execute_single_sync_step(&tx, &ctx, true, true).await;
+                                        let _ = tx.send(GuiEvent::SyncFinished {
+                                            last_sync: final_ts.or(ctx.last_sync),
+                                        });
+                                    }
+                                    Err(e) => {
+                                        let _ = tx.send(GuiEvent::Status {
+                                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                                            is_error: true,
+                                        });
+                                        let _ = tx.send(GuiEvent::SyncFinished {
+                                            last_sync: ctx.last_sync,
+                                        });
+                                    }
+                                }
+                            }
+                            _ => {
+                                let fallback_msg =
+                                    crate::i18n::t("sync.mmex_not_configured_fallback").to_string();
+                                let _ = tx.send(GuiEvent::Log(format!("⚠️ {}", fallback_msg)));
+                                let _ = tx.send(GuiEvent::SyncFinished {
+                                    last_sync: ctx.last_sync,
+                                });
+                            }
+                        }
+                    }
+                    "watch" => {
+                        let _ = tx.send(GuiEvent::Log(
+                            crate::i18n::t("sync.watch_pre_sync_start").to_string(),
+                        ));
+                        if let Some(ts) = execute_single_sync_step(&tx, &ctx, true, true).await {
+                            ctx.last_sync = Some(ts.clone());
+                            let _ = tx.send(GuiEvent::LastSyncUpdated(ts));
+                        }
+
+                        if let Some(exe) = &ctx.mmex_exe {
+                            if exe.exists() {
+                                let _ = tx.send(GuiEvent::Log(
+                                    crate::i18n::t("sync.mmex_background_start").to_string(),
+                                ));
+                                let _ = Command::new(exe).arg(&ctx.db_path).spawn();
+                            }
+                        }
+
+                        let watch_msg = crate::i18n::t("sync.watch_active").to_string();
+                        let _ = tx.send(GuiEvent::Log(watch_msg.clone()));
                         let _ = tx.send(GuiEvent::Status {
-                            message: summary,
+                            message: watch_msg,
                             is_error: false,
                         });
-                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: new_ts });
-                    }
-                    Err(e) => {
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.sync_error", &[("error", &e.to_string())])));
-                        let _ = tx.send(GuiEvent::Status {
-                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                            is_error: true,
+
+                        let mut last_modified = std::fs::metadata(&ctx.db_path)
+                            .and_then(|m| m.modified())
+                            .ok();
+
+                        while !stop_flag.load(Ordering::SeqCst) {
+                            for _ in 0..15 {
+                                if stop_flag.load(Ordering::SeqCst) {
+                                    break;
+                                }
+                                tokio::time::sleep(Duration::from_millis(200)).await;
+                            }
+                            if stop_flag.load(Ordering::SeqCst) {
+                                break;
+                            }
+
+                            let current_mod = std::fs::metadata(&ctx.db_path)
+                                .and_then(|m| m.modified())
+                                .ok();
+                            if current_mod != last_modified && current_mod.is_some() {
+                                last_modified = current_mod;
+                                let _ = tx.send(GuiEvent::Log(
+                                    crate::i18n::t("sync.watch_file_changed").to_string(),
+                                ));
+                                if let Some(ts) =
+                                    execute_single_sync_step(&tx, &ctx, true, true).await
+                                {
+                                    ctx.last_sync = Some(ts.clone());
+                                    let _ = tx.send(GuiEvent::LastSyncUpdated(ts));
+                                    // Riallinea il timestamp di modifica dopo il flush locale
+                                    last_modified = std::fs::metadata(&ctx.db_path)
+                                        .and_then(|m| m.modified())
+                                        .ok();
+                                }
+                            }
+                        }
+
+                        let _ = tx.send(GuiEvent::SyncFinished {
+                            last_sync: ctx.last_sync,
                         });
-                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: None });
+                    }
+                    _ => {
+                        let new_ts = execute_single_sync_step(&tx, &ctx, true, true).await;
+                        let _ = tx.send(GuiEvent::SyncFinished { last_sync: new_ts });
                     }
                 }
             });
@@ -396,6 +646,7 @@ impl MmexSyncGuiApp {
     }
 
     fn trigger_test_connection_async(&mut self) {
+        self.cancel_autostart_countdown();
         if self.is_working {
             return;
         }
@@ -436,7 +687,10 @@ impl MmexSyncGuiApp {
                     }
                 };
 
-                let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.test_endpoint", &[("url", &url)])));
+                let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                    "gui.log.test_endpoint",
+                    &[("url", &url)],
+                )));
 
                 if user.is_empty() || pass.is_empty() {
                     let _ = tx.send(GuiEvent::TestFinished {
@@ -448,6 +702,9 @@ impl MmexSyncGuiApp {
 
                 match remote.authenticate(&user, &pass).await {
                     Ok(auth) => {
+                        if let Ok(enc_tok) = protect(&auth.token, None) {
+                            let _ = tx.send(GuiEvent::TokenUpdated(enc_tok));
+                        }
                         let uid = auth.user_id.as_deref().unwrap_or("-");
                         let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
                             "gui.log.remote_auth_success",
@@ -459,10 +716,16 @@ impl MmexSyncGuiApp {
                         });
                     }
                     Err(e) => {
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt("gui.log.test_error", &[("error", &e.to_string())])));
+                        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                            "gui.log.test_error",
+                            &[("error", &e.to_string())],
+                        )));
                         let _ = tx.send(GuiEvent::TestFinished {
                             success: false,
-                            message: crate::i18n::t_fmt("gui.log.remote_auth_failed", &[("error", &e.to_string())]),
+                            message: crate::i18n::t_fmt(
+                                "gui.log.remote_auth_failed",
+                                &[("error", &e.to_string())],
+                            ),
                         });
                     }
                 }
@@ -471,6 +734,7 @@ impl MmexSyncGuiApp {
     }
 
     fn trigger_clear_db_async(&mut self) {
+        self.cancel_autostart_countdown();
         if self.is_working || self.db_path.trim().is_empty() {
             return;
         }
@@ -484,20 +748,24 @@ impl MmexSyncGuiApp {
         };
 
         std::thread::spawn(move || {
-            let mut db = match DatabaseService::connect(&db_path, false, file_password.as_deref(), false) {
-                Ok(d) => d,
-                Err(e) => {
-                    let _ = tx.send(GuiEvent::ClearFinished {
-                        success: false,
-                        message: format!("Errore apertura DB: {}", e),
-                    });
-                    return;
-                }
-            };
+            let mut db =
+                match DatabaseService::connect(&db_path, false, file_password.as_deref(), false) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::ClearFinished {
+                            success: false,
+                            message: format!("Errore apertura DB: {}", e),
+                        });
+                        return;
+                    }
+                };
 
             match db.clear_technical() {
                 Ok(_) => {
-                    let _ = tx.send(GuiEvent::Log(crate::i18n::t("gui.log.clear_db_success").to_string()));
+                    let _ = db.flush();
+                    let _ = tx.send(GuiEvent::Log(
+                        crate::i18n::t("gui.log.clear_db_success").to_string(),
+                    ));
                     let _ = tx.send(GuiEvent::ClearFinished {
                         success: true,
                         message: crate::i18n::t("gui.msg.clear_db_success").to_string(),
@@ -514,6 +782,7 @@ impl MmexSyncGuiApp {
     }
 
     fn trigger_clear_server_async(&mut self) {
+        self.cancel_autostart_countdown();
         if self.is_working {
             return;
         }
@@ -561,7 +830,9 @@ impl MmexSyncGuiApp {
 
                 match remote.clear_remote_server(SYNC_ORDER).await {
                     Ok(_) => {
-                        let _ = tx.send(GuiEvent::Log(crate::i18n::t("gui.log.clear_server_success").to_string()));
+                        let _ = tx.send(GuiEvent::Log(
+                            crate::i18n::t("gui.log.clear_server_success").to_string(),
+                        ));
                         let _ = tx.send(GuiEvent::ClearFinished {
                             success: true,
                             message: crate::i18n::t("gui.msg.clear_server_success").to_string(),
@@ -585,8 +856,23 @@ impl MmexSyncGuiApp {
                 GuiEvent::Status { message, is_error } => {
                     self.status_message = Some((message, is_error));
                 }
+                GuiEvent::TokenUpdated(enc_tok) => {
+                    self.encrypted_token = Some(enc_tok.clone());
+                    if let Ok(mut p) = self.config_mgr.load_profile(&self.active_profile) {
+                        p.encrypted_token = Some(enc_tok);
+                        let _ = self.config_mgr.save_profile(&self.active_profile, &p);
+                    }
+                }
+                GuiEvent::LastSyncUpdated(ts) => {
+                    self.last_sync = Some(ts.clone());
+                    if let Ok(mut p) = self.config_mgr.load_profile(&self.active_profile) {
+                        p.last_sync = Some(ts);
+                        let _ = self.config_mgr.save_profile(&self.active_profile, &p);
+                    }
+                }
                 GuiEvent::SyncFinished { last_sync } => {
                     self.is_working = false;
+                    self.is_watching = false;
                     if let Some(ts) = last_sync {
                         self.last_sync = Some(ts.clone());
                         if let Ok(mut p) = self.config_mgr.load_profile(&self.active_profile) {
@@ -608,9 +894,152 @@ impl MmexSyncGuiApp {
     }
 }
 
+/// Funzione helper eseguita nel worker thread per connettere DB, autenticare il client remoto ed eseguire un ciclo SyncEngine
+async fn execute_single_sync_step(
+    tx: &Sender<GuiEvent>,
+    ctx: &WorkerSyncContext,
+    push: bool,
+    pull: bool,
+) -> Option<String> {
+    let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+        "gui.log.db_open",
+        &[("path", &ctx.db_path.display().to_string())],
+    )));
+
+    let mut db = match DatabaseService::connect(
+        &ctx.db_path,
+        ctx.verbose,
+        ctx.file_password.as_deref(),
+        false,
+    ) {
+        Ok(d) => d,
+        Err(e) => {
+            let _ = tx.send(GuiEvent::Status {
+                message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                is_error: true,
+            });
+            let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                "gui.log.db_open_error",
+                &[("error", &e.to_string())],
+            )));
+            return None;
+        }
+    };
+
+    let mut remote = match create_remote_server(&ctx.server_type, &ctx.url) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.send(GuiEvent::Status {
+                message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                is_error: true,
+            });
+            let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                "gui.log.remote_error",
+                &[("error", &e.to_string())],
+            )));
+            return None;
+        }
+    };
+
+    if let (Some(u), Some(p)) = (&ctx.user, &ctx.pass) {
+        let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+            "gui.log.remote_auth",
+            &[("user", u)],
+        )));
+        match remote.authenticate(u, p).await {
+            Ok(auth) => {
+                if let Ok(enc_tok) = protect(&auth.token, None) {
+                    let _ = tx.send(GuiEvent::TokenUpdated(enc_tok));
+                }
+            }
+            Err(e) => {
+                let _ = tx.send(GuiEvent::Status {
+                    message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                    is_error: true,
+                });
+                let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                    "gui.log.remote_auth_failed",
+                    &[("error", &e.to_string())],
+                )));
+                return None;
+            }
+        }
+    } else if let Some(enc_token) = &ctx.encrypted_token {
+        if let Ok(Some(tok)) = unprotect(enc_token, None) {
+            remote.set_token(tok, ctx.auth_collection.clone());
+            if let Ok(refreshed) = remote.refresh_token().await {
+                if let Ok(enc_tok) = protect(&refreshed.token, None) {
+                    let _ = tx.send(GuiEvent::TokenUpdated(enc_tok));
+                }
+            }
+        }
+    }
+
+    let options = SyncOptions {
+        init: true,
+        push,
+        pull,
+        force: ctx.force,
+        verbose: ctx.verbose,
+    };
+
+    let mut engine = SyncEngine::new(&mut db, remote.as_mut(), options, ctx.last_sync.clone());
+
+    match engine.run_cycle().await {
+        Ok((stats, new_ts)) => {
+            let summary = crate::i18n::t_fmt(
+                "gui.log.sync_success",
+                &[
+                    ("pushed", &stats.pushed_records.to_string()),
+                    ("pulled", &stats.pulled_records.to_string()),
+                    ("deleted", &stats.deleted_records.to_string()),
+                    ("conflicts", &stats.conflicts_resolved.to_string()),
+                ],
+            );
+            let _ = tx.send(GuiEvent::Log(format!("✅ {}", summary)));
+            let _ = tx.send(GuiEvent::Status {
+                message: summary,
+                is_error: false,
+            });
+            new_ts
+        }
+        Err(e) => {
+            let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
+                "gui.log.sync_error",
+                &[("error", &e.to_string())],
+            )));
+            let _ = tx.send(GuiEvent::Status {
+                message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                is_error: true,
+            });
+            None
+        }
+    }
+}
+
 impl eframe::App for MmexSyncGuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_events();
+
+        // Intercettazione tasto Esc per annullare il countdown di auto-start (o fermare Watch)
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.countdown_start.is_some() {
+                self.cancel_autostart_countdown();
+            } else if self.is_watching {
+                self.watch_stop_flag.store(true, Ordering::SeqCst);
+            }
+        }
+
+        // Verifica scadenza countdown di 3 secondi
+        if let Some(start) = self.countdown_start {
+            let elapsed = start.elapsed().as_secs_f32();
+            if elapsed >= AUTOSTART_COUNTDOWN_SECS {
+                self.countdown_start = None;
+                self.trigger_default_mode_async();
+            } else {
+                ctx.request_repaint();
+            }
+        }
 
         // 1. TOP MENU BAR (Classica Desktop)
         egui::TopBottomPanel::top("top_menu_bar").show(ctx, |ui| {
@@ -618,6 +1047,7 @@ impl eframe::App for MmexSyncGuiApp {
                 // MENU PROFILI
                 ui.menu_button(self.lang.menu_profiles(), |ui| {
                     if ui.button(self.lang.menu_profile_new()).clicked() {
+                        self.cancel_autostart_countdown();
                         self.new_profile_name.clear();
                         self.dialog_new_profile = true;
                         ui.close_menu();
@@ -633,6 +1063,7 @@ impl eframe::App for MmexSyncGuiApp {
                                 format!("  {}", prof)
                             };
                             if ui.button(label).clicked() {
+                                self.cancel_autostart_countdown();
                                 self.save_current_profile();
                                 self.load_profile_data(&prof);
                                 ui.close_menu();
@@ -643,17 +1074,20 @@ impl eframe::App for MmexSyncGuiApp {
                     ui.separator();
 
                     if ui.button(self.lang.menu_profile_save()).clicked() {
+                        self.cancel_autostart_countdown();
                         self.save_current_profile();
                         ui.close_menu();
                     }
 
                     if ui.button(self.lang.menu_profile_save_as()).clicked() {
+                        self.cancel_autostart_countdown();
                         self.save_as_name = format!("{}_copy", self.active_profile);
                         self.dialog_save_as = true;
                         ui.close_menu();
                     }
 
                     if ui.button(self.lang.menu_profile_rename()).clicked() {
+                        self.cancel_autostart_countdown();
                         self.rename_profile_name = self.active_profile.clone();
                         self.dialog_rename_profile = true;
                         ui.close_menu();
@@ -663,16 +1097,24 @@ impl eframe::App for MmexSyncGuiApp {
 
                     let is_already_default = self.active_profile == self.default_profile;
                     if ui
-                        .add_enabled(!is_already_default, egui::Button::new(self.lang.menu_profile_set_default()))
+                        .add_enabled(
+                            !is_already_default,
+                            egui::Button::new(self.lang.menu_profile_set_default()),
+                        )
                         .clicked()
                     {
+                        self.cancel_autostart_countdown();
                         let _ = self.config_mgr.set_default_profile(&self.active_profile);
                         self.default_profile = self.active_profile.clone();
-                        self.add_log(self.lang.t_fmt("gui.log.profile_default_set", &[("name", &self.active_profile)]));
+                        self.add_log(self.lang.t_fmt(
+                            "gui.log.profile_default_set",
+                            &[("name", &self.active_profile)],
+                        ));
                         ui.close_menu();
                     }
 
                     if ui.button(self.lang.menu_profile_delete()).clicked() {
+                        self.cancel_autostart_countdown();
                         self.dialog_delete_confirm = true;
                         ui.close_menu();
                     }
@@ -687,6 +1129,7 @@ impl eframe::App for MmexSyncGuiApp {
                 // MENU MODIFICA
                 ui.menu_button(self.lang.menu_edit(), |ui| {
                     if ui.button(self.lang.menu_edit_db()).clicked() {
+                        self.cancel_autostart_countdown();
                         if let Some(file) = rfd::FileDialog::new()
                             .add_filter("MMEX Database", &["mmb", "emb"])
                             .pick_file()
@@ -697,6 +1140,7 @@ impl eframe::App for MmexSyncGuiApp {
                     }
 
                     if ui.button(self.lang.menu_edit_exe()).clicked() {
+                        self.cancel_autostart_countdown();
                         if let Some(file) = rfd::FileDialog::new().pick_file() {
                             self.mmex_exe = file.to_string_lossy().to_string();
                         }
@@ -707,7 +1151,10 @@ impl eframe::App for MmexSyncGuiApp {
                 // MENU SINCRONIZZAZIONE (con switch "Force Mode")
                 ui.menu_button(self.lang.menu_sync(), |ui| {
                     if ui
-                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_all()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_sync_all()),
+                        )
                         .clicked()
                     {
                         self.trigger_sync_async(true, true);
@@ -715,7 +1162,10 @@ impl eframe::App for MmexSyncGuiApp {
                     }
 
                     if ui
-                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_push()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_sync_push()),
+                        )
                         .clicked()
                     {
                         self.trigger_sync_async(true, false);
@@ -723,7 +1173,10 @@ impl eframe::App for MmexSyncGuiApp {
                     }
 
                     if ui
-                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_pull()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_sync_pull()),
+                        )
                         .clicked()
                     {
                         self.trigger_sync_async(false, true);
@@ -733,7 +1186,10 @@ impl eframe::App for MmexSyncGuiApp {
                     ui.separator();
 
                     if ui
-                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_sync_test()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_sync_test()),
+                        )
                         .clicked()
                     {
                         self.trigger_test_connection_async();
@@ -771,17 +1227,25 @@ impl eframe::App for MmexSyncGuiApp {
                 // MENU STRUMENTI
                 ui.menu_button(self.lang.menu_tools(), |ui| {
                     if ui
-                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_tools_clear_db()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_tools_clear_db()),
+                        )
                         .clicked()
                     {
+                        self.cancel_autostart_countdown();
                         self.dialog_clear_db_confirm = true;
                         ui.close_menu();
                     }
 
                     if ui
-                        .add_enabled(!self.is_working, egui::Button::new(self.lang.menu_tools_clear_server()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_tools_clear_server()),
+                        )
                         .clicked()
                     {
+                        self.cancel_autostart_countdown();
                         self.dialog_clear_server_confirm = true;
                         ui.close_menu();
                     }
@@ -790,6 +1254,7 @@ impl eframe::App for MmexSyncGuiApp {
                 // MENU AIUTO
                 ui.menu_button(self.lang.menu_help(), |ui| {
                     if ui.button(self.lang.menu_help_about()).clicked() {
+                        self.cancel_autostart_countdown();
                         self.dialog_about = true;
                         ui.close_menu();
                     }
@@ -805,9 +1270,15 @@ impl eframe::App for MmexSyncGuiApp {
                     ui.label(self.lang.msg_operation_in_progress());
                 } else if let Some((msg, is_error)) = &self.status_message {
                     if *is_error {
-                        ui.colored_label(egui::Color32::from_rgb(255, 90, 90), format!("⚠ {}", msg));
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 90, 90),
+                            format!("⚠ {}", msg),
+                        );
                     } else {
-                        ui.colored_label(egui::Color32::from_rgb(90, 255, 120), format!("✓ {}", msg));
+                        ui.colored_label(
+                            egui::Color32::from_rgb(90, 255, 120),
+                            format!("✓ {}", msg),
+                        );
                     }
                 } else {
                     ui.label(self.lang.msg_ready());
@@ -823,9 +1294,50 @@ impl eframe::App for MmexSyncGuiApp {
         // 3. CENTRAL PANEL
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                // Banner Countdown Auto-Start (se attivo)
+                if let Some(start) = self.countdown_start {
+                    let remaining = (AUTOSTART_COUNTDOWN_SECS - start.elapsed().as_secs_f32()).max(0.0);
+                    let progress = (remaining / AUTOSTART_COUNTDOWN_SECS).clamp(0.0, 1.0);
+                    let banner_text = self.lang.t_fmt(
+                        "gui.autostart.banner",
+                        &[
+                            ("mode", &self.default_mode.to_uppercase()),
+                            ("seconds", &format!("{:.1}", remaining)),
+                        ],
+                    );
+
+                    egui::Frame::group(ui.style())
+                        .fill(egui::Color32::from_rgb(45, 55, 75))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(255, 215, 90),
+                                    egui::RichText::new(banner_text).strong(),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui
+                                            .button(self.lang.t("gui.autostart.btn_cancel"))
+                                            .clicked()
+                                        {
+                                            self.cancel_autostart_countdown();
+                                        }
+                                    },
+                                );
+                            });
+                            ui.add(egui::ProgressBar::new(progress).animate(true));
+                        });
+                    ui.add_space(8.0);
+                }
+
                 // Header Profilo
                 ui.horizontal(|ui| {
-                    ui.heading(format!("{} {}", self.lang.active_profile_label(), self.active_profile));
+                    ui.heading(format!(
+                        "{} {}",
+                        self.lang.active_profile_label(),
+                        self.active_profile
+                    ));
                     if self.active_profile == self.default_profile {
                         ui.colored_label(
                             egui::Color32::from_rgb(100, 200, 255),
@@ -839,8 +1351,11 @@ impl eframe::App for MmexSyncGuiApp {
                 ui.collapsing(self.lang.section_db(), |ui| {
                     ui.horizontal(|ui| {
                         ui.label(self.lang.field_db_path());
-                        ui.text_edit_singleline(&mut self.db_path);
+                        if ui.text_edit_singleline(&mut self.db_path).changed() {
+                            self.cancel_autostart_countdown();
+                        }
                         if ui.button(self.lang.btn_browse()).clicked() {
+                            self.cancel_autostart_countdown();
                             if let Some(file) = rfd::FileDialog::new()
                                 .add_filter("MMEX Database", &["mmb", "emb"])
                                 .pick_file()
@@ -854,8 +1369,16 @@ impl eframe::App for MmexSyncGuiApp {
                     if is_emb {
                         ui.horizontal(|ui| {
                             ui.label(self.lang.field_db_password());
-                            ui.add(egui::TextEdit::singleline(&mut self.file_password).password(true));
-                            ui.checkbox(&mut self.save_file_password, self.lang.field_save_password());
+                            if ui
+                                .add(egui::TextEdit::singleline(&mut self.file_password).password(true))
+                                .changed()
+                            {
+                                self.cancel_autostart_countdown();
+                            }
+                            ui.checkbox(
+                                &mut self.save_file_password,
+                                self.lang.field_save_password(),
+                            );
                         });
                     }
                 });
@@ -881,19 +1404,30 @@ impl eframe::App for MmexSyncGuiApp {
                             ui.end_row();
 
                             ui.label(self.lang.field_server_url());
-                            ui.text_edit_singleline(&mut self.pb_url);
+                            if ui.text_edit_singleline(&mut self.pb_url).changed() {
+                                self.cancel_autostart_countdown();
+                            }
                             ui.end_row();
 
                             ui.label(self.lang.field_server_user());
-                            ui.text_edit_singleline(&mut self.pb_user);
+                            if ui.text_edit_singleline(&mut self.pb_user).changed() {
+                                self.cancel_autostart_countdown();
+                            }
                             ui.end_row();
 
                             ui.label(self.lang.field_server_password());
-                            ui.add(egui::TextEdit::singleline(&mut self.pb_pass).password(true));
+                            if ui
+                                .add(egui::TextEdit::singleline(&mut self.pb_pass).password(true))
+                                .changed()
+                            {
+                                self.cancel_autostart_countdown();
+                            }
                             ui.end_row();
 
                             ui.label(self.lang.field_auth_collection());
-                            ui.text_edit_singleline(&mut self.pb_auth_collection);
+                            if ui.text_edit_singleline(&mut self.pb_auth_collection).changed() {
+                                self.cancel_autostart_countdown();
+                            }
                             ui.end_row();
                         });
                 });
@@ -904,8 +1438,11 @@ impl eframe::App for MmexSyncGuiApp {
                 ui.collapsing(self.lang.section_runner(), |ui| {
                     ui.horizontal(|ui| {
                         ui.label(self.lang.field_mmex_exe());
-                        ui.text_edit_singleline(&mut self.mmex_exe);
+                        if ui.text_edit_singleline(&mut self.mmex_exe).changed() {
+                            self.cancel_autostart_countdown();
+                        }
                         if ui.button(self.lang.btn_browse()).clicked() {
+                            self.cancel_autostart_countdown();
                             if let Some(file) = rfd::FileDialog::new().pick_file() {
                                 self.mmex_exe = file.to_string_lossy().to_string();
                             }
@@ -917,11 +1454,30 @@ impl eframe::App for MmexSyncGuiApp {
                         egui::ComboBox::from_id_salt("default_mode_combo")
                             .selected_text(&self.default_mode)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.default_mode, "run".to_string(), "Run (MMEX Launcher)");
-                                ui.selectable_value(&mut self.default_mode, "sync".to_string(), "Sync Only");
-                                ui.selectable_value(&mut self.default_mode, "watch".to_string(), "Watch File");
+                                ui.selectable_value(
+                                    &mut self.default_mode,
+                                    "run".to_string(),
+                                    "Run (MMEX Launcher)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.default_mode,
+                                    "sync".to_string(),
+                                    "Sync Only",
+                                );
+                                ui.selectable_value(
+                                    &mut self.default_mode,
+                                    "watch".to_string(),
+                                    "Watch File",
+                                );
                             });
 
+                        if ui
+                            .checkbox(&mut self.auto_start, self.lang.toggle_auto_start())
+                            .changed()
+                            && !self.auto_start
+                        {
+                            self.cancel_autostart_countdown();
+                        }
                         ui.checkbox(&mut self.force_mode, self.lang.toggle_force_mode());
                         ui.checkbox(&mut self.verbose, self.lang.toggle_verbose());
                     });
@@ -931,38 +1487,76 @@ impl eframe::App for MmexSyncGuiApp {
 
                 // Barra dei pulsanti primari
                 ui.horizontal_wrapped(|ui| {
+                    let run_btn_label = self
+                        .lang
+                        .t_fmt("gui.btn.run_default", &[("mode", &self.default_mode.to_uppercase())]);
+
+                    if self.is_watching {
+                        if ui
+                            .add_sized([160.0, 32.0], egui::Button::new(self.lang.btn_stop_watch()))
+                            .clicked()
+                        {
+                            self.watch_stop_flag.store(true, Ordering::SeqCst);
+                        }
+                    } else if ui
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(run_btn_label).min_size(egui::vec2(160.0, 32.0)),
+                        )
+                        .clicked()
+                    {
+                        self.trigger_default_mode_async();
+                    }
+
                     if ui
-                        .add_sized([180.0, 32.0], egui::Button::new(self.lang.btn_sync_full()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.btn_sync_full())
+                                .min_size(egui::vec2(160.0, 32.0)),
+                        )
                         .clicked()
                     {
                         self.trigger_sync_async(true, true);
                     }
 
                     if ui
-                        .add_sized([120.0, 32.0], egui::Button::new(self.lang.btn_push_only()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.btn_push_only())
+                                .min_size(egui::vec2(110.0, 32.0)),
+                        )
                         .clicked()
                     {
                         self.trigger_sync_async(true, false);
                     }
 
                     if ui
-                        .add_sized([120.0, 32.0], egui::Button::new(self.lang.btn_pull_only()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.btn_pull_only())
+                                .min_size(egui::vec2(110.0, 32.0)),
+                        )
                         .clicked()
                     {
                         self.trigger_sync_async(false, true);
                     }
 
                     if ui
-                        .add_sized([140.0, 32.0], egui::Button::new(self.lang.btn_test_conn()))
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.btn_test_conn())
+                                .min_size(egui::vec2(130.0, 32.0)),
+                        )
                         .clicked()
                     {
                         self.trigger_test_connection_async();
                     }
 
                     if ui
-                        .add_sized([120.0, 32.0], egui::Button::new(self.lang.btn_save()))
+                        .add_sized([110.0, 32.0], egui::Button::new(self.lang.btn_save()))
                         .clicked()
                     {
+                        self.cancel_autostart_countdown();
                         self.save_current_profile();
                     }
                 });
@@ -1077,7 +1671,10 @@ impl MmexSyncGuiApp {
                             let new_name = self.rename_profile_name.trim().to_string();
                             if !new_name.is_empty()
                                 && new_name != self.active_profile
-                                && self.config_mgr.rename_profile(&self.active_profile, &new_name).is_ok()
+                                && self
+                                    .config_mgr
+                                    .rename_profile(&self.active_profile, &new_name)
+                                    .is_ok()
                             {
                                 self.active_profile = new_name;
                                 self.refresh_profile_list();
@@ -1141,7 +1738,10 @@ impl MmexSyncGuiApp {
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
-                    ui.colored_label(egui::Color32::from_rgb(255, 90, 90), self.lang.dialog_clear_server_msg());
+                    ui.colored_label(
+                        egui::Color32::from_rgb(255, 90, 90),
+                        self.lang.dialog_clear_server_msg(),
+                    );
                     ui.horizontal(|ui| {
                         if ui.button(self.lang.btn_ok()).clicked() {
                             self.dialog_clear_server_confirm = false;

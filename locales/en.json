@@ -55,8 +55,15 @@
 
   "gui.toggle.force_mode": "⚡ Force Mode",
   "gui.toggle.verbose": "📝 Verbose Logging",
+  "gui.toggle.auto_start": "🚀 Auto-Start on Launch",
+
+  "gui.autostart.banner": "⏳ Auto-starting '{mode}' mode in {seconds}s... (Press Esc to cancel)",
+  "gui.autostart.btn_cancel": "✖ Cancel Auto-Start (Esc)",
+  "gui.autostart.cancelled": "Auto-start countdown cancelled by user.",
 
   "gui.btn.browse": "Browse...",
+  "gui.btn.run_default": "▶️ Run ({mode})",
+  "gui.btn.stop_watch": "⏹️ Stop Watch",
   "gui.btn.sync_full": "🔄 Sync (Push + Pull)",
   "gui.btn.push_only": "⬆️ Push Only",
   "gui.btn.pull_only": "⬇️ Pull Only",

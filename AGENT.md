@@ -1,44 +1,43 @@
-# AGENTS.md - Linee Guida Architetturali per mmex-sync (Rust Rewrite)
+# AGENTS.md - Architectural and Operational Guidelines for mmex-sync
 
-## Contesto del Progetto
-`mmex-sync` è un sidecar gateway di sincronizzazione multipiattaforma tra i database locali di **Money Manager Ex (MMEX)** (file `.mmb` SQLite standard e file `.emb` cifrati) e un backend cloud remoto.
-Stiamo eseguendo una migrazione completa da Node.js a Rust sul branch `rust`.
+## Project Context
+`mmex-sync` is a cross-platform (Windows, macOS, Linux) synchronization sidecar gateway between local **Money Manager Ex (MMEX)** databases (standard `.mmb` SQLite and encrypted `.emb` files) and remote cloud backends (e.g., PocketBase). 
+The project is built entirely in **Rust** (Edition 2021).
 
-## Regole Operative per l'Agente
-1. **Riferimento Legacy:** Prima di implementare qualsiasi funzionalità in Rust, ispeziona il codice Node.js esistente per estrarre l'esatta logica di business, gli algoritmi di crittografia `.emb`, le query SQL e la struttura dati.
-2. **Ciclo di Verifica Obbligatorio:** Dopo ogni modifica ai file `.rs`, DEVI eseguire `cargo check` e `cargo clippy` nel terminale. Non considerare mai un task completato se il codice non compila a zero errori.
-3. **Preservazione Temporanea:** Sposta i file Node.js (`src/`, `package.json`, ecc.) in una cartella `_legacy_node/` durante la migrazione, così da poterli consultare senza inquinare la root di Cargo.
+## Spec-Driven Evolution Protocol (MANDATORY)
+Do not invent or guess behaviors. Code evolution is strictly driven by documentation:
+- **INTERNAL SPECS (`specs/`):** The `specs/as-is/` folder contains the exact internal specification of how the code works today. Modification requests are located in `specs/changes/CR-XXX-*.md`. This is your Single Source of Truth for development.
+- **PUBLIC DOCS (`docs/`):** The `docs/` folder is used to generate the public-facing website. It MUST be updated when implementing significant user-facing changes (e.g., new CLI flags, new GUI behaviors), but with **extreme caution**. Write for the end-user and NEVER include sensitive internal engineering details, architectural secrets, or backend credentials.
 
-## Architettura: Clean & Hexagonal (Ports & Adapters)
-Il progetto DEVE disaccoppiare completamente il database locale MMEX e il motore di sincronizzazione dallo specifico provider cloud remoto.
+**Workflow for implementing a Change Request (CR):**
+1. **Context Reading:** Read the `CR-XXX` document and ALL files in `specs/as-is/` to understand the current state and the *System Invariants* that must be preserved.
+2. **Impact Plan:** Set the CR status to `IN_PROGRESS`.
+3. **Coding & Testing:** Modify the Rust code in `src/`, add/update unit tests, and update `locales/*.json` if there are new UI/CLI text strings.
+4. **Strict Validation:** Run `cargo check`, `cargo clippy`, and `cargo test`. Never consider a task complete if there are compiler errors or warnings.
+5. **Documentation Alignment:** 
+   - **Internal:** Update the relevant files in `specs/as-is/` so they accurately reflect the newly implemented code behavior. Use english as default language for this files.
+   - **Public:** If the CR introduces user-facing changes, cautiously update the public manual in `docs/` to help the end-users. Use english as default language for this files too.
+6. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE`.
 
-### Pattern `RemoteServer` (Multi-Backend Ready)
-Il modulo `src/remoteserver/` deve definire un trait asincrono `RemoteServer` (usando `async-trait` o native async traits in Rust 2021/2024) che astrae le operazioni di autenticazione, pull, push e health-check.
-- L'orchestratore di sync (`src/sync/`) deve dipendere **esclusivamente** dal trait `RemoteServer` (es. `Box<dyn RemoteServer>` o generici), mai direttamente da strutture specifiche di PocketBase.
-- La configurazione (`config.rs` / CLI) deve prevedere un parametro `REMOTE_PROVIDER` (default: `pocketbase`, predisposto per estensioni future come `supabase` o `firebase`).
-- L'implementazione di PocketBase deve risiedere in `src/remoteserver/pocketbase/` (o `src/remoteserver/pocketbase.rs`).
+## Tech Stack & Architectural Rules
+- **No Panics Allowed:** It is **STRICTLY FORBIDDEN** to use `.unwrap()` or `.expect()` in production code (only allowed in tests). Handle all errors gracefully by propagating them with `?` using `thiserror` (`SyncError`) and `anyhow`.
+- **Async Runtime:** `tokio` (full features) + `async-trait`.
+- **Local Database (MMEX):** `rusqlite` with features `["bundled", "chrono"]`. 
+  - Always set `busy_timeout` and `journal_mode = WAL`. Multiple SQLite writes MUST happen inside an explicit atomic transaction (`conn.transaction()`).
+- **RemoteServer Pattern:** `src/remoteserver/` uses a Ports & Adapters approach. The sync engine must depend exclusively on the generic `RemoteServer` trait, never directly on PocketBase structures.
+- **Network & TLS:** `reqwest` with `rustls-tls` and `default-features = false` (zero system OpenSSL dependencies for clean cross-compilation).
+- **`.emb` Cryptography:** Pure Rust crates from the `RustCrypto` family (`aes`, `cipher`, `pbkdf2`, `cbc`).
+- **Native GUI:** `eframe` (`egui`) and `rfd` (enabled via the default `gui` feature in `Cargo.toml`).
+- **Internationalization (i18n):** Text strings are saved in `locales/en.json` and `locales/it.json`, and embedded at compile time.
 
-## Stack Tecnologico Obbligatorio
-- **Runtime Asincrono:** `tokio` (full features) + `async-trait`.
-- **Database Locale (MMEX):** `rusqlite` con feature `["bundled", "chrono"]`. **NON** usare SQLite di sistema.
-  - Imposta sempre `busy_timeout` e valuta `journal_mode = WAL` per prevenire `Database Locked`.
-  - Tutte le scritture multiple su SQLite DEVONO avvenire dentro una transazione atomica (`conn.transaction()`).
-- **Rete e TLS:** `reqwest` con feature `["json", "rustls-tls"]` e `default-features = false` (zero dipendenze da OpenSSL di sistema per garantire cross-compilation pulita).
-- **Serializzazione:** `serde` e `serde_json`. Le `struct` in `src/domain/` devono essere agnostiche rispetto al backend remoto; il mapping verso il formato JSON specifico di PocketBase (o futuri backend) deve avvenire dentro `src/remoteserver/<provider>`.
-- **Crittografia `.emb`:** Crate puri della famiglia `RustCrypto` (`aes`, `cipher`, `sha2`, `pbkdf2` o `cbc` in base all'implementazione JS attuale). Gestione sicura dei file temporanei tramite crate `tempfile` o in-memory.
-- **Gestione Errori:** `thiserror` per gli errori tipizzati (`SyncError`), `anyhow` solo nel `main.rs`.
-  - **DIVIETO ASSOLUTO** di usare `.unwrap()` o `.expect()` nel codice di produzione (ammessi solo nei test).
-- **CLI & Configurazione:** `clap` (macro `derive` + `env`) + `dotenvy`.
-- **Logging:** `tracing` e `tracing-subscriber`.
-
-## Struttura dei Moduli Target (`src/`)
-- `main.rs` -> Entrypoint, parsing CLI, setup logger, iniezione delle dipendenze.
-- `config.rs` -> Gestione configurazione, selezione del provider remoto ed `.env`.
-- `error.rs` -> Definizione di `SyncError` con `thiserror`.
-- `domain/` -> Struct pure agnostiche (Transazioni, Conti, Categorie, SyncPayload) e regole di risoluzione conflitti.
-- `crypto/` -> Logica di decrittazione e crittografia nativa dei file `.emb` con unit test.
-- `db/` -> Repository SQLite (`rusqlite`), query MMEX e transazioni atomiche.
-- `remoteserver/` ->
-  - `mod.rs` -> Trait `RemoteServer` e Factory di creazione del client.
-  - `pocketbase.rs` (o sottocartella) -> Implementazione concreta per PocketBase.
-- `sync/` -> Motore di sincronizzazione che orchestra `db` e `dyn RemoteServer`.
+## Target Module Structure (`src/`)
+- `main.rs` & `cli.rs` -> Entrypoint, CLI vs GUI dispatch, and `clap` argument parsing.
+- `config.rs` -> JSON profile configuration management and `.env` loading.
+- `error.rs` -> Centralized `SyncError` enum (`thiserror`).
+- `i18n.rs` -> JSON translation logic and OS language detection fallback.
+- `domain/` -> Pure structs, data models, and conflict resolution rules (agnostic to DB or Cloud).
+- `crypto/` -> Decryption and native encryption logic for `.emb` files and `.key` credentials.
+- `db/` -> SQLite repository, MMEX queries, atomic transactions, and schema migration.
+- `remoteserver/` -> `RemoteServer` trait and concrete implementations (e.g., `pocketbase.rs`).
+- `sync/` -> Async sync orchestrator (INIT, PUSH, PULL, RUN, WATCH modes).
+- `gui/` -> Native `egui` application state, layout, and background worker threads.

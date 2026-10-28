@@ -117,13 +117,13 @@ pub struct CliArgs {
     #[arg(long)]
     pub nowait: bool,
 
-    /// Avvia l'interfaccia grafica Web
-    #[arg(long)]
-    pub gui: bool,
+    /// Forza l'esecuzione headless nel terminale (senza GUI)
+    #[arg(long = "cli")]
+    pub cli: bool,
 
-    /// Disabilita la GUI
-    #[arg(long)]
-    pub nogui: bool,
+    /// Avvia l'interfaccia grafica Desktop bloccando l'auto-start
+    #[arg(long = "gui")]
+    pub gui: bool,
 
     /// Controlla la presenza di aggiornamenti
     #[arg(long = "checkForUpdate")]

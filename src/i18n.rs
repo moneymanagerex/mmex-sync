@@ -160,9 +160,11 @@ impl Language {
 
     pub fn toggle_force_mode(&self) -> &'static str { self.t("gui.toggle.force_mode") }
     pub fn toggle_verbose(&self) -> &'static str { self.t("gui.toggle.verbose") }
+    pub fn toggle_auto_start(&self) -> &'static str { self.t("gui.toggle.auto_start") }
 
     // Pulsanti
     pub fn btn_browse(&self) -> &'static str { self.t("gui.btn.browse") }
+    pub fn btn_stop_watch(&self) -> &'static str { self.t("gui.btn.stop_watch") }
     pub fn btn_sync_full(&self) -> &'static str { self.t("gui.btn.sync_full") }
     pub fn btn_push_only(&self) -> &'static str { self.t("gui.btn.push_only") }
     pub fn btn_pull_only(&self) -> &'static str { self.t("gui.btn.pull_only") }
