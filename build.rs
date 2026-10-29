@@ -73,17 +73,24 @@ exports:
                     "cargo:warning=Failed to compile Windows icon resource '{}': {}",
                     icon_path, err
                 );
-            } else if let Ok(out_dir) = env::var("OUT_DIR") {
+            } else if env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default() == "gnu" {
                 // In crates with both [lib] and [[bin]], cargo:rustc-link-lib=static=resource
                 // attaches libresource.a to the rlib and GNU ld drops unreferenced .rsrc objects
                 // from .a archives. Passing resource.o / resource.lib directly to binary targets
                 // forces the PE .rsrc icon section into mmex-sync.exe.
-                let res_obj = PathBuf::from(&out_dir).join("resource.o");
-                let res_lib = PathBuf::from(&out_dir).join("resource.lib");
-                if res_obj.exists() {
-                    println!("cargo:rustc-link-arg-bins={}", res_obj.display());
-                } else if res_lib.exists() {
-                    println!("cargo:rustc-link-arg-bins={}", res_lib.display());
+                //
+                // NOTA: Questo workaround è necessario SOLO per l'ambiente GNU (mingw).
+                // Per l'ambiente MSVC (windows-msvc), winres gestisce già correttamente
+                // l'iniezione delle risorse senza bisogno di forzarle tramite arg-bins,
+                // evitando l'errore "LNK1123: CVT1100: duplicate resource".
+                if let Ok(out_dir) = env::var("OUT_DIR") {
+                    let res_obj = PathBuf::from(&out_dir).join("resource.o");
+                    let res_lib = PathBuf::from(&out_dir).join("resource.lib");
+                    if res_obj.exists() {
+                        println!("cargo:rustc-link-arg-bins={}", res_obj.display());
+                    } else if res_lib.exists() {
+                        println!("cargo:rustc-link-arg-bins={}", res_lib.display());
+                    }
                 }
             }
         } else {
