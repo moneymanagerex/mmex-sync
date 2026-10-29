@@ -8,7 +8,6 @@
   "gui.menu.profile.set_default": "Imposta come Predefinito",
   "gui.menu.profile.delete": "Elimina Profilo",
   "gui.menu.profile.exit": "Esci",
-
   "gui.menu.edit": "Modifica",
   "gui.menu.edit.db": "Database MMEX...",
   "gui.menu.edit.new_db": "Crea Nuovo Database MMEX...",
@@ -16,33 +15,26 @@
   "gui.menu.edit.exe": "Eseguibile Money Manager Ex...",
   "gui.menu.edit.remote": "Server Remoto & Credenziali...",
   "gui.menu.edit.mode": "Modalità Operativa Predefinita",
-
   "gui.menu.sync": "Sincronizzazione",
   "gui.menu.sync.all": "Avvia Sincronizzazione Completa (Push + Pull)",
   "gui.menu.sync.push": "Esegui solo Push (Locale -> Remoto)",
   "gui.menu.sync.pull": "Esegui solo Pull (Remoto -> Locale)",
   "gui.menu.sync.test": "Test Connessione & Verifica Token",
   "gui.menu.sync.force_mode": "Usa Modalità Forzata (Force Mode)",
-
   "gui.menu.preferences": "Preferenze",
   "gui.menu.preferences.lang": "Lingua dell'Interfaccia",
-
   "gui.menu.tools": "Strumenti",
   "gui.menu.tools.clear_db": "Pulisci Schema Tecnico Locale",
   "gui.menu.tools.clear_server": "Pulisci Server Remoto",
-
   "gui.menu.help": "Aiuto",
   "gui.menu.help.about": "Informazioni su MMEX-Sync",
-
   "gui.dashboard.active_profile": "Profilo Attivo:",
   "gui.dashboard.default_badge": "PREDEFINITO",
   "gui.dashboard.last_sync": "Ultima Sincronizzazione:",
   "gui.dashboard.never": "Mai",
-
   "gui.section.db": "📁 Database MMEX Locale",
   "gui.section.remote": "🌐 Server Remoto Cloud",
   "gui.section.runner": "⚙️ Esecuzione MMEX & Modalità",
-
   "gui.field.db_path": "Percorso Database (.mmb/.emb):",
   "gui.field.db_password": "Password Database Cifrato (.emb):",
   "gui.field.save_password": "Salva password protetta",
@@ -53,29 +45,25 @@
   "gui.field.auth_collection": "Auth Collection (opzionale):",
   "gui.field.mmex_exe": "Eseguibile MMEX:",
   "gui.field.default_mode": "Modalità Predefinita:",
-
   "gui.toggle.force_mode": "⚡ Modalità Forzata (Force Mode)",
   "gui.toggle.verbose": "📝 Log Dettagliato (Verbose)",
   "gui.toggle.auto_start": "🚀 Avvio Automatico all'Apertura",
-
   "gui.autostart.banner": "⏳ Avvio automatico modalità '{mode}' tra {seconds}s... (Premi Esc per annullare)",
   "gui.autostart.btn_cancel": "✖ Annulla Auto-Start (Esc)",
   "gui.autostart.cancelled": "Countdown di avvio automatico annullato dall'utente.",
-
   "gui.btn.browse": "Sfoglia...",
   "gui.btn.new_db": "➕ Nuovo DB...",
-  "gui.btn.run_default": "▶️ Avvia ({mode})",
-  "gui.btn.stop_watch": "⏹️ Ferma Watch",
+  "gui.btn.run_default": "▶ Avvia ({mode})",
+  "gui.btn.stop_watch": "⏹ Ferma Watch",
   "gui.btn.sync_full": "🔄 Sincronizza (Push + Pull)",
-  "gui.btn.push_only": "⬆️ Solo Push",
-  "gui.btn.pull_only": "⬇️ Solo Pull",
+  "gui.btn.push_only": "⬆ Solo Push",
+  "gui.btn.pull_only": "⬇ Solo Pull",
   "gui.btn.test_conn": "🔌 Test Connessione",
   "gui.btn.save": "💾 Salva Profilo",
   "gui.btn.clear_logs": "🧹 Cancella Log",
   "gui.btn.ok": "OK",
   "gui.btn.cancel": "Annulla",
   "gui.btn.close": "Chiudi",
-
   "gui.log.console_title": "📋 Registro Eventi & Log Operazioni",
   "gui.log.profile_loaded": "Profilo '{name}' caricato con successo.",
   "gui.log.profile_load_failed": "Impossibile caricare il profilo '{name}'.",
@@ -96,7 +84,6 @@
   "gui.log.clear_db_success": "Schema tecnico locale rimosso.",
   "gui.log.clear_server_success": "Server remoto ripulito con successo.",
   "gui.log.create_db_success": "✅ Nuovo database MMEX creato e inizializzato: {path}",
-
   "gui.dialog.new_profile.title": "Crea Nuovo Profilo",
   "gui.dialog.new_emb_pwd.title": "Imposta Password Nuovo Database (.emb)",
   "gui.dialog.new_emb_pwd.prompt": "Inserisci una password per cifrare il nuovo database .emb:",
@@ -109,10 +96,8 @@
   "gui.dialog.clear_db.msg": "Verranno rimossi tutti i trigger TRG_* e le colonne pb_* dal database MMEX locale. Continuare?",
   "gui.dialog.clear_server.title": "ATTENZIONE: Pulizia Server Remoto",
   "gui.dialog.clear_server.msg": "Tutti i record sincronizzati nelle tabelle PocketBase sul server remoto verranno ELIMINATI definitivamente! Questa operazione è IRREVERSIBILE. Continuare?",
-
   "gui.about.title": "Informazioni su MMEX-Sync",
   "gui.about.content": "MMEX-Sync v0.3.0 (Rust Edition)\n\nGateway Offline-First sicuro e moderno per Money Manager Ex (MMEX).\nCrittografia nativa AES-256-GCM, supporto file cifrati .emb e architettura esagonale multi-backend (PocketBase, Supabase, Firebase).",
-
   "gui.msg.profile_saved": "Profilo salvato con successo.",
   "gui.msg.error": "Errore",
   "gui.msg.sync_running": "Sincronizzazione in corso...",
@@ -127,7 +112,6 @@
   "gui.msg.emb_password_required": "È richiesta una password non vuota per i database .emb.",
   "gui.msg.operation_in_progress": "Operazione in corso...",
   "gui.msg.ready": "Pronto.",
-
   "cli.banner": "🚀 MMEX-Sync v{version} (Rust Native Gateway)",
   "cli.gui_launch": "🖥️ Avvio interfaccia desktop nativa...",
   "cli.no_gui_compiled": "Questo binario è stato compilato senza il supporto GUI (senza feature 'gui'). Utilizzare le opzioni CLI (--help).",
@@ -169,7 +153,6 @@
   "cli.context_remote_create": "Creazione del client per il server remoto fallita",
   "cli.context_clear_server": "Pulizia del server remoto fallita",
   "cli.context_runner_exec": "Errore durante l'esecuzione della modalità operativa",
-
   "sync.cycle_start": "🚀 Avvio Ciclo Sincronizzazione [Init={init}, Push={push}, Pull={pull}, Force={force}]",
   "sync.init_schema": "Inizializzazione schema e trigger tecnici MMEX...",
   "sync.push_start": "📤 Operazione: PUSH (Locale -> Remoto)",
@@ -187,7 +170,6 @@
   "sync.mmex_background_start": "Avvio MMEX in background...",
   "sync.watch_active": "👀 Modalità WATCH attiva: monitoraggio continuo delle modifiche (premi Ctrl+C per uscire)...",
   "sync.watch_file_changed": "Rilevata modifica al file database locale MMEX. Avvio sincronizzazione...",
-
   "db.init_new_db": "Inizializzazione nuovo database MMEX: {path}",
   "db.schema_upgrading": "Aggiornamento schema di sincronizzazione da v{current} a v{target}...",
   "db.schema_updated": "Schema di sincronizzazione aggiornato a v{target}.",
@@ -196,7 +178,6 @@
   "db.unique_constraint_detected": "Violazione vincolo di unicità su {table}",
   "db.unique_constraint_resolved": "Risolto conflitto di unicità su {table} (rowid: {rowid}, pk: {old_pk} -> {new_pk})",
   "db.technical_cleaned": "Schema tecnico locale rimosso con successo.",
-
   "crypto.aes_cbc_init_failed": "Inizializzazione Aes256Cbc fallita: {error}",
   "crypto.aes_gcm_init_failed": "Inizializzazione Aes256Gcm fallita: {error}",
   "crypto.db_encryption_failed": "Cifratura database fallita: {error}",
@@ -208,7 +189,6 @@
   "crypto.empty_password": "La password non può essere vuota per il file cifrato {path}",
   "crypto.invalid_ciphertext_len": "Lunghezza ciphertext non valida",
   "crypto.invalid_sqlite_temp": "I dati del database temporaneo non corrispondono a un file SQLite valido",
-
   "remote.unsupported_provider": "Provider remoto non supportato: '{provider}'",
   "remote.auth_failed_user": "Autenticazione fallita per l'utente '{user}': {error}",
   "remote.record_not_found": "Record '{id}' non trovato nella tabella '{table}'",
@@ -216,7 +196,6 @@
   "remote.cleaning_server_start": "Avvio pulizia completa del server PocketBase (ordine inverso)...",
   "remote.cleaning_table": "Pulizia tabella remota '{table}' ({count} record)...",
   "remote.cleaning_server_done": "Pulizia del server PocketBase completata.",
-
   "errors.config": "Errore di configurazione: {error}",
   "errors.io": "Errore I/O: {error}",
   "errors.database": "Errore database SQLite: {error}",
