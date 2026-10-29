@@ -7,9 +7,10 @@
 
 ## 1. Module Architecture Overview
 
-The `mmex-sync` crate is structured as both a library (`mmex_sync` in `src/lib.rs`) and a binary (`mmex-sync` in `src/main.rs`).
+The `mmex-sync` crate is structured as both a library (`mmex_sync` in `src/lib.rs`) and a binary (`mmex-sync` in `src/main.rs`), with a root `build.rs` script that handles both macOS cross-compilation (`CoreFoundation.framework` TBD stub for `cargo-zigbuild`) and Windows executable icon resource embedding (`assets/icons/icon.ico` / `assets/icons/icons.ico` via `winres`).
 
 ```text
+build.rs                    # Build script: macOS CoreFoundation TBD stub + Windows PE icon resource (winres)
 src/
 ├── main.rs                 # Binary entry point: .env loading, CLI parsing, i18n init, logging, GUI vs CLI dispatch
 ├── lib.rs                  # Root library exports
@@ -38,14 +39,15 @@ src/
 │   ├── engine.rs           # SyncEngine: atomic INIT -> PUSH (deletions + records) -> PULL orchestration
 │   └── runner.rs           # SyncRunner: execution modes ("sync", "run", "watch")
 └── gui/                    # Compiled only when feature "gui" is enabled (default = ["gui"])
-    ├── mod.rs              # eframe::run_native launcher (800x640 viewport, min 640x480)
+    ├── mod.rs              # eframe::run_native launcher (800x640 viewport, min 640x480) + embedded PNG window icon loader
     ├── app.rs              # MmexSyncGuiApp state machine, background worker threads, and egui rendering
     └── i18n.rs             # Re-exports crate::i18n::*
 ```
 
-### Cargo Features
+### Cargo Features & Build Dependencies
 - `default = ["gui"]`
-- `gui = ["dep:eframe", "dep:rfd"]`: Enables the native desktop interface (`eframe` `0.30` with `default_fonts`, `glow`, `x11`, `wayland` and `rfd` `0.15` with `default-features = false, features = ["gtk3"]` for direct GTK3 native file dialogs on Linux/WSL without requiring a D-Bus `xdg-desktop-portal` service).
+- `gui = ["dep:eframe", "dep:rfd", "dep:image"]`: Enables the native desktop interface (`eframe` `0.30` with `default_fonts`, `glow`, `x11`, `wayland`, `rfd` `0.15` with `default-features = false, features = ["gtk3"]` for direct GTK3 native file dialogs on Linux/WSL without requiring a D-Bus `xdg-desktop-portal` service, and `image` `0.25` with `default-features = false, features = ["png"]` for decoding the compile-time embedded window icon into RGBA8).
+- `[build-dependencies]`: `winres = "0.1"` compiles the `.ico` resource into the Windows executable when `CARGO_CFG_TARGET_OS == "windows"` (including cross-compilation from Linux via `x86_64-w64-mingw32-windres`).
 - Building with `--no-default-features` produces a headless CLI-only binary (used for cross-compiling to macOS from Linux when the Apple Cocoa SDK is unavailable).
 
 ---
@@ -198,9 +200,10 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 
 ## 5. Native Desktop GUI (`src/gui/`)
 
-### Viewport & Theme
+### Viewport, Window Icon & Theme
 - Launched via `eframe::run_native("MMEX-Sync", ...)` with window title `"MMEX-Sync - Configuration & Synchronization Gateway"`.
 - Initial window size: `800.0 x 640.0` (minimum `640.0 x 480.0`).
+- **Window Icon (`load_window_icon`):** Embeds `assets/icons/icon.png` at compile time via `include_bytes!`, decodes it into raw RGBA8 bytes via `image::load_from_memory`, wraps it into `Arc<egui::IconData>`, and injects it into `ViewportBuilder` via `.with_icon(icon)`.
 - Uses `egui::Visuals::dark()` with `window_rounding = 8.0` and `menu_rounding = 6.0`.
 
 ### Threading & Event Architecture
@@ -251,7 +254,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 
 ## Invarianti di Sistema
 
-1. **Zero External Runtime Asset Dependencies:** Localization catalogs (`en.json`, `it.json`) and SQL schema definitions (`tables_v1_for_sync.sql`) MUST remain embedded at compile time (`include_str!`) so the compiled binary is 100% portable as a single file.
+1. **Zero External Runtime Asset Dependencies:** Localization catalogs (`en.json`, `it.json`), SQL schema definitions (`tables_v1_for_sync.sql`), and GUI window icons (`assets/icons/icon.png`) MUST remain embedded at compile time (`include_str!` / `include_bytes!`) so the compiled binary is 100% portable as a single file.
 2. **Strict Translation Key Parity:** `locales/en.json` and `locales/it.json` MUST contain the exact same set of keys (enforced by unit test `test_json_key_parity`).
 3. **Configuration Precedence:** Effective configuration MUST always follow `CLI Arguments / Environment Variables > Saved Profile JSON > Default Values`, unless `--ignoreProfile` is passed (which bypasses the saved Profile JSON).
 4. **Cross-Platform Configuration Path Compatibility:** Config files MUST be stored in `%APPDATA%\mmex-sync` on Windows and `~/.mmex-sync` on Linux/macOS to preserve compatibility with existing user profiles and `.key` files.

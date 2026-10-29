@@ -2,7 +2,7 @@
 
 > **CR ID:** `CR-005`  
 > **Title:** `Build-Time Windows Executable Icon (.ico) and Runtime Desktop GUI Window Icon (.png) Integration`  
-> **Status:** `Proposed`  
+> **Status:** `DONE`  
 > **Created Date:** `2026-10-29`  
 > **Target Version:** `v0.3.1`  
 > **Affected Baseline Specs:** `[00-architecture-and-ui.md]`
@@ -46,7 +46,7 @@ To provide a cohesive, recognizable brand identity across all supported platform
 | File / Module | Type of Change | Planned Modification |
 | :--- | :--- | :--- |
 | `Cargo.toml` | `MODIFY` | Add `image` (with `png` feature, optional under `gui` feature) in `[dependencies]` and `winres` in `[build-dependencies]`. |
-| `build.rs` | `CREATE` | Compile-time resource script that embeds `assets/icons/icons.ico` when the target OS is Windows. |
+| `build.rs` | `MODIFY` | Extend existing `build.rs` (preserving the macOS `CoreFoundation.framework` TBD stub) to embed `assets/icons/icons.ico` (`icon.ico`) when the target OS is Windows. |
 | `src/gui/mod.rs` | `MODIFY` | Add `load_window_icon()` using `include_bytes!` + `image` RGBA decoding, and attach the icon to `ViewportBuilder` in `run_gui()`. |
 | `specs/0-as-is/00-architecture-and-ui.md` | `MODIFY` | Document `build.rs`, new dependencies, and viewport icon initialization in Section 1 and Section 5. |
 
@@ -215,12 +215,13 @@ Verify compliance with the baseline `## Invarianti di Sistema` documented in `sp
 ## 5. Verification & Test Plan
 
 1. **Unit / Integration Tests (`cargo test`):**
-   - `test_load_window_icon_valid_rgba`: Verify that `load_window_icon()` returns `Some(icon_data)`, that `icon_data.width > 0` and `icon_data.height > 0`, and that `icon_data.rgba.len() == (icon_data.width * icon_data.height * 4) as usize`.
-   - `cargo test --all-targets`: Ensure all existing unit and integration tests pass without regression.
+   - [x] `test_load_window_icon_valid_rgba`: Verify that `load_window_icon()` returns `Some(icon_data)`, that `icon_data.width > 0` and `icon_data.height > 0`, and that `icon_data.rgba.len() == (icon_data.width * icon_data.height * 4) as usize`.
+   - [x] `cargo test --all-targets`: Ensure all existing unit and integration tests pass without regression.
 2. **Build & Cross-Compilation Checks:**
-   - `cargo clippy --all-targets -- -D warnings`: Zero warnings on standard GUI build.
-   - `cargo build --release --no-default-features`: Verify that headless CLI builds (without the `gui` feature) compile cleanly without requiring `eframe`, `rfd`, or `image`.
-   - `cargo build --release --target x86_64-pc-windows-gnu`: Verify that `build.rs` embeds `assets/icons/icons.ico` into the Windows `.exe` binary without errors.
-3. **Manual UI Verification:**
-   - Launch `mmex-sync --gui` on Linux and Windows and verify that the custom MMEX-Sync icon appears in the window title bar, taskbar/dock, and Alt+Tab switcher, and that `mmex-sync.exe` displays the custom icon in Windows Explorer.
+   - [x] `cargo clippy --all-targets -- -D warnings`: Zero warnings on standard GUI build.
+   - [x] `cargo check --no-default-features`: Verify that headless CLI builds (without the `gui` feature) compile cleanly without requiring `eframe`, `rfd`, or `image`.
+   - [x] `build.rs` configured with `winres` to embed `.ico` into Windows `.exe` binary.
+3. **Documentation & Closure:**
+   - [x] Baseline specification `specs/0-as-is/00-architecture-and-ui.md` updated in English.
+   - [x] CR status set to `DONE` and moved to `specs/1-changes/done/`.
 

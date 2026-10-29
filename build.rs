@@ -1,8 +1,11 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
+    println!("cargo:rerun-if-changed=assets/icons/icon.ico");
+    println!("cargo:rerun-if-changed=assets/icons/icons.ico");
+
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "macos" {
         let has_system_cf =
@@ -13,12 +16,11 @@ fn main() {
         // senza un MacOSX.sdk completo installato, forniamo uno stub TBD minimale per CoreFoundation
         // (richiesto da iana-time-zone e sys-locale) così il linker Mach-O di Zig risolve i simboli dinamici.
         if !has_system_cf && !has_sdkroot {
-            let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR non impostato"));
-            let cf_dir = out_dir.join("Frameworks").join("CoreFoundation.framework");
-            fs::create_dir_all(&cf_dir)
-                .expect("Impossibile creare directory CoreFoundation.framework");
-
-            let tbd_content = "--- !tapi-tbd
+            if let Ok(out_dir_str) = env::var("OUT_DIR") {
+                let out_dir = PathBuf::from(out_dir_str);
+                let cf_dir = out_dir.join("Frameworks").join("CoreFoundation.framework");
+                if fs::create_dir_all(&cf_dir).is_ok() {
+                    let tbd_content = "--- !tapi-tbd
 tbd-version:     4
 targets:         [ x86_64-macos, arm64-macos ]
 install-name:    '/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation'
@@ -41,12 +43,40 @@ exports:
                        _kCFTypeDictionaryValueCallBacks ]
 ...
 ";
-            fs::write(cf_dir.join("CoreFoundation.tbd"), tbd_content)
-                .expect("Impossibile scrivere CoreFoundation.tbd");
+                    if fs::write(cf_dir.join("CoreFoundation.tbd"), tbd_content).is_ok() {
+                        println!(
+                            "cargo:rustc-link-search=framework={}",
+                            out_dir.join("Frameworks").display()
+                        );
+                    }
+                }
+            }
+        }
+    } else if target_os == "windows" {
+        let candidates = ["assets/icons/icons.ico", "assets/icons/icon.ico"];
+        if let Some(icon_path) = candidates.iter().copied().find(|p| Path::new(p).exists()) {
+            let mut res = winres::WindowsResource::new();
+            res.set_icon(icon_path);
 
+            // Support cross-compilation from Linux to Windows (x86_64-pc-windows-gnu)
+            if env::var("HOST").unwrap_or_default().contains("linux")
+                && env::var("TARGET")
+                    .unwrap_or_default()
+                    .contains("windows-gnu")
+            {
+                res.set_windres_path("x86_64-w64-mingw32-windres");
+                res.set_ar_path("x86_64-w64-mingw32-ar");
+            }
+
+            if let Err(err) = res.compile() {
+                println!(
+                    "cargo:warning=Failed to compile Windows icon resource '{}': {}",
+                    icon_path, err
+                );
+            }
+        } else {
             println!(
-                "cargo:rustc-link-search=framework={}",
-                out_dir.join("Frameworks").display()
+                "cargo:warning=Windows icon file not found in assets/icons/; skipping PE icon embedding."
             );
         }
     }
