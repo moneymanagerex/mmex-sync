@@ -109,6 +109,16 @@ fn main() {
                     "cargo:warning=Failed to compile Windows icon resource '{}': {}",
                     icon_path, err
                 );
+            } else if let Ok(out_dir) = env::var("OUT_DIR") {
+                // Force GNU ld / MSVC link to include the .rsrc object in [[bin]] targets
+                // even when Cargo.toml defines both [lib] and [[bin]].
+                let res_obj = PathBuf::from(&out_dir).join("resource.o");
+                let res_lib = PathBuf::from(&out_dir).join("resource.lib");
+                if res_obj.exists() {
+                    println!("cargo:rustc-link-arg-bins={}", res_obj.display());
+                } else if res_lib.exists() {
+                    println!("cargo:rustc-link-arg-bins={}", res_lib.display());
+                }
             }
         } else {
             println!(

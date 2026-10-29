@@ -47,7 +47,7 @@ src/
 ### Cargo Features & Build Dependencies
 - `default = ["gui"]`
 - `gui = ["dep:eframe", "dep:rfd", "dep:image"]`: Enables the native desktop interface (`eframe` `0.30` with `default_fonts`, `glow`, `x11`, `wayland`, `rfd` `0.15` with `default-features = false, features = ["gtk3"]` for direct GTK3 native file dialogs on Linux/WSL without requiring a D-Bus `xdg-desktop-portal` service, and `image` `0.25` with `default-features = false, features = ["png"]` for decoding the compile-time embedded window icon into RGBA8).
-- `[build-dependencies]`: `winres = "0.1"` compiles the `.ico` resource into the Windows executable when `CARGO_CFG_TARGET_OS == "windows"` (including cross-compilation from Linux via `x86_64-w64-mingw32-windres`).
+- `[build-dependencies]`: `winres = "0.1"` compiles the `.ico` resource into the Windows executable when `CARGO_CFG_TARGET_OS == "windows"` (including cross-compilation from Linux via `x86_64-w64-mingw32-windres`, and emits `cargo:rustc-link-arg-bins=<OUT_DIR>/resource.o` so GNU `ld` retains the `.rsrc` section when linking `mmex-sync.exe` in a dual `[lib]` + `[[bin]]` crate).
 - Building with `--no-default-features` produces a headless CLI-only binary (used for cross-compiling to macOS from Linux when the Apple Cocoa SDK is unavailable).
 
 ---
