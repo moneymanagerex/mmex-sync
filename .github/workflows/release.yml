@@ -1,62 +1,121 @@
-name: Create Production Release
+name: Release
 
 on:
   push:
     branches:
       - stable
+  workflow_dispatch: # Permette l'avvio manuale dalla scheda Actions
+
+permissions:
+  contents: write
 
 jobs:
-  release:
-    name: Build, Test and Publish Release
-    runs-on: ubuntu-latest # 💡 Cambiato da windows-latest a ubuntu-latest per velocità e stabilità
-    permissions:
-      contents: write
-
+  test:
+    name: Pre-release Checks
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout del codice
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configurazione Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libglib2.0-dev libgtk-3-dev libappindicator3-dev
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Tests
+        run: cargo test --verbose
+
+  build-binaries:
+    name: Build (${{ matrix.target }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            bin_name: mmex-sync
+            asset_name: mmex-sync-linux-x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            bin_name: mmex-sync.exe
+            asset_name: mmex-sync-windows-x86_64.exe
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            bin_name: mmex-sync
+            asset_name: mmex-sync-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            bin_name: mmex-sync
+            asset_name: mmex-sync-macos-aarch64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: 24
-          cache: 'npm'
+          targets: ${{ matrix.target }}
 
-      - name: Installazione dipendenze
-        run: npm ci
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-      - name: Esecuzione Test e Creazione Pacchetto (npm run release)
-        run: npm run release
+      - name: Build Release Binary
+        run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Estrazione versione da package.json
-        id: get_version
+      - name: Stage Artifact
         shell: bash
         run: |
-          # 💡 Modificato il modo di leggere il package.json per essere nativo ESM 
-          VERSION=$(node -e "import fs from 'fs'; console.log(JSON.parse(fs.readFileSync('./package.json')).version);")
-          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin_name }}" "dist/${{ matrix.asset_name }}"
 
-      - name: Estrai messaggio del commit di merge
-        id: commit_message
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: dist/*
+          retention-days: 7
+
+  publish:
+    name: Publish Release & Tag
+    needs: build-binaries
+    # Esegue solo se l'evento è un push su stable (salta in caso di dispatch manuale)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read version from Cargo.toml
+        id: cargo_version
         run: |
-          # Estrae l'intero messaggio del commit corrente (HEAD)
-          # Per prendere solo il body senza il subject, usa %b invece di %B
-          MSG=$(git log -1 --pretty=format:"%b")
-          
-          # Gestione corretta dell'output multilinea in GitHub Actions
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "BODY<<$EOF" >> "$GITHUB_OUTPUT"
-          echo "$MSG" >> "$GITHUB_OUTPUT"
-          echo "$EOF" >> "$GITHUB_OUTPUT"
-          
-      - name: Creazione e Pubblicazione GitHub Release
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_version.outputs.VERSION }}
-          name: Release ${{ steps.get_version.outputs.VERSION }}
-          body: ${{ steps.commit_message.outputs.BODY }}
+          tag_name: ${{ steps.cargo_version.outputs.tag }}
+          name: Release ${{ steps.cargo_version.outputs.tag }}
           draft: false
           prerelease: false
-          files: dist/release/*.zip
+          generate_release_notes: true
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
