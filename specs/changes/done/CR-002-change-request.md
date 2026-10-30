@@ -1,6 +1,6 @@
 # CR-002: Risoluzione Bug Ciclo di Sync, Trigger Recursion e Ordine di Autenticazione
 - **Stato:** DONE
-- **Spec impattate:** `specs/0-as-is/00-architecture-and-ui.md`, `specs/0-as-is/01-db-and-crypto.md`, `specs/0-as-is/03-sync-engine.md`
+- **Spec impattate:** `specs/as-is/00-architecture-and-ui.md`, `specs/as-is/01-db-and-crypto.md`, `specs/as-is/03-sync-engine.md`
 
 ---
 

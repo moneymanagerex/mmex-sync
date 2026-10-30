@@ -7,7 +7,7 @@ The project is built entirely in **Rust** (Edition 2021).
 ## Spec-Driven Evolution Protocol (MANDATORY)
 Do not invent or guess behaviors. Code evolution is strictly driven by documentation:
 - **INTERNAL SPECS (`specs/`):** The `specs/as-is/` folder contains the exact internal specification of how the code works today. Modification requests are located in `specs/changes/CR-XXX-*.md`. This is your Single Source of Truth for development.
-- **PUBLIC DOCS (`docs/`):** The `docs/` folder is used to generate the public-facing website. It MUST be updated when implementing significant user-facing changes (e.g., new CLI flags, new GUI behaviors), but with **extreme caution**. Write for the end-user and NEVER include sensitive internal engineering details, architectural secrets, or backend credentials.
+- **PUBLIC DOCS (`docs/`):** The `docs/` folder is used to generate the public-facing website. It MUST be updated when implementing significant user-facing changes (e.g., new CLI flags, new GUI behaviors), but with **extreme caution**. Write for the end-user and NEVER include sensitive internal engineering details, architectural secrets, or backend credentials. Consider also to update application help `docs/HELP.md`
 
 **Workflow for implementing a Change Request (CR):**
 1. **Context Reading:** Read the `CR-XXX` document and ALL files in `specs/as-is/` to understand the current state and the *System Invariants* that must be preserved.

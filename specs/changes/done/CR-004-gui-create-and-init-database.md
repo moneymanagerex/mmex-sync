@@ -1,6 +1,6 @@
 # CR-004: Creazione e Inizializzazione Nuovo Database MMEX (`.mmb` / `.emb`) da GUI
 - **Stato:** DONE
-- **Spec impattate:** `specs/0-as-is/00-architecture-and-ui.md`, `specs/0-as-is/01-db-and-crypto.md`
+- **Spec impattate:** `specs/as-is/00-architecture-and-ui.md`, `specs/as-is/01-db-and-crypto.md`
 
 ---
 
@@ -52,5 +52,5 @@
 - [x] `DatabaseService::connect(..., true)` ricrea correttamente il database anche se il file esiste già e persiste subito su disco i file `.emb`.
 - [x] Parità 100% delle chiavi tra `locales/en.json` e `locales/it.json`.
 - [x] `cargo check`, `cargo clippy` e `cargo test` passano al 100%.
-- [x] Specifiche `specs/0-as-is/` aggiornate e stato CR impostato a `DONE`.
+- [x] Specifiche `specs/as-is/` aggiornate e stato CR impostato a `DONE`.
 
