@@ -17,7 +17,12 @@ Do not invent or guess behaviors. Code evolution is strictly driven by documenta
 5. **Documentation Alignment:** 
    - **Internal:** Update the relevant files in `specs/as-is/` so they accurately reflect the newly implemented code behavior. Use english as default language for this files.
    - **Public:** If the CR introduces user-facing changes, cautiously update the public manual in `docs/` to help the end-users. Use english as default language for this files too.
-6. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE` and move into subfolder `specs/1-changes/done/`.
+6. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE` and move into subfolder `specs/changes/done/`.
+
+**Backlog & Future Ideas Management:**
+- The file `specs/backlog.md` contains ONLY embryonic ideas and future Change Requests. 
+- PROHIBITION: Never write code based on items in `specs/backlog.md`. Read it strictly to understand the long-term architectural vision.
+- To implement an idea, it must first be extracted from the backlog, formalized into a proper specification, and placed in `specs/changes/` as an active CR.
 
 ## Tech Stack & Architectural Rules
 - **No Panics Allowed:** It is **STRICTLY FORBIDDEN** to use `.unwrap()` or `.expect()` in production code (only allowed in tests). Handle all errors gracefully by propagating them with `?` using `thiserror` (`SyncError`) and `anyhow`.
