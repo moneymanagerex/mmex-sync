@@ -119,6 +119,12 @@ impl<'a> SyncEngine<'a> {
         // 3. PULL: Ricezione modifiche remote ed applicazione transazionale atomica
         let mut new_sync_time = None;
         if self.options.pull {
+            if self.last_sync.is_some() && !self.db.has_synced_data() {
+                debug!(
+                    "Database locale privo di record sincronizzati: forzatura Pull completo (last_sync ignorato)."
+                );
+                self.last_sync = None;
+            }
             info!("{}", crate::i18n::t("sync.pull_start"));
             let cycle_start_time = Utc::now().to_rfc3339();
 

@@ -129,6 +129,7 @@ impl<'a> SyncRunner<'a> {
                 &[("status", &status.to_string())]
             )
         );
+        self.db.reload_if_emb()?;
         self.execute_sync_mode().await?;
 
         Ok(())
@@ -163,18 +164,23 @@ impl<'a> SyncRunner<'a> {
                 info!("{}", crate::i18n::t("sync.watch_file_changed"));
                 last_modified = current_mod;
 
-                let mut engine = SyncEngine::new(
-                    self.db,
-                    self.remote,
-                    self.options.clone(),
-                    self.last_sync.clone(),
-                );
+                if self.db.reload_if_emb().is_ok() {
+                    let mut engine = SyncEngine::new(
+                        self.db,
+                        self.remote,
+                        self.options.clone(),
+                        self.last_sync.clone(),
+                    );
 
-                if let Ok((_stats, Some(ts))) = engine.run_cycle().await {
-                    self.last_sync = Some(ts.clone());
-                    if let Ok(mut profile) = self.config_mgr.load_profile(&self.profile_name) {
-                        profile.last_sync = Some(ts);
-                        let _ = self.config_mgr.save_profile(&self.profile_name, &profile);
+                    if let Ok((_stats, Some(ts))) = engine.run_cycle().await {
+                        self.last_sync = Some(ts.clone());
+                        if let Ok(mut profile) = self.config_mgr.load_profile(&self.profile_name) {
+                            profile.last_sync = Some(ts);
+                            let _ = self.config_mgr.save_profile(&self.profile_name, &profile);
+                        }
+                        last_modified = std::fs::metadata(self.db_path)
+                            .and_then(|m| m.modified())
+                            .ok();
                     }
                 }
             }

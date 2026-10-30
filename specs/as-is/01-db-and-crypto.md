@@ -36,36 +36,51 @@ Sensitive profile values (`encryptedToken` and `encryptedFilePassword` in `<prof
   1. `is_emb_path(db_path)` is true (file extension is `.emb`, case-insensitive), **OR**
   2. `password.is_some()` is passed to `DatabaseService::connect`.
 
-### Binary Container Format (`encrypt_sqlite_bytes`)
+### SQLCipher v4 (`cipher = 'sqlcipher'`, `legacy = 4`) Page Format (`encrypt_sqlite_bytes` / `decrypt_sqlite_bytes`)
+Money Manager Ex for PC encrypts `.emb` files using SQLCipher v4 (`legacy = 4`), which operates page-by-page (`SQLCIPHER_PAGE_SIZE = 4096` bytes, `RESERVE_SIZE = 80` bytes per page) with **no PKCS#7 padding**:
+
 ```text
-+-------------------+-------------------+---------------------------------------+
-| SALT (16 bytes)   | IV (16 bytes)     | CIPHERTEXT (AES-256-CBC + PKCS#7)     |
-+-------------------+-------------------+---------------------------------------+
-0                  16                  32                                     EOF
+Page 1 (4096 bytes):
++-------------------+-----------------------------------+-------------------+-----------------------+
+| SALT (16 bytes)   | CIPHERTEXT (4000 bytes, AES-CBC)  | IV (16 bytes)     | HMAC-SHA512 (64 bytes)|
++-------------------+-----------------------------------+-------------------+-----------------------+
+0                  16                                  4016                4032                    4096
+
+Page N > 1 (4096 bytes):
++-------------------------------------------------------+-------------------+-----------------------+
+| CIPHERTEXT (4016 bytes, AES-CBC)                      | IV (16 bytes)     | HMAC-SHA512 (64 bytes)|
++-------------------------------------------------------+-------------------+-----------------------+
+0                                                      4016                4032                    4096
 ```
-- **Encryption Parameters:**
-  - `SALT`: 16 random bytes (`OsRng`).
-  - `IV`: 16 random bytes (`OsRng`).
-  - **Key Derivation:** `PBKDF2-HMAC-SHA256` with **64,000 iterations**, producing a 32-byte (256-bit) key.
-  - **Cipher:** `AES-256-CBC` with **PKCS#7** block padding (`cbc::Encryptor<aes::Aes256>`).
 
-### Multi-Fallback Decryption (`decrypt_sqlite_bytes`)
-When opening an existing `.emb` file (must be at least `16 + 16 + 16 = 48` bytes), `decrypt_sqlite_bytes` extracts `salt = encrypted[0..16]`, `iv = encrypted[16..32]`, and `ciphertext = encrypted[32..]`, then attempts `AES-256-CBC` with PKCS#7 unpadding using three KDF profiles in sequence. A decryption attempt succeeds **only if** the resulting plaintext starts with the 16-byte SQLite header magic `b"SQLite format 3\0"`:
-
-1. **Attempt 1 (Standard Container):** `PBKDF2-HMAC-SHA256`, **64,000 iterations**.
-2. **Attempt 2 (SQLCipher 4 Default):** `PBKDF2-HMAC-SHA512`, **256,000 iterations**.
-3. **Attempt 3 (wxSQLite3 / Legacy):** `PBKDF2-HMAC-SHA256`, **4,001 iterations**.
-
-If all three attempts fail to produce a valid `SQLite format 3\0` header, `SyncError::Crypto(crypto.decryption_failed)` is returned.
+- **Key Derivation (`derive_sqlcipher4_keys`):**
+  - `salt`: 16 bytes stored unencrypted at bytes `0..16` of Page 1 (replacing `"SQLite format 3\0"` on disk).
+  - **Encryption Key (`enc_key`, 32 bytes):** `PBKDF2-HMAC-SHA512(password, salt, 256_000 iterations)`.
+  - **HMAC Salt (`hmac_salt`, 16 bytes):** `salt[i] ^ 0x3a` for `i in 0..16`.
+  - **HMAC Key (`hmac_key`, 32 bytes):** `PBKDF2-HMAC-SHA512(enc_key, hmac_salt, 2 iterations)`.
+- **Per-Page Authentication (`compute_page_hmac` / `verify_page_hmac`):**
+  - For 1-based page number `page_no` (`u32`), computes `HMAC-SHA512(key = hmac_key, msg = page[offset..4032] || page_no.to_le_bytes())`, where `offset = 16` on Page 1 and `offset = 0` on Pages `2..=N`.
+  - Stored in the trailing 64 bytes (`4032..4096`) of each page and verified in constant time via `mac.verify_slice` before decrypting.
+- **Per-Page Encryption / Decryption:**
+  - Cipher: `AES-256-CBC` with `NoPadding` (`cbc::Encryptor<aes::Aes256>` / `cbc::Decryptor<aes::Aes256>`), using the per-page 16-byte IV stored at `page[4016..4032]`.
+  - On Page 1 decryption, bytes `0..16` are restored to `b"SQLite format 3\0"`, bytes `16..4016` receive the decrypted Page 1 payload (where byte `20` is `80` = `0x50` reserved bytes per page), and bytes `4016..4096` are zeroed.
+  - On Page `N > 1` decryption, if the entire 4096-byte page is all zeros (`0x00`), it is preserved as an empty zero page; otherwise bytes `0..4016` receive the decrypted payload and bytes `4016..4096` are zeroed.
+  - After decrypting all pages, Page 1 header fields are validated (`&result[0..16] == b"SQLite format 3\0"`, big-endian page size `result[16..18] == 4096`, payload fractions `result[21..24] == [64, 32, 32]`).
 
 ### Temporary File & Atomic Flush Lifecycle (`EmbDatabaseHandler`)
-1. **Open/Decrypt:** `EmbDatabaseHandler::open_or_create` creates a `NamedTempFile` in the OS temp directory, decrypts the `.emb` bytes into that temporary file, and `rusqlite::Connection` opens the temporary file path.
-2. **Modification Tracking:** Any write operation on `DatabaseService` calls `self.mark_modified()`, setting `is_modified = true` on `EmbDatabaseHandler`.
-3. **Flush & Atomic Persistence (`DatabaseService::flush`):**
+1. **Open/Decrypt or Pre-Initialize (`EmbDatabaseHandler::open_or_create`):**
+   - Requires a non-empty `password` (otherwise returns `SyncError::Crypto(crypto.password_required)`).
+   - Creates a `NamedTempFile` in the OS temp directory.
+   - **Existing `.emb` (`emb_path.exists() && !create`):** Reads the `.emb` file, preserves its 16-byte `salt`, decrypts all pages into the temporary file via `decrypt_sqlite_bytes`, and verifies schema readability by opening a `rusqlite::Connection` and executing `SELECT count(*) FROM sqlite_master`.
+   - **New `.emb` (`!emb_path.exists() || create`):** Generates a random 16-byte `salt` (`OsRng`) and writes a valid 1-page (`4096`-byte) empty SQLite database (`create_empty_sqlcipher_sqlite_page`) pre-configured with `page_size = 4096` and `reserve_bytes = 80` (`page[20] = 0x50`, `usable_size = 4016`) so all B-tree pages allocated by SQLite leave the trailing 80 bytes unused for SQLCipher IV + HMAC.
+2. **External Modification Reload (`EmbDatabaseHandler::reload_from_emb` / `DatabaseService::reload_if_emb`):**
+   - Used in CLI `run` and `watch` modes after Money Manager Ex modifies the `.emb` file on disk: re-reads and re-decrypts the `.emb` file into the temporary file and re-opens the `rusqlite::Connection`.
+3. **Modification Tracking:** Any write operation on `DatabaseService` calls `self.mark_modified()`, setting `is_modified = true` on `EmbDatabaseHandler`.
+4. **Flush & Atomic Persistence (`DatabaseService::flush`):**
    - If `is_modified` is `false`, `flush_to_emb()` is a no-op.
-   - Executes `PRAGMA wal_checkpoint(TRUNCATE)` on the SQLite connection so all WAL frames are merged back into the main temporary SQLite file.
-   - Reads the temporary file and verifies that its first 16 bytes equal `b"SQLite format 3\0"`.
-   - Encrypts the bytes using `encrypt_sqlite_bytes` (PBKDF2-HMAC-SHA256, 64,000 iterations).
+   - Executes `PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;` on the SQLite connection so all WAL frames are merged back into the main temporary SQLite file and header bytes `18..=19` are set to rollback format (`1, 1`) before encryption, then restores `PRAGMA journal_mode = WAL;`.
+   - Reads the temporary file and verifies that its length is at least `4096` bytes and its first 16 bytes equal `b"SQLite format 3\0"`.
+   - Encrypts the pages using `encrypt_sqlite_bytes_with_salt` (SQLCipher v4 `legacy = 4`).
    - Creates a `NamedTempFile::new_in(parent_dir)` **in the same directory as the target `.emb` file**, writes and flushes the encrypted bytes, and atomically replaces the target `.emb` file via `atomic_temp.persist(&self.emb_path)`.
 
 ---
@@ -76,10 +91,11 @@ When `DatabaseService::connect` opens a SQLite connection:
 - If `create == true` and `!is_emb` and `db_path.exists()`, removes the existing `.mmb` file (along with any `-wal` and `-shm` sidecar files) before opening the SQLite connection so the database is recreated cleanly from scratch.
 - Sets `conn.busy_timeout(Duration::from_secs(10))` (10,000 ms busy wait for lock contention with MMEX Desktop).
 - Executes `PRAGMA journal_mode = WAL`.
-- If `create == true` or (`!db_path.exists() && !is_emb`):
+- If `create == true` or `!db_path.exists()`:
   - Executes the embedded DDL script `tables_v1_for_sync.sql` (`DEFAULT_SCHEMA_SQL`).
   - Executes `PRAGMA user_version = 21`.
   - Marks the database modified (`service.mark_modified()`) and immediately calls `service.flush()?` so newly created `.emb` databases are encrypted and persisted to disk right away.
+- Executes `SELECT count(*) FROM sqlite_master` to verify database integrity.
 - Calls `refresh_schemas()` to inspect all tables in `SYNC_ORDER` via `PRAGMA table_info(<table>)`.
 
 ---
@@ -213,8 +229,8 @@ When a conflict resolution changes a record's Primary Key (`old_pk != new_pk`), 
    - `1` (`Dirty`): Record was inserted or updated locally by MMEX Desktop; must be pushed.
    - `2` (`Pending` / Cloud Ingress): Record is currently being inserted or updated by `mmex-sync` during a PULL or conflict resolution. Both `TRG_<table>_INSERT` and `TRG_<table>_UPDATE` MUST ignore changes when `NEW.pb_is_dirty == 2`, and `DatabaseService` MUST immediately reset `pb_is_dirty = 0` after the write completes.
 2. **Crash Recovery of Pending Records (`reset_unfinished_ops`):** Any record left in state `pb_is_dirty = 2` after a table pull MUST be reset to `pb_is_dirty = 1` (`UPDATE <table> SET pb_is_dirty = 1 WHERE pb_is_dirty = 2`) so interrupted operations are not silently lost.
-3. **Atomic `.emb` Persistence & WAL Checkpoint:** Before re-encrypting a temporary SQLite database back to `.emb`, `PRAGMA wal_checkpoint(TRUNCATE)` MUST be executed so that no data remains trapped in the `-wal` file, and the encrypted output MUST be written to a temporary file in the same directory and atomically persisted (`NamedTempFile::persist`).
-4. **SQLite Magic Header Verification:** Decryption of `.emb` files and pre-encryption validation in `flush_to_emb` MUST always verify the 16-byte header `b"SQLite format 3\0"` to prevent overwriting a user's `.emb` database with corrupted or uninitialized data.
+3. **Atomic `.emb` Persistence & WAL Checkpoint:** Before re-encrypting a temporary SQLite database back to `.emb`, `PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;` MUST be executed so that no data remains trapped in the `-wal` file and the SQLite header is in rollback journal state (`1, 1`), and the encrypted output MUST be written to a temporary file in the same directory and atomically persisted (`NamedTempFile::persist`).
+4. **SQLCipher v4 (`legacy = 4`), Per-Page HMAC-SHA512, and SQLite Header Verification:** `.emb` files MUST use SQLCipher v4 (`legacy = 4`: 4096-byte pages, 80-byte reserve, `PBKDF2-HMAC-SHA512` 256,000 iterations for key and 2 iterations with `salt ^ 0x3a` for `HMAC-SHA512`), verify every page's `HMAC-SHA512` before decryption, verify the 16-byte header `b"SQLite format 3\0"`, and validate readability via `SELECT count(*) FROM sqlite_master`.
 5. **Trigger Scope on Domain Columns Only & Remote Deletion Bypass:** `TRG_<table>_UPDATE` MUST only watch domain columns (`AFTER UPDATE OF <non_tech_cols>`), never `pb_id`, `pb_is_dirty`, or `pb_updated_at`, preventing infinite trigger recursion when `set_synced_status` updates `pb_id` and `pb_is_dirty = 0`. Similarly, when `apply_remote_changes` deletes a local row due to `remote.is_deleted == true`, it MUST first set `pb_id = NULL` before executing `DELETE` in the same transaction so `TRG_<table>_DELETE` (`WHEN OLD.pb_id IS NOT NULL`) is bypassed and does not re-queue the remote deletion into `pb_DELETED_RECORDS_LOG`.
 6. **Foreign Key Referential Integrity on PK Realignment:** Whenever a local record is merged with a remote record that has a different integer Primary Key (`old_pk != new_pk`), `replace_record_and_references` MUST update both the record's PK and all referencing FK columns across `SYNC_ORDER` within the same SQLite transaction.
 

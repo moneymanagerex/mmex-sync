@@ -361,6 +361,7 @@ impl MmexSyncGuiApp {
         };
         p.default_mode = Some(self.default_mode.clone());
         p.auto_start = self.auto_start;
+        p.last_sync = self.last_sync.clone();
         p.save_password = Some(if self.save_file_password { "yes" } else { "no" }.to_string());
 
         if self.save_file_password && !self.file_password.is_empty() {
@@ -769,19 +770,32 @@ impl MmexSyncGuiApp {
             return;
         }
 
+        let default_filename = if self.db_path.to_lowercase().ends_with(".emb") {
+            "new_database.emb"
+        } else {
+            "new_database.mmb"
+        };
+
         if let Some(mut file) = rfd::FileDialog::new()
             .add_filter("MMEX Database", &["mmb", "emb"])
-            .set_file_name("new_database.mmb")
+            .add_filter("MMEX Encrypted (.emb)", &["emb"])
+            .add_filter("MMEX SQLite (.mmb)", &["mmb"])
+            .set_file_name(default_filename)
             .save_file()
         {
             if file.extension().is_none() {
-                file.set_extension("mmb");
+                let ext = if default_filename.ends_with(".emb") {
+                    "emb"
+                } else {
+                    "mmb"
+                };
+                file.set_extension(ext);
             }
             self.db_path = file.to_string_lossy().to_string();
+            self.last_sync = None;
 
             if self.db_path.to_lowercase().ends_with(".emb") {
-                self.file_password.clear();
-                self.new_emb_password_input.clear();
+                self.new_emb_password_input = self.file_password.clone();
                 self.dialog_new_emb_password = true;
             } else {
                 self.save_current_profile();
@@ -795,27 +809,28 @@ impl MmexSyncGuiApp {
         if self.is_working || self.db_path.trim().is_empty() {
             return;
         }
+        self.last_sync = None;
+        self.save_current_profile();
         self.is_working = true;
         let tx = self.tx.clone();
-        let db_path = expand_tilde(Path::new(self.db_path.trim()));
-        let file_password = if self.file_password.is_empty() {
-            None
-        } else {
-            Some(self.file_password.clone())
-        };
+        let ctx = self.build_worker_context();
 
         std::thread::spawn(move || {
-            let mut db =
-                match DatabaseService::connect(&db_path, false, file_password.as_deref(), true) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        let _ = tx.send(GuiEvent::ClearFinished {
-                            success: false,
-                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                        });
-                        return;
-                    }
-                };
+            let mut db = match DatabaseService::connect(
+                &ctx.db_path,
+                ctx.verbose,
+                ctx.file_password.as_deref(),
+                true,
+            ) {
+                Ok(d) => d,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                    });
+                    return;
+                }
+            };
 
             if let Err(e) = db.init_schema().and_then(|_| db.flush()) {
                 let _ = tx.send(GuiEvent::ClearFinished {
@@ -824,11 +839,36 @@ impl MmexSyncGuiApp {
                 });
                 return;
             }
+            drop(db);
 
             let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
                 "gui.log.create_db_success",
-                &[("path", &db_path.display().to_string())],
+                &[("path", &ctx.db_path.display().to_string())],
             )));
+
+            let has_creds = ctx.user.is_some() && ctx.pass.is_some();
+            let has_token = ctx
+                .encrypted_token
+                .as_deref()
+                .map(|t| !t.trim().is_empty())
+                .unwrap_or(false);
+
+            if !ctx.url.is_empty() && (has_creds || has_token) {
+                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    let new_ts = rt
+                        .block_on(async { execute_single_sync_step(&tx, &ctx, false, true).await });
+                    if let Some(ts) = new_ts {
+                        let _ = tx.send(GuiEvent::SyncFinished {
+                            last_sync: Some(ts),
+                        });
+                        return;
+                    }
+                }
+            }
+
             let _ = tx.send(GuiEvent::ClearFinished {
                 success: true,
                 message: crate::i18n::t("gui.msg.create_db_success").to_string(),
@@ -1283,7 +1323,11 @@ impl eframe::App for MmexSyncGuiApp {
                             .add_filter("MMEX Database", &["mmb", "emb"])
                             .pick_file()
                         {
-                            self.db_path = file.to_string_lossy().to_string();
+                            let new_path = file.to_string_lossy().to_string();
+                            if new_path != self.db_path {
+                                self.db_path = new_path;
+                                self.last_sync = None;
+                            }
                         }
                         ui.close_menu();
                     }
@@ -1514,6 +1558,7 @@ impl eframe::App for MmexSyncGuiApp {
                         ui.label(self.lang.field_db_path());
                         if ui.text_edit_singleline(&mut self.db_path).changed() {
                             self.cancel_autostart_countdown();
+                            self.last_sync = None;
                         }
                         if ui.button(self.lang.btn_browse()).clicked() {
                             self.cancel_autostart_countdown();
@@ -1521,7 +1566,11 @@ impl eframe::App for MmexSyncGuiApp {
                                 .add_filter("MMEX Database", &["mmb", "emb"])
                                 .pick_file()
                             {
-                                self.db_path = file.to_string_lossy().to_string();
+                                let new_path = file.to_string_lossy().to_string();
+                                if new_path != self.db_path {
+                                    self.db_path = new_path;
+                                    self.last_sync = None;
+                                }
                             }
                         }
                         if ui
@@ -1808,15 +1857,17 @@ impl MmexSyncGuiApp {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.label(self.lang.dialog_new_emb_pwd_prompt());
-                    ui.add(
+                    let pwd_resp = ui.add(
                         egui::TextEdit::singleline(&mut self.new_emb_password_input).password(true),
                     );
                     ui.checkbox(
                         &mut self.save_file_password,
                         self.lang.field_save_password(),
                     );
+                    let enter_pressed =
+                        pwd_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.horizontal(|ui| {
-                        if ui.button(self.lang.btn_ok()).clicked() {
+                        if ui.button(self.lang.btn_ok()).clicked() || enter_pressed {
                             if self.new_emb_password_input.is_empty() {
                                 self.status_message = Some((
                                     self.lang.t("gui.msg.emb_password_required").to_string(),
@@ -1825,6 +1876,7 @@ impl MmexSyncGuiApp {
                             } else {
                                 self.file_password = self.new_emb_password_input.clone();
                                 self.dialog_new_emb_password = false;
+                                self.last_sync = None;
                                 self.save_current_profile();
                                 self.trigger_create_db_async();
                             }

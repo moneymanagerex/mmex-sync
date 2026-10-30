@@ -11,13 +11,14 @@ Do not invent or guess behaviors. Code evolution is strictly driven by documenta
 
 **Workflow for implementing a Change Request (CR):**
 1. **Context Reading:** Read the `CR-XXX` document and ALL files in `specs/as-is/` to understand the current state and the *System Invariants* that must be preserved.
-2. **Impact Plan:** Set the CR status to `IN_PROGRESS`.
-3. **Coding & Testing:** Modify the Rust code in `src/`, add/update unit tests, and update `locales/*.json` if there are new UI/CLI text strings.
-4. **Strict Validation:** Run `cargo check`, `cargo clippy`, and `cargo test`. Never consider a task complete if there are compiler errors or warnings.
-5. **Documentation Alignment:** 
+2. **Approval check** if the status is not Approved, ask for a double confirmation to prevent implement of DRAFT or PROPOSED.
+3. **Impact Plan:** Set the CR status to `IN_PROGRESS`.
+4. **Coding & Testing:** Modify the Rust code in `src/`, add/update unit tests, and update `locales/*.json` if there are new UI/CLI text strings.
+5. **Strict Validation:** Run `cargo check`, `cargo clippy`, and `cargo test`. Never consider a task complete if there are compiler errors or warnings.
+6. **Documentation Alignment:** 
    - **Internal:** Update the relevant files in `specs/as-is/` so they accurately reflect the newly implemented code behavior. Use english as default language for this files.
    - **Public:** If the CR introduces user-facing changes, cautiously update the public manual in `docs/` to help the end-users. Use english as default language for this files too.
-6. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE` and move into subfolder `specs/changes/done/`.
+7. **Closure:** Check off all acceptance criteria boxes in `CR-XXX` and set its status to `DONE` and move into subfolder `specs/changes/done/`.
 
 **Backlog & Future Ideas Management:**
 - The file `specs/backlog.md` contains ONLY embryonic ideas and future Change Requests. 

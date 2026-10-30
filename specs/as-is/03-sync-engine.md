@@ -20,7 +20,7 @@
    - **Fallback:** If `mmex_exe` is `None` or the file does not exist on disk, logs a warning (`sync.mmex_not_configured_fallback`) and falls back to a single `execute_sync_mode().await`.
 2. **Pre-Sync:** Executes `self.execute_sync_mode().await?`.
 3. **MMEX Execution (Blocking):** Launches `Command::new(exe).arg(self.db_path).status()` and waits synchronously until the user closes Money Manager Ex.
-4. **Post-Sync:** Executes `self.execute_sync_mode().await?` to push all changes made during the MMEX session.
+4. **Post-Sync:** Calls `self.db.reload_if_emb()?` (to re-decrypt any external changes written by MMEX to an `.emb` file) and executes `self.execute_sync_mode().await?` to push all changes made during the MMEX session.
    - *(Note: in AS-IS `execute_run_mode`, `self.last_sync` on `SyncRunner` is not updated in-memory between the pre-sync and post-sync calls, though the profile file on disk is updated after each `execute_sync_mode`.)*
 
 ### 1.3 `watch` Mode — Real-Time Polling (`execute_watch_mode`)
@@ -30,8 +30,8 @@
    - Records initial `last_modified = std::fs::metadata(self.db_path).and_then(|m| m.modified()).ok()`.
    - Loops indefinitely (`loop { sleep(Duration::from_secs(3)).await; ... }`):
      - Reads current `modified()` timestamp of `self.db_path`.
-     - If `current_mod != last_modified && current_mod.is_some()`, updates `last_modified = current_mod` and runs `SyncEngine::run_cycle().await`.
-     - On `Ok((_stats, Some(ts)))`, updates both `self.last_sync` in memory and `profile.last_sync` on disk.
+     - If `current_mod != last_modified && current_mod.is_some()`, updates `last_modified = current_mod`, reloads `.emb` changes via `self.db.reload_if_emb()`, and runs `SyncEngine::run_cycle().await`.
+     - On `Ok((_stats, Some(ts)))`, updates both `self.last_sync` in memory and `profile.last_sync` on disk, and refreshes `last_modified` after the local flush.
 
 ### 1.4 GUI Execution of `sync`, `run`, and `watch` Modes (`MmexSyncGuiApp::trigger_default_mode_async`)
 When triggered via the 3-second auto-start countdown or the `▶️ Run (<MODE>)` button in the desktop GUI (`src/gui/app.rs`):

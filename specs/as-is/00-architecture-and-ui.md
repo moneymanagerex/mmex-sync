@@ -21,7 +21,7 @@ src/
 ├── crypto/
 │   ├── mod.rs              # Re-exports for credentials and .emb encryption
 │   ├── credentials.rs      # AES-256-GCM local secret protection using a 256-bit master key (.key)
-│   └── emb.rs              # AES-256-CBC + PBKDF2 handler for encrypted MMEX databases (.emb)
+│   └── emb.rs              # SQLCipher v4 (legacy = 4) page-level AES-256-CBC + HMAC-SHA512 handler for .emb databases
 ├── db/
 │   ├── mod.rs              # Re-exports for DatabaseService and schema helpers
 │   ├── schema.rs           # DDL creation, pb_sync_info, pb_DELETED_RECORDS_LOG, pb_* columns, and SQLite triggers

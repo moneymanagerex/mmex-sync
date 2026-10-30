@@ -15,6 +15,7 @@ struct MockRemoteState {
     create_calls: usize,
     update_calls: usize,
     delete_calls: usize,
+    last_filter: Option<String>,
 }
 
 struct MockRemoteServer {
@@ -73,9 +74,10 @@ impl RemoteServer for MockRemoteServer {
     async fn get_full_list(
         &self,
         collection: &str,
-        _filter: Option<&str>,
+        filter: Option<&str>,
     ) -> Result<Vec<RemoteRecord>, SyncError> {
-        let lock = self.state.lock().unwrap();
+        let mut lock = self.state.lock().unwrap();
+        lock.last_filter = filter.map(|s| s.to_string());
         if let Some(col_map) = lock.records.get(collection) {
             Ok(col_map.values().cloned().collect())
         } else {
@@ -398,4 +400,60 @@ async fn test_sync_engine_push_only_flushes_emb_on_disk() {
             "Il pb_id assegnato durante il push deve essere persistito nel file .emb su disco"
         );
     }
+}
+
+#[tokio::test]
+async fn test_new_emb_ignores_stale_last_sync_on_initial_pull() {
+    let dir = tempdir().expect("tempdir");
+    let emb_path = dir.path().join("new_gui_created.emb");
+    let password = "test";
+
+    // 1. Simula creazione nuovo DB .emb da GUI ("+ Nuovo")
+    let mut db = DatabaseService::connect(&emb_path, false, Some(password), true)
+        .expect("connect create emb");
+    assert!(!db.has_synced_data());
+
+    // 2. Popola il mock server con un record remoto antecedente a uno stale last_sync
+    let remote_state = Arc::new(Mutex::new(MockRemoteState::default()));
+    {
+        let mut lock = remote_state.lock().unwrap();
+        let mut info_fields = HashMap::new();
+        info_fields.insert("INFOID".to_string(), serde_json::json!(1));
+        info_fields.insert("INFONAME".to_string(), serde_json::json!("DATAVERSION"));
+        info_fields.insert("INFOVALUE".to_string(), serde_json::json!("3"));
+
+        let rec = RemoteRecord {
+            id: "pb_info_1".to_string(),
+            is_deleted: false,
+            updated_at: Some("2026-08-20T16:57:35Z".to_string()),
+            fields: info_fields,
+        };
+        lock.records
+            .entry("INFOTABLE_V1".to_string())
+            .or_default()
+            .insert(rec.id.clone(), rec);
+    }
+
+    let mut remote = MockRemoteServer::new(remote_state.clone());
+    let options = SyncOptions {
+        init: true,
+        push: false,
+        pull: true,
+        force: false,
+        verbose: false,
+    };
+
+    // Passiamo intenzionalmente uno stale last_sync futuro: poiché il DB locale non ha dati sincronizzati,
+    // SyncEngine deve ignorare last_sync ed eseguire un Pull completo (filter = None)
+    let stale_last_sync = Some("2026-10-30T10:00:00Z".to_string());
+    let mut engine = SyncEngine::new(&mut db, &mut remote, options, stale_last_sync);
+    let (stats, new_ts) = engine.run_cycle().await.expect("run initial pull");
+
+    assert_eq!(stats.pulled_records, 1);
+    assert!(new_ts.is_some());
+    assert!(
+        remote_state.lock().unwrap().last_filter.is_none(),
+        "Il Pull iniziale su DB vuoto deve ignorare last_sync e non applicare filtri temporali"
+    );
+    assert!(db.has_synced_data());
 }
