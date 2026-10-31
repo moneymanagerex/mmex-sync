@@ -17,3 +17,7 @@ This document collects ideas, future improvements, and embryonic Change Requests
 **Add Application Help**
 - **Description:** Use `docs/HELP.md` as Help in gui under HELP menu in gui. 
 - **Impact:** GUI  management (`src/gui/`).
+
+**improve linux lanucher**
+- **Description:** Now app check for existence of mmex bin. But under linux mmex is launched via flatpack. So we need to allow insert of "flatpak run org.moneymanagerex.MMEX" followed by mmb file
+- **impact:** Gui and command line
