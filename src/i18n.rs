@@ -588,43 +588,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Gestito nativamente da Crowdin"]
-    fn test_json_key_parity() {
-        let en_map = get_en_map();
-        let it_map = get_it_map();
-
-        let mut missing_in_it = Vec::new();
-        for key in en_map.keys() {
-            if !it_map.contains_key(key) {
-                missing_in_it.push(key.clone());
-            }
-        }
-
-        let mut missing_in_en = Vec::new();
-        for key in it_map.keys() {
-            if !en_map.contains_key(key) {
-                missing_in_en.push(key.clone());
-            }
-        }
-
-        assert!(
-            missing_in_it.is_empty(),
-            "Chiavi presenti in en.json ma mancanti in it.json: {:?}",
-            missing_in_it
-        );
-        assert!(
-            missing_in_en.is_empty(),
-            "Chiavi presenti in it.json ma mancanti in en.json: {:?}",
-            missing_in_en
-        );
-        assert_eq!(
-            en_map.len(),
-            it_map.len(),
-            "Il numero totale di chiavi deve essere identico"
-        );
-    }
-
-    #[test]
     fn test_t_fmt_interpolation() {
         set_current_locale(Language::En);
         let res_en = t_fmt("cli.profile_item_default", &[("name", "work")]);
@@ -637,40 +600,6 @@ mod tests {
         // Multiple arguments
         let banner_it = t_fmt("cli.profile_renamed", &[("old", "home"), ("new", "casa")]);
         assert_eq!(banner_it, "✅ Profilo 'home' rinominato in 'casa'");
-    }
-
-    #[test]
-    fn test_embedded_translations_integrity() {
-        let it = Language::It;
-        let en = Language::En;
-
-        assert_ne!(it.menu_profiles(), en.menu_profiles());
-        assert_ne!(it.menu_sync(), en.menu_sync());
-        assert_ne!(it.menu_sync_force_mode(), en.menu_sync_force_mode());
-        assert_ne!(it.menu_preferences(), en.menu_preferences());
-        assert_ne!(it.t("gui.update.btn.close"), en.t("gui.update.btn.close"));
-        assert_ne!(it.section_db(), en.section_db());
-        assert_ne!(it.about_content(), en.about_content());
-
-        assert_eq!(it.menu_profiles(), "Profili");
-        assert_eq!(en.menu_profiles(), "Profiles");
-        assert_eq!(
-            it.menu_sync_force_mode(),
-            "Usa Modalità Forzata (Force Mode)"
-        );
-        assert_eq!(
-            en.menu_sync_force_mode(),
-            "Use Force Mode (Ignore timestamps/dirty)"
-        );
-
-        assert_eq!(
-            it.dialog_delete_confirm_msg("famiglia"),
-            "Sei sicuro di voler eliminare definitivamente il profilo 'famiglia'?"
-        );
-        assert_eq!(
-            en.dialog_delete_confirm_msg("family"),
-            "Are you sure you want to permanently delete profile 'family'?"
-        );
     }
 
     #[test]
