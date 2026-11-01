@@ -27,4 +27,6 @@ samples/
 # Test coverage
 coverage/
 
-
+# local database
+*.mmb
+*.emb

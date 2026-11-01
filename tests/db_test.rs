@@ -190,7 +190,15 @@ fn test_bidirectional_unique_conflict_and_fk_cascade() {
         .expect("apply with conflict resolution");
 
     // 6. Verifica che nella tabella collegata CHECKINGACCOUNT_V1 l'ACCOUNTID sia stato
-    // aggiornato automaticamente da 100 a 250 tramite FK_MAP!
+    // aggiornato automaticamente da 100 a 250 tramite FK_MAP e che pb_is_dirty sia 0!
+    let dirty_accounts = db
+        .get_dirty_records("ACCOUNTLIST_V1", false)
+        .expect("get dirty accounts after replace");
+    assert!(
+        dirty_accounts.is_empty(),
+        "Dopo replace_record_and_references con cambio PK, pb_is_dirty deve essere 0 (non rimanere a 2)"
+    );
+
     let checking_records = db
         .get_dirty_records("CHECKINGACCOUNT_V1", true)
         .expect("get checking");
@@ -369,7 +377,20 @@ fn test_create_flag_recreates_existing_mmb_and_flushes_emb_immediately() {
     }
     // Riapertura senza ulteriore flush per verificare che il file .emb su disco sia valido e decifrabile
     {
-        let _reopened = DatabaseService::connect(&emb_path, false, Some(pwd), false)
+        let reopened = DatabaseService::connect(&emb_path, false, Some(pwd), false)
             .expect("reopen created emb");
+        assert!(
+            !reopened.has_synced_data(),
+            "Un database appena creato non deve risultare già sincronizzato"
+        );
+        let ver: String = reopened
+            .raw_conn()
+            .query_row(
+                "SELECT VAL FROM pb_sync_info WHERE KEY = 'VERSION'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("pb_sync_info deve essere inizializzato alla creazione");
+        assert_eq!(ver, "3");
     }
 }

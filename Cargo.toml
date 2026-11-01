@@ -1,6 +1,6 @@
 [package]
 name = "mmex-sync"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Wolfsolver"]
 description = "A non-intrusive, Offline-First synchronization gateway for Money Manager Ex (MMEX) with multi-backend cloud support."
@@ -47,6 +47,7 @@ chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 rand = "0.8"
 sys-locale = "0.3"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 
 
 # Pure Rust Cryptography (RustCrypto)

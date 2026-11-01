@@ -36,6 +36,10 @@ impl DatabaseService {
         password: Option<&str>,
         create: bool,
     ) -> Result<Self, SyncError> {
+        let file_missing_or_empty = !db_path.exists()
+            || std::fs::metadata(db_path)
+                .map(|m| m.len() == 0)
+                .unwrap_or(true);
         let is_emb = is_emb_path(db_path) || password.is_some();
         let mut emb_handler = None;
 
@@ -59,7 +63,7 @@ impl DatabaseService {
 
         // Impostazioni di concorrenza SQLite secondo AGENTS.md
         conn.busy_timeout(Duration::from_secs(10))?;
-        let _ = conn.execute("PRAGMA journal_mode = WAL", []);
+        let _ = conn.execute_batch("PRAGMA journal_mode = WAL;");
 
         let mut service = Self {
             conn,
@@ -69,7 +73,7 @@ impl DatabaseService {
             verbose,
         };
 
-        if create || (!db_path.exists() && !is_emb) {
+        if create || file_missing_or_empty {
             info!(
                 "{}",
                 crate::i18n::t_fmt(
@@ -78,12 +82,33 @@ impl DatabaseService {
                 )
             );
             create_empty_database(&service.conn, None)?;
+            init_sync_schema(&mut service.conn)?;
             service.mark_modified();
             service.flush()?;
         }
 
+        let _: i64 = service
+            .conn
+            .query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0))?;
+
         service.refresh_schemas()?;
         Ok(service)
+    }
+
+    /// Ricarica e decifra nuovamente il database .emb da disco se modificato esternamente (es. da MMEX in run/watch)
+    pub fn reload_if_emb(&mut self) -> Result<(), SyncError> {
+        if let Some(h) = &mut self.emb_handler {
+            let _ = self
+                .conn
+                .execute_batch("PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;");
+            h.reload_from_emb()?;
+            let new_conn = Connection::open(h.temp_db_path())?;
+            new_conn.busy_timeout(Duration::from_secs(10))?;
+            let _ = new_conn.execute("PRAGMA journal_mode = WAL", []);
+            self.conn = new_conn;
+            self.refresh_schemas()?;
+        }
+        Ok(())
     }
 
     /// Ricarica la cache degli schemi per tutte le tabelle note in SYNC_ORDER
@@ -132,12 +157,32 @@ impl DatabaseService {
         &self.conn
     }
 
+    /// Verifica se il database locale contiene già almeno un record sincronizzato (con `pb_id` valorizzato).
+    /// Se non è presente alcun record sincronizzato in nessuna tabella, il database è appena stato
+    /// creato/inizializzato e un'operazione di Pull deve scaricare l'intero dataset remoto ignorando `last_sync`.
+    pub fn has_synced_data(&self) -> bool {
+        for table in SYNC_ORDER {
+            let sql = format!(
+                "SELECT EXISTS(SELECT 1 FROM {} WHERE pb_id IS NOT NULL AND pb_id != '' LIMIT 1)",
+                table
+            );
+            if let Ok(true) = self.conn.query_row(&sql, [], |row| row.get::<_, bool>(0)) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Salva le modifiche (se il database è .emb, esegue il checkpoint WAL e ricifra atomicamente su disco)
     pub fn flush(&mut self) -> Result<(), SyncError> {
         if let Some(h) = &mut self.emb_handler {
-            // Checkpoint obbligatorio del WAL per riversare tutte le pagine nel file SQLite primario
-            let _ = self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)", []);
+            // Checkpoint obbligatorio del WAL e passaggio temporaneo a DELETE per riversare
+            // tutte le pagine e i flag di formato header (1/1) nel file SQLite primario
+            let _ = self
+                .conn
+                .execute_batch("PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;");
             h.flush_to_emb()?;
+            let _ = self.conn.execute_batch("PRAGMA journal_mode = WAL;");
         }
         Ok(())
     }
@@ -569,10 +614,13 @@ impl DatabaseService {
             params_from_iter(params.iter().map(|b| b.as_ref())),
         )?;
 
-        // Imposta a 0 (Sincronizzato)
+        // Imposta a 0 (Sincronizzato) usando la nuova PK (poiché in SQLite l'aggiornamento di INTEGER PRIMARY KEY modifica il ROWID)
         tx.execute(
-            &format!("UPDATE {} SET pb_is_dirty = 0 WHERE ROWID = ?", table),
-            [old_rowid],
+            &format!(
+                "UPDATE {} SET pb_is_dirty = 0 WHERE {} = ?",
+                table, schema.pk
+            ),
+            [new_pk],
         )?;
 
         // Se la Primary Key è cambiata, aggiorna a cascata tutte le tabelle dipendenti (FK_MAP)
@@ -675,5 +723,47 @@ fn json_value_to_sql(val: &serde_json::Value) -> Box<dyn ToSql> {
         }
         serde_json::Value::String(s) => Box::new(s.clone()),
         other => Box::new(other.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_database_service_emb_full_schema_roundtrip() {
+        let dir = tempdir().expect("tempdir");
+        let emb_path = dir.path().join("mmex_full.emb");
+        let password = "MyEmbPassword!2026";
+
+        // 1. Creazione e inizializzazione completa dello schema MMEX + schema tecnico pb_* su .emb
+        {
+            let mut db =
+                DatabaseService::connect(&emb_path, false, Some(password), true).expect("connect");
+            db.init_schema().expect("init_schema");
+            db.raw_conn()
+                .execute(
+                    "INSERT INTO PAYEE_V1 (PAYEENAME, ACTIVE) VALUES ('Test Payee', 1)",
+                    [],
+                )
+                .expect("insert payee");
+            db.mark_modified();
+            db.flush().expect("flush");
+        }
+
+        assert!(emb_path.exists());
+
+        // 2. Riapertura del file .emb multipagina e verifica record sporco tracciato dal trigger
+        let db_reopen =
+            DatabaseService::connect(&emb_path, false, Some(password), false).expect("reopen");
+        let dirty_payees = db_reopen
+            .get_dirty_records("PAYEE_V1", false)
+            .expect("get_dirty_records");
+        assert_eq!(dirty_payees.len(), 1);
+
+        // 3. Verifica rifiuto con password errata
+        let err_res = DatabaseService::connect(&emb_path, false, Some("wrong_password"), false);
+        assert!(err_res.is_err());
     }
 }

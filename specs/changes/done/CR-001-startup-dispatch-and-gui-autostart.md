@@ -1,6 +1,6 @@
 # CR-001: Semplificazione Dispatch CLI/GUI, Rimozione `--nogui` / `has_cli_action` e Auto-Start con Countdown in GUI
 - **Stato:** DONE
-- **Spec impattate:** `specs/0-as-is/00-architecture-and-ui.md`, `specs/0-as-is/03-sync-engine.md`
+- **Spec impattate:** `specs/as-is/00-architecture-and-ui.md`, `specs/as-is/03-sync-engine.md`
 
 ---
 
@@ -35,5 +35,5 @@
 - [x] Rimossi `--nogui` e `has_cli_action`. Introdotti `--cli` e `--gui` con comportamento deterministico.
 - [x] Avvio senza argomenti apre la GUI con countdown e auto-start (se il profilo è pronto).
 - [x] `cargo check`, `cargo clippy` e `cargo test` passano al 100%.
-- [x] Specifiche `specs/0-as-is/` aggiornate.
+- [x] Specifiche `specs/as-is/` aggiornate.
 - [x] Stato CR impostato a `DONE`.

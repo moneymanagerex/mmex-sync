@@ -44,6 +44,32 @@ pub enum GuiEvent {
         success: bool,
         message: String,
     },
+    UpdateCheckFinished {
+        update_available: bool,
+        release: Option<crate::update::ReleaseInfo>,
+        message: String,
+        is_error: bool,
+    },
+    UpdateInstallProgress {
+        downloaded: u64,
+        total: u64,
+    },
+    UpdateInstallFinished {
+        success: bool,
+        message: String,
+    },
+}
+
+/// Stato del dialogo modale di aggiornamento software
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpdateDialogState {
+    None,
+    Checking,
+    UpToDate(String),
+    Available(crate::update::ReleaseInfo),
+    Downloading { progress: f32 },
+    Success(String),
+    Error(String),
 }
 
 /// Parametri raccolti per l'esecuzione asincrona in background
@@ -113,6 +139,7 @@ pub struct MmexSyncGuiApp {
     dialog_clear_db_confirm: bool,
     dialog_clear_server_confirm: bool,
     dialog_about: bool,
+    update_state: UpdateDialogState,
 }
 
 impl MmexSyncGuiApp {
@@ -186,6 +213,7 @@ impl MmexSyncGuiApp {
             dialog_clear_db_confirm: false,
             dialog_clear_server_confirm: false,
             dialog_about: false,
+            update_state: UpdateDialogState::None,
         };
 
         app.load_profile_data(&initial_profile);
@@ -361,6 +389,7 @@ impl MmexSyncGuiApp {
         };
         p.default_mode = Some(self.default_mode.clone());
         p.auto_start = self.auto_start;
+        p.last_sync = self.last_sync.clone();
         p.save_password = Some(if self.save_file_password { "yes" } else { "no" }.to_string());
 
         if self.save_file_password && !self.file_password.is_empty() {
@@ -769,19 +798,32 @@ impl MmexSyncGuiApp {
             return;
         }
 
+        let default_filename = if self.db_path.to_lowercase().ends_with(".emb") {
+            "new_database.emb"
+        } else {
+            "new_database.mmb"
+        };
+
         if let Some(mut file) = rfd::FileDialog::new()
             .add_filter("MMEX Database", &["mmb", "emb"])
-            .set_file_name("new_database.mmb")
+            .add_filter("MMEX Encrypted (.emb)", &["emb"])
+            .add_filter("MMEX SQLite (.mmb)", &["mmb"])
+            .set_file_name(default_filename)
             .save_file()
         {
             if file.extension().is_none() {
-                file.set_extension("mmb");
+                let ext = if default_filename.ends_with(".emb") {
+                    "emb"
+                } else {
+                    "mmb"
+                };
+                file.set_extension(ext);
             }
             self.db_path = file.to_string_lossy().to_string();
+            self.last_sync = None;
 
             if self.db_path.to_lowercase().ends_with(".emb") {
-                self.file_password.clear();
-                self.new_emb_password_input.clear();
+                self.new_emb_password_input = self.file_password.clone();
                 self.dialog_new_emb_password = true;
             } else {
                 self.save_current_profile();
@@ -795,27 +837,28 @@ impl MmexSyncGuiApp {
         if self.is_working || self.db_path.trim().is_empty() {
             return;
         }
+        self.last_sync = None;
+        self.save_current_profile();
         self.is_working = true;
         let tx = self.tx.clone();
-        let db_path = expand_tilde(Path::new(self.db_path.trim()));
-        let file_password = if self.file_password.is_empty() {
-            None
-        } else {
-            Some(self.file_password.clone())
-        };
+        let ctx = self.build_worker_context();
 
         std::thread::spawn(move || {
-            let mut db =
-                match DatabaseService::connect(&db_path, false, file_password.as_deref(), true) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        let _ = tx.send(GuiEvent::ClearFinished {
-                            success: false,
-                            message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
-                        });
-                        return;
-                    }
-                };
+            let mut db = match DatabaseService::connect(
+                &ctx.db_path,
+                ctx.verbose,
+                ctx.file_password.as_deref(),
+                true,
+            ) {
+                Ok(d) => d,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::ClearFinished {
+                        success: false,
+                        message: format!("{}: {}", crate::i18n::t("gui.msg.error"), e),
+                    });
+                    return;
+                }
+            };
 
             if let Err(e) = db.init_schema().and_then(|_| db.flush()) {
                 let _ = tx.send(GuiEvent::ClearFinished {
@@ -824,11 +867,36 @@ impl MmexSyncGuiApp {
                 });
                 return;
             }
+            drop(db);
 
             let _ = tx.send(GuiEvent::Log(crate::i18n::t_fmt(
                 "gui.log.create_db_success",
-                &[("path", &db_path.display().to_string())],
+                &[("path", &ctx.db_path.display().to_string())],
             )));
+
+            let has_creds = ctx.user.is_some() && ctx.pass.is_some();
+            let has_token = ctx
+                .encrypted_token
+                .as_deref()
+                .map(|t| !t.trim().is_empty())
+                .unwrap_or(false);
+
+            if !ctx.url.is_empty() && (has_creds || has_token) {
+                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    let new_ts = rt
+                        .block_on(async { execute_single_sync_step(&tx, &ctx, false, true).await });
+                    if let Some(ts) = new_ts {
+                        let _ = tx.send(GuiEvent::SyncFinished {
+                            last_sync: Some(ts),
+                        });
+                        return;
+                    }
+                }
+            }
+
             let _ = tx.send(GuiEvent::ClearFinished {
                 success: true,
                 message: crate::i18n::t("gui.msg.create_db_success").to_string(),
@@ -983,6 +1051,124 @@ impl MmexSyncGuiApp {
         });
     }
 
+    fn trigger_check_update_async(&mut self) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
+
+        self.is_working = true;
+        self.update_state = UpdateDialogState::Checking;
+        self.status_message = Some((self.lang.update_checking().to_string(), false));
+
+        let tx = self.tx.clone();
+        let current_version = env!("CARGO_PKG_VERSION");
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                        update_available: false,
+                        release: None,
+                        message: format!("Runtime error: {}", e),
+                        is_error: true,
+                    });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let updater = crate::update::UpdateService::default();
+                match updater.check_for_update(current_version).await {
+                    Ok(Some(release)) => {
+                        let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                            update_available: true,
+                            release: Some(release),
+                            message: "New update available".to_string(),
+                            is_error: false,
+                        });
+                    }
+                    Ok(None) => {
+                        let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                            update_available: false,
+                            release: None,
+                            message: "Application is up to date".to_string(),
+                            is_error: false,
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                            update_available: false,
+                            release: None,
+                            message: e.to_string(),
+                            is_error: true,
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    fn trigger_download_update_async(&mut self, release: crate::update::ReleaseInfo) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
+
+        self.is_working = true;
+        self.update_state = UpdateDialogState::Downloading { progress: 0.0 };
+
+        let tx = self.tx.clone();
+        let tx_prog = self.tx.clone();
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::UpdateInstallFinished {
+                        success: false,
+                        message: format!("Runtime error: {}", e),
+                    });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let updater = crate::update::UpdateService::default();
+                match updater
+                    .download_and_install(
+                        &release,
+                        Some(move |downloaded, total| {
+                            let _ =
+                                tx_prog.send(GuiEvent::UpdateInstallProgress { downloaded, total });
+                        }),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        let _ = tx.send(GuiEvent::UpdateInstallFinished {
+                            success: true,
+                            message: "Update successfully installed!".to_string(),
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::UpdateInstallFinished {
+                            success: false,
+                            message: e.to_string(),
+                        });
+                    }
+                }
+            });
+        });
+    }
+
     fn drain_events(&mut self) {
         while let Ok(event) = self.rx.try_recv() {
             match event {
@@ -1030,6 +1216,44 @@ impl MmexSyncGuiApp {
                 GuiEvent::ClearFinished { success, message } => {
                     self.is_working = false;
                     self.status_message = Some((message, !success));
+                }
+                GuiEvent::UpdateCheckFinished {
+                    update_available,
+                    release,
+                    message,
+                    is_error,
+                } => {
+                    self.is_working = false;
+                    self.status_message = Some((message.clone(), is_error));
+                    if is_error {
+                        self.update_state = UpdateDialogState::Error(message);
+                    } else if update_available {
+                        if let Some(rel) = release {
+                            self.update_state = UpdateDialogState::Available(rel);
+                        }
+                    } else {
+                        self.update_state =
+                            UpdateDialogState::UpToDate(env!("CARGO_PKG_VERSION").to_string());
+                    }
+                }
+                GuiEvent::UpdateInstallProgress { downloaded, total } => {
+                    let progress = if total > 0 {
+                        (downloaded as f32 / total as f32).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    self.update_state = UpdateDialogState::Downloading { progress };
+                }
+                GuiEvent::UpdateInstallFinished { success, message } => {
+                    self.is_working = false;
+                    self.status_message = Some((message.clone(), !success));
+                    if success {
+                        self.update_state = UpdateDialogState::Success(
+                            self.lang.update_install_success().to_string(),
+                        );
+                    } else {
+                        self.update_state = UpdateDialogState::Error(message);
+                    }
                 }
             }
         }
@@ -1283,7 +1507,11 @@ impl eframe::App for MmexSyncGuiApp {
                             .add_filter("MMEX Database", &["mmb", "emb"])
                             .pick_file()
                         {
-                            self.db_path = file.to_string_lossy().to_string();
+                            let new_path = file.to_string_lossy().to_string();
+                            if new_path != self.db_path {
+                                self.db_path = new_path;
+                                self.last_sync = None;
+                            }
                         }
                         ui.close_menu();
                     }
@@ -1362,10 +1590,18 @@ impl eframe::App for MmexSyncGuiApp {
                     ui.checkbox(&mut self.force_mode, self.lang.menu_sync_force_mode());
                 });
 
-                // MENU PREFERENZE (Selezione Lingua IT / EN)
+                // MENU PREFERENZE (Selezione Lingua)
                 ui.menu_button(self.lang.menu_preferences(), |ui| {
                     ui.label(self.lang.menu_preferences_lang());
                     ui.separator();
+
+                    if ui
+                        .selectable_label(self.lang == Language::En, "🇬🇧 English (master)")
+                        .clicked()
+                    {
+                        self.set_language(Language::En);
+                        ui.close_menu();
+                    }
 
                     if ui
                         .selectable_label(self.lang == Language::It, "🇮🇹 Italiano")
@@ -1376,10 +1612,26 @@ impl eframe::App for MmexSyncGuiApp {
                     }
 
                     if ui
-                        .selectable_label(self.lang == Language::En, "🇬🇧 English")
+                        .selectable_label(self.lang == Language::Fr, "🇫🇷 Français")
                         .clicked()
                     {
-                        self.set_language(Language::En);
+                        self.set_language(Language::Fr);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .selectable_label(self.lang == Language::De, "🇩🇪 Deutsch")
+                        .clicked()
+                    {
+                        self.set_language(Language::De);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .selectable_label(self.lang == Language::Es, "🇪🇸 Español")
+                        .clicked()
+                    {
+                        self.set_language(Language::Es);
                         ui.close_menu();
                     }
                 });
@@ -1407,6 +1659,20 @@ impl eframe::App for MmexSyncGuiApp {
                     {
                         self.cancel_autostart_countdown();
                         self.dialog_clear_server_confirm = true;
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    if ui
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_tools_check_update()),
+                        )
+                        .clicked()
+                    {
+                        self.cancel_autostart_countdown();
+                        self.trigger_check_update_async();
                         ui.close_menu();
                     }
                 });
@@ -1514,6 +1780,7 @@ impl eframe::App for MmexSyncGuiApp {
                         ui.label(self.lang.field_db_path());
                         if ui.text_edit_singleline(&mut self.db_path).changed() {
                             self.cancel_autostart_countdown();
+                            self.last_sync = None;
                         }
                         if ui.button(self.lang.btn_browse()).clicked() {
                             self.cancel_autostart_countdown();
@@ -1521,7 +1788,11 @@ impl eframe::App for MmexSyncGuiApp {
                                 .add_filter("MMEX Database", &["mmb", "emb"])
                                 .pick_file()
                             {
-                                self.db_path = file.to_string_lossy().to_string();
+                                let new_path = file.to_string_lossy().to_string();
+                                if new_path != self.db_path {
+                                    self.db_path = new_path;
+                                    self.last_sync = None;
+                                }
                             }
                         }
                         if ui
@@ -1808,15 +2079,17 @@ impl MmexSyncGuiApp {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.label(self.lang.dialog_new_emb_pwd_prompt());
-                    ui.add(
+                    let pwd_resp = ui.add(
                         egui::TextEdit::singleline(&mut self.new_emb_password_input).password(true),
                     );
                     ui.checkbox(
                         &mut self.save_file_password,
                         self.lang.field_save_password(),
                     );
+                    let enter_pressed =
+                        pwd_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.horizontal(|ui| {
-                        if ui.button(self.lang.btn_ok()).clicked() {
+                        if ui.button(self.lang.btn_ok()).clicked() || enter_pressed {
                             if self.new_emb_password_input.is_empty() {
                                 self.status_message = Some((
                                     self.lang.t("gui.msg.emb_password_required").to_string(),
@@ -1825,6 +2098,7 @@ impl MmexSyncGuiApp {
                             } else {
                                 self.file_password = self.new_emb_password_input.clone();
                                 self.dialog_new_emb_password = false;
+                                self.last_sync = None;
                                 self.save_current_profile();
                                 self.trigger_create_db_async();
                             }
@@ -1971,6 +2245,134 @@ impl MmexSyncGuiApp {
                         self.dialog_about = false;
                     }
                 });
+        }
+
+        // Dialog Aggiornamento Software
+        match &self.update_state {
+            UpdateDialogState::None => {}
+            UpdateDialogState::Checking => {
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(self.lang.update_checking());
+                        });
+                    });
+            }
+            UpdateDialogState::UpToDate(version) => {
+                let mut close = false;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(self.lang.update_up_to_date(version));
+                        ui.add_space(10.0);
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            close = true;
+                        }
+                    });
+                if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
+            UpdateDialogState::Available(release) => {
+                let mut start_download = false;
+                let mut close = false;
+                let rel = release.clone();
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.heading(self.lang.update_available_title(&rel.tag_name));
+                        ui.label(self.lang.update_current_version(env!("CARGO_PKG_VERSION")));
+                        if let Some(body) = &rel.body {
+                            if !body.trim().is_empty() {
+                                ui.separator();
+                                ui.label(self.lang.update_release_notes());
+                                egui::ScrollArea::vertical()
+                                    .max_height(180.0)
+                                    .show(ui, |ui| {
+                                        ui.label(body.trim());
+                                    });
+                            }
+                        }
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(self.lang.btn_download_install()).clicked() {
+                                start_download = true;
+                            }
+                            if ui.button(self.lang.btn_cancel()).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                if start_download {
+                    self.trigger_download_update_async(rel);
+                } else if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
+            UpdateDialogState::Downloading { progress } => {
+                let pct = (progress * 100.0) as u32;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(self.lang.update_downloading(pct));
+                        ui.add(egui::ProgressBar::new(*progress).show_percentage());
+                    });
+            }
+            UpdateDialogState::Success(msg) => {
+                let mut close = false;
+                let mut restart = false;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(msg.as_str());
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(self.lang.btn_restart()).clicked() {
+                                restart = true;
+                            }
+                            if ui.button(self.lang.btn_close()).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                if restart {
+                    if let Ok(exe) = std::env::current_exe() {
+                        let _ = std::process::Command::new(exe).spawn();
+                    }
+                    std::process::exit(0);
+                } else if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
+            UpdateDialogState::Error(err) => {
+                let mut close = false;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(self.lang.update_install_error(err));
+                        ui.add_space(10.0);
+                        if ui.button(self.lang.btn_close()).clicked() {
+                            close = true;
+                        }
+                    });
+                if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
         }
     }
 }

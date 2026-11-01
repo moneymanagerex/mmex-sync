@@ -378,6 +378,12 @@ impl ConfigManager {
                 .and_then(|enc| crate::crypto::unprotect(enc, None).ok().flatten())
         });
 
+        let last_sync = if args.create || !db_path.exists() {
+            None
+        } else {
+            profile.last_sync
+        };
+
         Ok(EffectiveConfig {
             profile: profile_name,
             db_path,
@@ -397,7 +403,7 @@ impl ConfigManager {
             mmex_exe,
             default_mode,
             auto_start: profile.auto_start,
-            last_sync: profile.last_sync,
+            last_sync,
             is_running: profile.is_running,
             verbose: args.verbose,
             force: args.force,

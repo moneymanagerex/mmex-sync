@@ -21,7 +21,7 @@ src/
 ├── crypto/
 │   ├── mod.rs              # Re-exports for credentials and .emb encryption
 │   ├── credentials.rs      # AES-256-GCM local secret protection using a 256-bit master key (.key)
-│   └── emb.rs              # AES-256-CBC + PBKDF2 handler for encrypted MMEX databases (.emb)
+│   └── emb.rs              # SQLCipher v4 (legacy = 4) page-level AES-256-CBC + HMAC-SHA512 handler for .emb databases
 ├── db/
 │   ├── mod.rs              # Re-exports for DatabaseService and schema helpers
 │   ├── schema.rs           # DDL creation, pb_sync_info, pb_DELETED_RECORDS_LOG, pb_* columns, and SQLite triggers
@@ -141,8 +141,8 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 | `--nowait` | `nowait` | `bool` | — | Parsed in `CliArgs` (currently unused in Rust execution flow) |
 | `--cli` | `cli` | `bool` | — | Forces headless CLI execution in the terminal |
 | `--gui` | `gui` | `bool` | — | Opens the native desktop GUI in configuration mode (blocks auto-start) |
-| `--checkForUpdate` | `check_for_update` | `bool` | — | Parsed in `CliArgs` (placeholder, not wired in `main.rs`) |
-| `--autoDownloadUpdate` | `auto_download_update` | `bool` | — | Parsed in `CliArgs` (placeholder, not wired in `main.rs`) |
+| `--checkForUpdate` | `check_for_update` | `bool` | — | Queries GitHub Releases API to check if a newer version is available |
+| `--downloadUpdate` | `download_update` | `bool` | — | Checks, downloads, extracts, and installs the latest version from GitHub Releases |
 
 ---
 
@@ -221,7 +221,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
    - **Edit:** Select Database (`rfd::FileDialog::pick_file` filter: `mmb`, `emb`), Create New MMEX Database (`rfd::FileDialog::save_file` filter: `mmb`, `emb`), Select MMEX Executable (`rfd`).
    - **Synchronization:** Full Sync (`push=true, pull=true`), Push Only (`push=true, pull=false`), Pull Only (`push=false, pull=true`), Test Connection, Force Mode checkbox.
    - **Preferences:** Language switcher (`🇮🇹 Italiano` / `🇬🇧 English`), which immediately updates `self.lang`, `CURRENT_LOCALE`, and saves `"language"` to `mmex-sync.config.json`.
-   - **Tools:** Clear Local DB (confirmation modal), Clear Remote Server (confirmation modal).
+   - **Tools:** Clear Local DB (confirmation modal), Clear Remote Server (confirmation modal), Check for Updates (checks GitHub Releases, displays status/release notes modal with direct download and install).
    - **Help:** About modal.
 2. **Central Panel:**
    - Active profile heading + `[DEFAULT]` badge.

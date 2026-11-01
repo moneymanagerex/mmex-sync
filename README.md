@@ -94,7 +94,7 @@ From the Desktop GUI you can:
 * **Manage Profiles** (`Profiles` menu): Create new profiles, switch between profiles, save changes, duplicate (`Save As...`), rename, set the default profile, or delete profiles.
 * **Configure Local Database & Remote Server**: Select your `.mmb` or encrypted `.emb` file and MMEX executable using native OS file dialogs (**Browse**), configure PocketBase credentials, and test connectivity (**Test Connection**).
 * **Run Sync Operations**: Trigger **Full Sync (Init + Push + Pull)**, **Push Only**, or **Pull Only** with real-time progress logs in the integrated console.
-* **Switch Language** (`Preferences -> Language`): Supports **English** and **Italiano** with automatic OS locale detection on first launch.
+* **Switch Language** (`Preferences -> Language`): Supports **English (master)**, **Italiano**, **Français**, **Deutsch**, and **Español** with automatic OS locale detection on first launch.
 * **Maintenance Tools** (`Tools` menu): Clean technical sync metadata/triggers from the local DB (`Clear Local DB`) or wipe remote server collections (`Clear Remote Server`).
 
 ---
@@ -209,6 +209,26 @@ Options:
   -h, --help                                   Print help
   -V, --version                                Print version
 ```
+
+---
+
+## 🌍 Translations & Localization (Help Wanted!)
+
+We want to make `mmex-sync` accessible to everyone worldwide in their native language!
+
+The reference master language is **English** (`locales/en.json`). Translations for other languages are managed collaboratively via **Crowdin** ([https://crowdin.com/project/mmex-sync](https://crowdin.com/project/mmex-sync)).
+
+Currently enabled languages:
+* 🇬🇧 **English (`en`)** — *Master reference*
+* 🇮🇹 **Italiano (`it`)**
+* 🇫🇷 **Français (`fr`)** — *(Help wanted!)*
+* 🇩🇪 **Deutsch (`de`)** — *(Help wanted!)*
+* 🇪🇸 **Español (`es`)** — *(Help wanted!)*
+
+### How to Help:
+1. **Contribute on Crowdin:** Translations are coordinated through Crowdin. No coding skills needed—just your knowledge of the language!
+2. **Review & Translate:** Help translate newly added strings or refine existing translations to keep `mmex-sync` polished and user-friendly.
+3. **Request New Languages:** If you'd like to see `mmex-sync` in another language, open an issue or pull request on GitHub.
 
 ---
 

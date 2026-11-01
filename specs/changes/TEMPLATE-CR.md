@@ -11,7 +11,7 @@
 
 ## 1. Context & Motivation (Why)
 
-Describe the problem, limitation, or new requirement driving this change. Reference the exact behavior in `specs/0-as-is/` that is being modified or extended.
+Describe the problem, limitation, or new requirement driving this change. Reference the exact behavior in `specs/as-is/` that is being modified or extended.
 
 ---
 
@@ -43,7 +43,7 @@ Provide any struct, trait, SQL trigger, or JSON payload changes:
 
 ## 4. Impact on System Invariants (`Invarianti di Sistema`)
 
-Verify compliance with the baseline `## Invarianti di Sistema` documented in `specs/0-as-is/`:
+Verify compliance with the baseline `## Invarianti di Sistema` documented in `specs/as-is/`:
 - [ ] **3-State Loop-Prevention Protocol (`pb_is_dirty` `0`/`1`/`2`)** preserved?
 - [ ] **Topological `SYNC_ORDER` & Foreign Key Cascade (`FK_MAP`)** preserved?
 - [ ] **`.emb` Atomic Flush & WAL Checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`)** preserved?

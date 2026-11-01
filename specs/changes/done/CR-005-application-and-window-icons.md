@@ -12,7 +12,7 @@
 ## 1. Context & Motivation (Why)
 
 ### Current Behavior (AS-IS)
-In the current baseline implementation (`specs/0-as-is/00-architecture-and-ui.md`, Section 1 & Section 5):
+In the current baseline implementation (`specs/as-is/00-architecture-and-ui.md`, Section 1 & Section 5):
 1. **No Build-Time Windows Resource Compilation (`build.rs` absent):** When compiling `mmex-sync.exe` for Windows (`x86_64-pc-windows-msvc` or cross-compiling via `x86_64-pc-windows-gnu` in `build-all.sh`), no `.rc` / `.ico` resource is embedded into the PE header. As a result, Windows Explorer, desktop shortcuts, and the taskbar display the generic default executable icon.
 2. **No Runtime Window Icon in Desktop GUI (`src/gui/mod.rs`):** `run_gui()` initializes `eframe::egui::ViewportBuilder::default()` with only `.with_title(...)`, `.with_inner_size(...)`, and `.with_min_inner_size(...)`. No application icon is attached to the native window viewport, causing the window title bar, Alt+Tab switcher, and OS dock/taskbar to show a generic fallback icon at runtime.
 
@@ -48,7 +48,7 @@ To provide a cohesive, recognizable brand identity across all supported platform
 | `Cargo.toml` | `MODIFY` | Add `image` (with `png` feature, optional under `gui` feature) in `[dependencies]` and `winres` in `[build-dependencies]`. |
 | `build.rs` | `MODIFY` | Extend existing `build.rs` (preserving the macOS `CoreFoundation.framework` TBD stub) to embed `assets/icons/icons.ico` (`icon.ico`) when the target OS is Windows. |
 | `src/gui/mod.rs` | `MODIFY` | Add `load_window_icon()` using `include_bytes!` + `image` RGBA decoding, and attach the icon to `ViewportBuilder` in `run_gui()`. |
-| `specs/0-as-is/00-architecture-and-ui.md` | `MODIFY` | Document `build.rs`, new dependencies, and viewport icon initialization in Section 1 and Section 5. |
+| `specs/as-is/00-architecture-and-ui.md` | `MODIFY` | Document `build.rs`, new dependencies, and viewport icon initialization in Section 1 and Section 5. |
 
 ---
 
@@ -213,7 +213,7 @@ pub fn run_gui(args: CliArgs, allow_auto_start: bool) -> Result<(), SyncError> {
 
 ## 4. Impact on System Invariants (`Invarianti di Sistema`)
 
-Verify compliance with the baseline `## Invarianti di Sistema` documented in `specs/0-as-is/`:
+Verify compliance with the baseline `## Invarianti di Sistema` documented in `specs/as-is/`:
 - [x] **3-State Loop-Prevention Protocol (`pb_is_dirty` `0`/`1`/`2`)** preserved? (Unchanged)
 - [x] **Topological `SYNC_ORDER` & Foreign Key Cascade (`FK_MAP`)** preserved? (Unchanged)
 - [x] **`.emb` Atomic Flush & WAL Checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`)** preserved? (Unchanged)
@@ -232,6 +232,6 @@ Verify compliance with the baseline `## Invarianti di Sistema` documented in `sp
    - [x] `cargo check --no-default-features`: Verify that headless CLI builds (without the `gui` feature) compile cleanly without requiring `eframe`, `rfd`, or `image`.
    - [x] `build.rs` configured with `winres` to embed `.ico` into Windows `.exe` binary.
 3. **Documentation & Closure:**
-   - [x] Baseline specification `specs/0-as-is/00-architecture-and-ui.md` updated in English.
-   - [x] CR status set to `DONE` and moved to `specs/1-changes/done/`.
+   - [x] Baseline specification `specs/as-is/00-architecture-and-ui.md` updated in English.
+   - [x] CR status set to `DONE` and moved to `specs/changes/done/`.
 

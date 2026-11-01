@@ -43,7 +43,7 @@ The PocketBase authentication collection (`users` vs. `_superusers`) is an inter
 
 ## 4. Impact on System Invariants (`Invarianti di Sistema`)
 
-Verify compliance with the baseline `## Invarianti di Sistema` documented in `specs/0-as-is/`:
+Verify compliance with the baseline `## Invarianti di Sistema` documented in `specs/as-is/`:
 - [x] **Zero External Runtime Asset Dependencies** preserved?
 - [x] **Strict Translation Key Parity (`en.json` / `it.json`)** preserved?
 - [x] **Backward Compatibility with Existing User Profiles (`~/.mmex-sync` / `%APPDATA%\mmex-sync`)** preserved?
@@ -56,4 +56,4 @@ Verify compliance with the baseline `## Invarianti di Sistema` documented in `sp
 - [x] Automated test `test_factory_creation` verifies `client.get_auth_collection() == Some("users")` upon creation.
 - [x] Automated test `test_failed_auth_keeps_users_collection_internally` verifies that when authentication fails on both `"users"` and `"_superusers"`, the internal collection is kept/reset to `"users"`.
 - [x] `cargo clippy --all-targets` and `cargo test --all-targets` pass with zero warnings and zero errors.
-- [x] Baseline specifications `specs/0-as-is/00-architecture-and-ui.md` and `specs/0-as-is/02-remote-providers.md` updated in English.
+- [x] Baseline specifications `specs/as-is/00-architecture-and-ui.md` and `specs/as-is/02-remote-providers.md` updated in English.

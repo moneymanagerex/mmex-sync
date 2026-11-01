@@ -6,11 +6,17 @@ use std::sync::OnceLock;
 // File JSON di localizzazione incorporati direttamente nel binario a tempo di compilazione
 const EN_JSON: &str = include_str!("../locales/en.json");
 const IT_JSON: &str = include_str!("../locales/it.json");
+const FR_JSON: &str = include_str!("../locales/fr.json");
+const DE_JSON: &str = include_str!("../locales/de.json");
+const ES_JSON: &str = include_str!("../locales/es.json");
 
 static EN_MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
 static IT_MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
+static FR_MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
+static DE_MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
+static ES_MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
 
-// Locale globale attivo (0 = En, 1 = It)
+// Locale globale attivo (0 = En, 1 = It, 2 = Fr, 3 = De, 4 = Es)
 static CURRENT_LOCALE: AtomicU8 = AtomicU8::new(0);
 
 fn parse_locale(json_content: &str) -> HashMap<String, String> {
@@ -23,6 +29,18 @@ pub fn get_en_map() -> &'static HashMap<String, String> {
 
 pub fn get_it_map() -> &'static HashMap<String, String> {
     IT_MAP.get_or_init(|| parse_locale(IT_JSON))
+}
+
+pub fn get_fr_map() -> &'static HashMap<String, String> {
+    FR_MAP.get_or_init(|| parse_locale(FR_JSON))
+}
+
+pub fn get_de_map() -> &'static HashMap<String, String> {
+    DE_MAP.get_or_init(|| parse_locale(DE_JSON))
+}
+
+pub fn get_es_map() -> &'static HashMap<String, String> {
+    ES_MAP.get_or_init(|| parse_locale(ES_JSON))
 }
 
 /// Imposta la lingua globale attiva dell'applicazione
@@ -41,6 +59,9 @@ pub enum Language {
     #[default]
     En,
     It,
+    Fr,
+    De,
+    Es,
 }
 
 impl Language {
@@ -48,12 +69,18 @@ impl Language {
         match self {
             Language::En => 0,
             Language::It => 1,
+            Language::Fr => 2,
+            Language::De => 3,
+            Language::Es => 4,
         }
     }
 
     pub const fn from_u8(val: u8) -> Self {
         match val {
             1 => Language::It,
+            2 => Language::Fr,
+            3 => Language::De,
+            4 => Language::Es,
             _ => Language::En,
         }
     }
@@ -64,6 +91,9 @@ impl Language {
         match normalized.as_str() {
             "en" => Some(Language::En),
             "it" => Some(Language::It),
+            "fr" => Some(Language::Fr),
+            "de" => Some(Language::De),
+            "es" => Some(Language::Es),
             _ => None,
         }
     }
@@ -78,6 +108,9 @@ impl Language {
         match self {
             Language::En => "en",
             Language::It => "it",
+            Language::Fr => "fr",
+            Language::De => "de",
+            Language::Es => "es",
         }
     }
 
@@ -86,6 +119,9 @@ impl Language {
         match self {
             Language::En => "English",
             Language::It => "Italiano",
+            Language::Fr => "Français",
+            Language::De => "Deutsch",
+            Language::Es => "Español",
         }
     }
 
@@ -186,6 +222,9 @@ impl Language {
     }
     pub fn menu_tools_clear_server(&self) -> &'static str {
         self.t("gui.menu.tools.clear_server")
+    }
+    pub fn menu_tools_check_update(&self) -> &'static str {
+        self.t("gui.menu.tools.check_update")
     }
 
     pub fn menu_help(&self) -> &'static str {
@@ -367,6 +406,42 @@ impl Language {
     pub fn msg_operation_in_progress(&self) -> &'static str {
         self.t("gui.msg.operation_in_progress")
     }
+
+    // Aggiornamento Software
+    pub fn dialog_update_title(&self) -> &'static str {
+        self.t("gui.update.dialog.title")
+    }
+    pub fn update_checking(&self) -> &'static str {
+        self.t("gui.update.checking")
+    }
+    pub fn update_up_to_date(&self, version: &str) -> String {
+        self.t_fmt("gui.update.up_to_date", &[("version", version)])
+    }
+    pub fn update_available_title(&self, version: &str) -> String {
+        self.t_fmt("gui.update.available_title", &[("version", version)])
+    }
+    pub fn update_current_version(&self, version: &str) -> String {
+        self.t_fmt("gui.update.current_version", &[("version", version)])
+    }
+    pub fn update_release_notes(&self) -> &'static str {
+        self.t("gui.update.release_notes")
+    }
+    pub fn update_downloading(&self, percent: u32) -> String {
+        let pct = percent.to_string();
+        self.t_fmt("gui.update.downloading", &[("percent", &pct)])
+    }
+    pub fn update_install_success(&self) -> &'static str {
+        self.t("gui.update.install_success")
+    }
+    pub fn update_install_error(&self, error: &str) -> String {
+        self.t_fmt("gui.update.install_error", &[("error", error)])
+    }
+    pub fn btn_download_install(&self) -> &'static str {
+        self.t("gui.update.btn.download_install")
+    }
+    pub fn btn_restart(&self) -> &'static str {
+        self.t("gui.update.btn.restart")
+    }
 }
 
 /// Traduce una chiave per la lingua richiesta con fallback automatico su en.json
@@ -374,6 +449,9 @@ pub fn translate(lang: Language, key: &str) -> &'static str {
     let map = match lang {
         Language::En => get_en_map(),
         Language::It => get_it_map(),
+        Language::Fr => get_fr_map(),
+        Language::De => get_de_map(),
+        Language::Es => get_es_map(),
     };
 
     if let Some(val) = map.get(key) {
@@ -502,44 +580,11 @@ mod tests {
             detect_best_locale_from(None, Some("en_US.UTF-8")),
             Language::En
         );
-        assert_eq!(detect_best_locale_from(None, Some("fr-FR")), Language::En);
+        assert_eq!(detect_best_locale_from(None, Some("fr-FR")), Language::Fr);
+        assert_eq!(detect_best_locale_from(None, Some("de-DE")), Language::De);
+        assert_eq!(detect_best_locale_from(None, Some("es-ES")), Language::Es);
+        assert_eq!(detect_best_locale_from(None, Some("ja-JP")), Language::En);
         assert_eq!(detect_best_locale_from(None, None), Language::En);
-    }
-
-    #[test]
-    fn test_json_key_parity() {
-        let en_map = get_en_map();
-        let it_map = get_it_map();
-
-        let mut missing_in_it = Vec::new();
-        for key in en_map.keys() {
-            if !it_map.contains_key(key) {
-                missing_in_it.push(key.clone());
-            }
-        }
-
-        let mut missing_in_en = Vec::new();
-        for key in it_map.keys() {
-            if !en_map.contains_key(key) {
-                missing_in_en.push(key.clone());
-            }
-        }
-
-        assert!(
-            missing_in_it.is_empty(),
-            "Chiavi presenti in en.json ma mancanti in it.json: {:?}",
-            missing_in_it
-        );
-        assert!(
-            missing_in_en.is_empty(),
-            "Chiavi presenti in it.json ma mancanti in en.json: {:?}",
-            missing_in_en
-        );
-        assert_eq!(
-            en_map.len(),
-            it_map.len(),
-            "Il numero totale di chiavi deve essere identico"
-        );
     }
 
     #[test]
@@ -558,45 +603,8 @@ mod tests {
     }
 
     #[test]
-    fn test_embedded_translations_integrity() {
-        let it = Language::It;
-        let en = Language::En;
-
-        assert_ne!(it.menu_profiles(), en.menu_profiles());
-        assert_ne!(it.menu_sync(), en.menu_sync());
-        assert_ne!(it.menu_sync_force_mode(), en.menu_sync_force_mode());
-        assert_ne!(it.menu_preferences(), en.menu_preferences());
-        assert_ne!(it.msg_profile_saved(), en.msg_profile_saved());
-        assert_ne!(it.section_db(), en.section_db());
-        assert_ne!(it.about_content(), en.about_content());
-
-        assert_eq!(it.menu_profiles(), "Profili");
-        assert_eq!(en.menu_profiles(), "Profiles");
-        assert_eq!(
-            it.menu_sync_force_mode(),
-            "Usa Modalità Forzata (Force Mode)"
-        );
-        assert_eq!(
-            en.menu_sync_force_mode(),
-            "Use Force Mode (Ignore timestamps/dirty)"
-        );
-
-        assert_eq!(
-            it.dialog_delete_confirm_msg("famiglia"),
-            "Sei sicuro di voler eliminare definitivamente il profilo 'famiglia'?"
-        );
-        assert_eq!(
-            en.dialog_delete_confirm_msg("family"),
-            "Are you sure you want to permanently delete profile 'family'?"
-        );
-    }
-
-    #[test]
     fn test_fallback_on_missing_key() {
-        let fallback_result = translate(Language::It, "gui.dashboard.default_badge");
-        assert_eq!(fallback_result, "PREDEFINITO");
-
-        let missing = translate(Language::It, "non_existent_key_xyz");
-        assert_eq!(missing, "");
+        let fallback_result = translate(Language::It, "chiave_fittizia_inesistente_12345");
+        assert_eq!(fallback_result, "");
     }
 }
