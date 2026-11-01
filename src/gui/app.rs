@@ -1590,10 +1590,18 @@ impl eframe::App for MmexSyncGuiApp {
                     ui.checkbox(&mut self.force_mode, self.lang.menu_sync_force_mode());
                 });
 
-                // MENU PREFERENZE (Selezione Lingua IT / EN)
+                // MENU PREFERENZE (Selezione Lingua)
                 ui.menu_button(self.lang.menu_preferences(), |ui| {
                     ui.label(self.lang.menu_preferences_lang());
                     ui.separator();
+
+                    if ui
+                        .selectable_label(self.lang == Language::En, "🇬🇧 English (master)")
+                        .clicked()
+                    {
+                        self.set_language(Language::En);
+                        ui.close_menu();
+                    }
 
                     if ui
                         .selectable_label(self.lang == Language::It, "🇮🇹 Italiano")
@@ -1604,10 +1612,26 @@ impl eframe::App for MmexSyncGuiApp {
                     }
 
                     if ui
-                        .selectable_label(self.lang == Language::En, "🇬🇧 English")
+                        .selectable_label(self.lang == Language::Fr, "🇫🇷 Français")
                         .clicked()
                     {
-                        self.set_language(Language::En);
+                        self.set_language(Language::Fr);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .selectable_label(self.lang == Language::De, "🇩🇪 Deutsch")
+                        .clicked()
+                    {
+                        self.set_language(Language::De);
+                        ui.close_menu();
+                    }
+
+                    if ui
+                        .selectable_label(self.lang == Language::Es, "🇪🇸 Español")
+                        .clicked()
+                    {
+                        self.set_language(Language::Es);
                         ui.close_menu();
                     }
                 });
