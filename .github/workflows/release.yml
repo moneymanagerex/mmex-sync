@@ -114,6 +114,41 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Package ZIP Archives for Backwards Compatibility
+        run: |
+          TAG="${{ steps.cargo_version.outputs.tag }}"
+          cd release-assets
+          
+          # Linux x86_64
+          if [ -f "mmex-sync-linux-x86_64" ]; then
+            mkdir -p tmp-linux && cp mmex-sync-linux-x86_64 tmp-linux/mmex-sync
+            chmod +x tmp-linux/mmex-sync
+            (cd tmp-linux && zip "../mmex-sync-${TAG}-linux.zip" mmex-sync)
+            rm -rf tmp-linux
+          fi
+          
+          # Windows x86_64 (genera sia -win.zip per il vecchio client JS, sia -windows.zip)
+          if [ -f "mmex-sync-windows-x86_64.exe" ]; then
+            mkdir -p tmp-win && cp mmex-sync-windows-x86_64.exe tmp-win/mmex-sync.exe
+            (cd tmp-win && zip "../mmex-sync-${TAG}-win.zip" mmex-sync.exe)
+            (cd tmp-win && zip "../mmex-sync-${TAG}-windows.zip" mmex-sync.exe)
+            rm -rf tmp-win
+          fi
+          
+          # macOS x86_64 & aarch64
+          if [ -f "mmex-sync-macos-x86_64" ]; then
+            mkdir -p tmp-macos && cp mmex-sync-macos-x86_64 tmp-macos/mmex-sync
+            chmod +x tmp-macos/mmex-sync
+            (cd tmp-macos && zip "../mmex-sync-${TAG}-macos.zip" mmex-sync)
+            rm -rf tmp-macos
+          fi
+          if [ -f "mmex-sync-macos-aarch64" ]; then
+            mkdir -p tmp-macos-arm && cp mmex-sync-macos-aarch64 tmp-macos-arm/mmex-sync
+            chmod +x tmp-macos-arm/mmex-sync
+            (cd tmp-macos-arm && zip "../mmex-sync-${TAG}-macos-arm64.zip" mmex-sync)
+            rm -rf tmp-macos-arm
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

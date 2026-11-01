@@ -9,5 +9,6 @@ pub mod gui;
 pub mod i18n;
 pub mod remoteserver;
 pub mod sync;
+pub mod update;
 
 pub use error::SyncError;
