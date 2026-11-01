@@ -1146,7 +1146,8 @@ impl MmexSyncGuiApp {
                     .download_and_install(
                         &release,
                         Some(move |downloaded, total| {
-                            let _ = tx_prog.send(GuiEvent::UpdateInstallProgress { downloaded, total });
+                            let _ =
+                                tx_prog.send(GuiEvent::UpdateInstallProgress { downloaded, total });
                         }),
                     )
                     .await

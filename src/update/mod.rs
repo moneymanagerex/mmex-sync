@@ -132,7 +132,9 @@ impl UpdateService {
             .await
             .context("Connessione a GitHub API non riuscita")?;
 
-        if resp.status() == reqwest::StatusCode::FORBIDDEN || resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        if resp.status() == reqwest::StatusCode::FORBIDDEN
+            || resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+        {
             return Err(anyhow!(
                 "Limite di richieste GitHub API superato (HTTP {}). Riprova più tardi.",
                 resp.status()
@@ -193,14 +195,19 @@ impl UpdateService {
     }
 
     /// Scarica l'aggiornamento e aggiorna il binario in esecuzione
-    pub async fn download_and_install<F>(&self, release: &ReleaseInfo, progress_callback: Option<F>) -> Result<PathBuf>
+    pub async fn download_and_install<F>(
+        &self,
+        release: &ReleaseInfo,
+        progress_callback: Option<F>,
+    ) -> Result<PathBuf>
     where
         F: Fn(u64, u64) + Send + Sync + 'static,
     {
-        let current_exe = std::env::current_exe().context("Impossibile determinare il percorso dell'eseguibile corrente")?;
-        let exe_dir = current_exe
-            .parent()
-            .ok_or_else(|| anyhow!("Impossibile determinare la cartella dell'eseguibile corrente"))?;
+        let current_exe = std::env::current_exe()
+            .context("Impossibile determinare il percorso dell'eseguibile corrente")?;
+        let exe_dir = current_exe.parent().ok_or_else(|| {
+            anyhow!("Impossibile determinare la cartella dell'eseguibile corrente")
+        })?;
 
         // 1. Download asset con notifica di avanzamento
         let user_agent = format!("mmex-sync/{}", env!("CARGO_PKG_VERSION"));
@@ -221,9 +228,17 @@ impl UpdateService {
 
         let total_size = response.content_length().unwrap_or(release.size);
         let mut downloaded: u64 = 0;
-        let mut bytes = Vec::with_capacity(if total_size > 0 { total_size as usize } else { 1024 * 1024 });
+        let mut bytes = Vec::with_capacity(if total_size > 0 {
+            total_size as usize
+        } else {
+            1024 * 1024
+        });
 
-        while let Some(chunk) = response.chunk().await.context("Errore durante lo streaming del file")? {
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .context("Errore durante lo streaming del file")?
+        {
             downloaded += chunk.len() as u64;
             bytes.extend_from_slice(&chunk);
             if let Some(ref cb) = progress_callback {
@@ -263,7 +278,11 @@ impl UpdateService {
             let perms = std::fs::Permissions::from_mode(0o755);
             if let Err(e) = std::fs::set_permissions(&temp_path, perms) {
                 let _ = std::fs::remove_file(&temp_path);
-                return Err(anyhow!("Impossibile impostare i permessi di esecuzione su '{}': {}", temp_path.display(), e));
+                return Err(anyhow!(
+                    "Impossibile impostare i permessi di esecuzione su '{}': {}",
+                    temp_path.display(),
+                    e
+                ));
             }
         }
 
@@ -382,15 +401,22 @@ fn extract_binary_from_zip(zip_bytes: &[u8], os: &str) -> Result<Vec<u8>> {
         )
     })?;
 
-    let mut file = archive.by_index(index).context("Estrazione binario fallita")?;
+    let mut file = archive
+        .by_index(index)
+        .context("Estrazione binario fallita")?;
     let mut buffer = Vec::with_capacity(file.size() as usize);
-    std::io::copy(&mut file, &mut buffer).context("Errore durante la lettura del file dall'archivio ZIP")?;
+    std::io::copy(&mut file, &mut buffer)
+        .context("Errore durante la lettura del file dall'archivio ZIP")?;
 
     Ok(buffer)
 }
 
 /// Individua il miglior asset compatibile per l'OS e l'architettura corrente
-pub fn find_compatible_asset(assets: &[GitHubAsset], os: &str, arch: &str) -> Option<(GitHubAsset, bool)> {
+pub fn find_compatible_asset(
+    assets: &[GitHubAsset],
+    os: &str,
+    arch: &str,
+) -> Option<(GitHubAsset, bool)> {
     let os_aliases: &[&str] = match os {
         "linux" => &["linux"],
         "windows" => &["windows", "win"],
@@ -413,9 +439,15 @@ pub fn find_compatible_asset(assets: &[GitHubAsset], os: &str, arch: &str) -> Op
 
         let matches_os = os_aliases.iter().any(|alias| name_lower.contains(alias));
         if matches_os {
-            let matches_arch = arch_aliases.iter().any(|arch_alias| name_lower.contains(arch_alias));
+            let matches_arch = arch_aliases
+                .iter()
+                .any(|arch_alias| name_lower.contains(arch_alias));
             // Se arch combacia oppure se l'asset non specifica architettura (es. mmex-sync-v0.4.0-linux.zip)
-            if matches_arch || !name_lower.contains("x86_64") && !name_lower.contains("arm64") && !name_lower.contains("aarch64") {
+            if matches_arch
+                || !name_lower.contains("x86_64")
+                    && !name_lower.contains("arm64")
+                    && !name_lower.contains("aarch64")
+            {
                 return Some((asset.clone(), true));
             }
         }
@@ -424,7 +456,8 @@ pub fn find_compatible_asset(assets: &[GitHubAsset], os: &str, arch: &str) -> Op
     // 2. Seconda scelta: qualsiasi .zip che matcha l'OS
     for asset in assets {
         let name_lower = asset.name.to_lowercase();
-        if name_lower.ends_with(".zip") && os_aliases.iter().any(|alias| name_lower.contains(alias)) {
+        if name_lower.ends_with(".zip") && os_aliases.iter().any(|alias| name_lower.contains(alias))
+        {
             return Some((asset.clone(), true));
         }
     }
@@ -438,7 +471,9 @@ pub fn find_compatible_asset(assets: &[GitHubAsset], os: &str, arch: &str) -> Op
 
         let matches_os = os_aliases.iter().any(|alias| name_lower.contains(alias));
         if matches_os {
-            let matches_arch = arch_aliases.iter().any(|arch_alias| name_lower.contains(arch_alias));
+            let matches_arch = arch_aliases
+                .iter()
+                .any(|arch_alias| name_lower.contains(arch_alias));
             if matches_arch {
                 return Some((asset.clone(), false));
             }
@@ -448,7 +483,9 @@ pub fn find_compatible_asset(assets: &[GitHubAsset], os: &str, arch: &str) -> Op
     // 4. Ultimo fallback: qualsiasi binario che matcha l'OS
     for asset in assets {
         let name_lower = asset.name.to_lowercase();
-        if !name_lower.ends_with(".zip") && os_aliases.iter().any(|alias| name_lower.contains(alias)) {
+        if !name_lower.ends_with(".zip")
+            && os_aliases.iter().any(|alias| name_lower.contains(alias))
+        {
             return Some((asset.clone(), false));
         }
     }
@@ -543,7 +580,8 @@ mod tests {
             browser_download_url: "https://example.com/linux_bin".into(),
             size: 3000,
         }];
-        let (bin_asset, is_zip) = find_compatible_asset(&non_zip_assets, "linux", "x86_64").unwrap();
+        let (bin_asset, is_zip) =
+            find_compatible_asset(&non_zip_assets, "linux", "x86_64").unwrap();
         assert_eq!(bin_asset.name, "mmex-sync-linux-x86_64");
         assert!(!is_zip);
     }
