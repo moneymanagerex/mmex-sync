@@ -1,0 +1,33 @@
+name: Crowdin Sync
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'locales/en.json'
+  workflow_dispatch: # Permette di avviare la sincronizzazione manualmente
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  synchronize-with-crowdin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sincronizza con Crowdin
+        uses: crowdin/github-action@v2
+        with:
+          upload_sources: true
+          upload_translations: false
+          download_translations: true
+          create_pull_request: true
+          pull_request_title: 'chore: aggiornamento traduzioni da Crowdin'
+          pull_request_labels: 'translations, automated'
+          pull_request_base_branch_name: 'main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
