@@ -187,6 +187,9 @@ impl Language {
     pub fn menu_tools_clear_server(&self) -> &'static str {
         self.t("gui.menu.tools.clear_server")
     }
+    pub fn menu_tools_check_update(&self) -> &'static str {
+        self.t("gui.menu.tools.check_update")
+    }
 
     pub fn menu_help(&self) -> &'static str {
         self.t("gui.menu.help")
@@ -366,6 +369,42 @@ impl Language {
     }
     pub fn msg_operation_in_progress(&self) -> &'static str {
         self.t("gui.msg.operation_in_progress")
+    }
+
+    // Aggiornamento Software
+    pub fn dialog_update_title(&self) -> &'static str {
+        self.t("gui.update.dialog.title")
+    }
+    pub fn update_checking(&self) -> &'static str {
+        self.t("gui.update.checking")
+    }
+    pub fn update_up_to_date(&self, version: &str) -> String {
+        self.t_fmt("gui.update.up_to_date", &[("version", version)])
+    }
+    pub fn update_available_title(&self, version: &str) -> String {
+        self.t_fmt("gui.update.available_title", &[("version", version)])
+    }
+    pub fn update_current_version(&self, version: &str) -> String {
+        self.t_fmt("gui.update.current_version", &[("version", version)])
+    }
+    pub fn update_release_notes(&self) -> &'static str {
+        self.t("gui.update.release_notes")
+    }
+    pub fn update_downloading(&self, percent: u32) -> String {
+        let pct = percent.to_string();
+        self.t_fmt("gui.update.downloading", &[("percent", &pct)])
+    }
+    pub fn update_install_success(&self) -> &'static str {
+        self.t("gui.update.install_success")
+    }
+    pub fn update_install_error(&self, error: &str) -> String {
+        self.t_fmt("gui.update.install_error", &[("error", error)])
+    }
+    pub fn btn_download_install(&self) -> &'static str {
+        self.t("gui.update.btn.download_install")
+    }
+    pub fn btn_restart(&self) -> &'static str {
+        self.t("gui.update.btn.restart")
     }
 }
 

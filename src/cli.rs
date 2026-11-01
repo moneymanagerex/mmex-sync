@@ -125,11 +125,11 @@ pub struct CliArgs {
     #[arg(long = "gui")]
     pub gui: bool,
 
-    /// Controlla la presenza di aggiornamenti
+    /// Controlla la presenza di aggiornamenti su GitHub Releases
     #[arg(long = "checkForUpdate")]
     pub check_for_update: bool,
 
-    /// Scarica e installa automaticamente l'aggiornamento
-    #[arg(long = "autoDownloadUpdate")]
-    pub auto_download_update: bool,
+    /// Scarica e installa l'aggiornamento più recente da GitHub Releases
+    #[arg(long = "downloadUpdate")]
+    pub download_update: bool,
 }

@@ -6,10 +6,6 @@ This document collects ideas, future improvements, and embryonic Change Requests
 - **Descrizione:** [...]
 - **Impatto:** [...]
 
-**GitHub Releases Auto-Update Mechanism**
-- **Description:** Implement an auto-update feature that fetches new versions from GitHub Releases. The mechanism must support extracting both `.zip` archives (for future multi-file distributions) and replacing standalone executables. Consider also to add this under "tools" menu with item "check and update" that check (--checkforupdate) and if there is any update proposte the update (--downloadUpdate), remove old "--autoDownloadUpdate" from command line.
-- **Impact:** Network layer (`reqwest`), file system operations (`std::fs`), potential new `src/update/` module, and GUI/CLI triggers.
-
 **Post-Sync Auto-Close Timer**
 - **Description:** Introduce an auto-close countdown (e.g., 3 seconds) that automatically terminates the application upon successful sync completion, mirroring the `autorun` startup behavior.
 - **Impact:** GUI state management (`src/gui/`), sync orchestrator (`src/sync/`), and configuration profile/CLI flags.

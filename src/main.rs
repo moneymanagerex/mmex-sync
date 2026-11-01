@@ -16,6 +16,9 @@ fn main() -> Result<()> {
     // 1. Carica le variabili da .env se presente
     let _ = dotenvy::dotenv();
 
+    // Pulizia file temporanei o .old da precedenti aggiornamenti
+    mmex_sync::update::cleanup_old_executables();
+
     // 2. Parsing degli argomenti da linea di comando
     let args = CliArgs::parse();
 
@@ -52,8 +55,9 @@ fn main() -> Result<()> {
         || args.set_default_profile.is_some()
         || args.rename_profile_to.is_some()
         || args.set_default_mode.is_some();
+    let is_update_cmd = args.check_for_update || args.download_update;
 
-    if !args.cli && !is_profile_cmd {
+    if !args.cli && !is_profile_cmd && !is_update_cmd {
         #[cfg(feature = "gui")]
         {
             info!("{}", t("cli.gui_launch"));
@@ -85,6 +89,11 @@ fn main() -> Result<()> {
 }
 
 async fn run_cli(args: CliArgs) -> Result<()> {
+    // Gestione comandi di aggiornamento software
+    if args.check_for_update || args.download_update {
+        return handle_update_cli(&args).await;
+    }
+
     let config_mgr = ConfigManager::new().context(t("cli.context_config_init"))?;
 
     // Gestione comandi informativi e di manutenzione dei profili
@@ -355,6 +364,107 @@ async fn run_cli(args: CliArgs) -> Result<()> {
         .run(requested_mode)
         .await
         .context(t("cli.context_runner_exec"))?;
+
+    Ok(())
+}
+
+async fn handle_update_cli(args: &CliArgs) -> Result<()> {
+    let updater = mmex_sync::update::UpdateService::default();
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    println!("{}", t("cli.update_checking"));
+
+    if args.download_update {
+        match updater.check_for_update(current_version).await {
+            Ok(Some(release)) => {
+                println!(
+                    "{}",
+                    t_fmt(
+                        "cli.update_available",
+                        &[("version", &release.tag_name), ("current", current_version)]
+                    )
+                );
+                println!(
+                    "{}",
+                    t_fmt("cli.update_downloading", &[("version", &release.tag_name)])
+                );
+                match updater
+                    .download_and_install(
+                        &release,
+                        Some(|downloaded, total| {
+                            if total > 0 {
+                                let pct = (downloaded as f64 / total as f64 * 100.0) as u32;
+                                print!("\rDownload: {}% ({} / {} bytes)", pct, downloaded, total);
+                                let _ = std::io::Write::flush(&mut std::io::stdout());
+                            }
+                        }),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        println!();
+                        println!(
+                            "{}",
+                            t_fmt("cli.update_success", &[("version", &release.tag_name)])
+                        );
+                        println!("{}", t("cli.update_restart_needed"));
+                    }
+                    Err(e) => {
+                        println!();
+                        eprintln!(
+                            "{}",
+                            t_fmt("cli.update_error", &[("error", &e.to_string())])
+                        );
+                        return Err(e);
+                    }
+                }
+            }
+            Ok(None) => {
+                println!(
+                    "{}",
+                    t_fmt("cli.update_up_to_date", &[("version", current_version)])
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "{}",
+                    t_fmt("cli.update_error", &[("error", &e.to_string())])
+                );
+                return Err(e);
+            }
+        }
+    } else if args.check_for_update {
+        match updater.check_for_update(current_version).await {
+            Ok(Some(release)) => {
+                println!(
+                    "{}",
+                    t_fmt(
+                        "cli.update_available",
+                        &[("version", &release.tag_name), ("current", current_version)]
+                    )
+                );
+                if let Some(body) = &release.body {
+                    if !body.trim().is_empty() {
+                        println!("\n{}\n{}", t("cli.update_changelog"), body.trim());
+                    }
+                }
+                println!("\n{}", t("cli.update_suggest_download"));
+            }
+            Ok(None) => {
+                println!(
+                    "{}",
+                    t_fmt("cli.update_up_to_date", &[("version", current_version)])
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "{}",
+                    t_fmt("cli.update_error", &[("error", &e.to_string())])
+                );
+                return Err(e);
+            }
+        }
+    }
 
     Ok(())
 }

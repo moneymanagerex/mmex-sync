@@ -47,6 +47,7 @@ chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 rand = "0.8"
 sys-locale = "0.3"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 
 
 # Pure Rust Cryptography (RustCrypto)

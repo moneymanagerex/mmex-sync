@@ -44,6 +44,32 @@ pub enum GuiEvent {
         success: bool,
         message: String,
     },
+    UpdateCheckFinished {
+        update_available: bool,
+        release: Option<crate::update::ReleaseInfo>,
+        message: String,
+        is_error: bool,
+    },
+    UpdateInstallProgress {
+        downloaded: u64,
+        total: u64,
+    },
+    UpdateInstallFinished {
+        success: bool,
+        message: String,
+    },
+}
+
+/// Stato del dialogo modale di aggiornamento software
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpdateDialogState {
+    None,
+    Checking,
+    UpToDate(String),
+    Available(crate::update::ReleaseInfo),
+    Downloading { progress: f32 },
+    Success(String),
+    Error(String),
 }
 
 /// Parametri raccolti per l'esecuzione asincrona in background
@@ -113,6 +139,7 @@ pub struct MmexSyncGuiApp {
     dialog_clear_db_confirm: bool,
     dialog_clear_server_confirm: bool,
     dialog_about: bool,
+    update_state: UpdateDialogState,
 }
 
 impl MmexSyncGuiApp {
@@ -186,6 +213,7 @@ impl MmexSyncGuiApp {
             dialog_clear_db_confirm: false,
             dialog_clear_server_confirm: false,
             dialog_about: false,
+            update_state: UpdateDialogState::None,
         };
 
         app.load_profile_data(&initial_profile);
@@ -1023,6 +1051,123 @@ impl MmexSyncGuiApp {
         });
     }
 
+    fn trigger_check_update_async(&mut self) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
+
+        self.is_working = true;
+        self.update_state = UpdateDialogState::Checking;
+        self.status_message = Some((self.lang.update_checking().to_string(), false));
+
+        let tx = self.tx.clone();
+        let current_version = env!("CARGO_PKG_VERSION");
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                        update_available: false,
+                        release: None,
+                        message: format!("Runtime error: {}", e),
+                        is_error: true,
+                    });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let updater = crate::update::UpdateService::default();
+                match updater.check_for_update(current_version).await {
+                    Ok(Some(release)) => {
+                        let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                            update_available: true,
+                            release: Some(release),
+                            message: "New update available".to_string(),
+                            is_error: false,
+                        });
+                    }
+                    Ok(None) => {
+                        let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                            update_available: false,
+                            release: None,
+                            message: "Application is up to date".to_string(),
+                            is_error: false,
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::UpdateCheckFinished {
+                            update_available: false,
+                            release: None,
+                            message: e.to_string(),
+                            is_error: true,
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    fn trigger_download_update_async(&mut self, release: crate::update::ReleaseInfo) {
+        self.cancel_autostart_countdown();
+        if self.is_working {
+            return;
+        }
+
+        self.is_working = true;
+        self.update_state = UpdateDialogState::Downloading { progress: 0.0 };
+
+        let tx = self.tx.clone();
+        let tx_prog = self.tx.clone();
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(GuiEvent::UpdateInstallFinished {
+                        success: false,
+                        message: format!("Runtime error: {}", e),
+                    });
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let updater = crate::update::UpdateService::default();
+                match updater
+                    .download_and_install(
+                        &release,
+                        Some(move |downloaded, total| {
+                            let _ = tx_prog.send(GuiEvent::UpdateInstallProgress { downloaded, total });
+                        }),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        let _ = tx.send(GuiEvent::UpdateInstallFinished {
+                            success: true,
+                            message: "Update successfully installed!".to_string(),
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.send(GuiEvent::UpdateInstallFinished {
+                            success: false,
+                            message: e.to_string(),
+                        });
+                    }
+                }
+            });
+        });
+    }
+
     fn drain_events(&mut self) {
         while let Ok(event) = self.rx.try_recv() {
             match event {
@@ -1070,6 +1215,44 @@ impl MmexSyncGuiApp {
                 GuiEvent::ClearFinished { success, message } => {
                     self.is_working = false;
                     self.status_message = Some((message, !success));
+                }
+                GuiEvent::UpdateCheckFinished {
+                    update_available,
+                    release,
+                    message,
+                    is_error,
+                } => {
+                    self.is_working = false;
+                    self.status_message = Some((message.clone(), is_error));
+                    if is_error {
+                        self.update_state = UpdateDialogState::Error(message);
+                    } else if update_available {
+                        if let Some(rel) = release {
+                            self.update_state = UpdateDialogState::Available(rel);
+                        }
+                    } else {
+                        self.update_state =
+                            UpdateDialogState::UpToDate(env!("CARGO_PKG_VERSION").to_string());
+                    }
+                }
+                GuiEvent::UpdateInstallProgress { downloaded, total } => {
+                    let progress = if total > 0 {
+                        (downloaded as f32 / total as f32).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    self.update_state = UpdateDialogState::Downloading { progress };
+                }
+                GuiEvent::UpdateInstallFinished { success, message } => {
+                    self.is_working = false;
+                    self.status_message = Some((message.clone(), !success));
+                    if success {
+                        self.update_state = UpdateDialogState::Success(
+                            self.lang.update_install_success().to_string(),
+                        );
+                    } else {
+                        self.update_state = UpdateDialogState::Error(message);
+                    }
                 }
             }
         }
@@ -1451,6 +1634,20 @@ impl eframe::App for MmexSyncGuiApp {
                     {
                         self.cancel_autostart_countdown();
                         self.dialog_clear_server_confirm = true;
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    if ui
+                        .add_enabled(
+                            !self.is_working,
+                            egui::Button::new(self.lang.menu_tools_check_update()),
+                        )
+                        .clicked()
+                    {
+                        self.cancel_autostart_countdown();
+                        self.trigger_check_update_async();
                         ui.close_menu();
                     }
                 });
@@ -2023,6 +2220,134 @@ impl MmexSyncGuiApp {
                         self.dialog_about = false;
                     }
                 });
+        }
+
+        // Dialog Aggiornamento Software
+        match &self.update_state {
+            UpdateDialogState::None => {}
+            UpdateDialogState::Checking => {
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(self.lang.update_checking());
+                        });
+                    });
+            }
+            UpdateDialogState::UpToDate(version) => {
+                let mut close = false;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(self.lang.update_up_to_date(version));
+                        ui.add_space(10.0);
+                        if ui.button(self.lang.btn_ok()).clicked() {
+                            close = true;
+                        }
+                    });
+                if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
+            UpdateDialogState::Available(release) => {
+                let mut start_download = false;
+                let mut close = false;
+                let rel = release.clone();
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.heading(self.lang.update_available_title(&rel.tag_name));
+                        ui.label(self.lang.update_current_version(env!("CARGO_PKG_VERSION")));
+                        if let Some(body) = &rel.body {
+                            if !body.trim().is_empty() {
+                                ui.separator();
+                                ui.label(self.lang.update_release_notes());
+                                egui::ScrollArea::vertical()
+                                    .max_height(180.0)
+                                    .show(ui, |ui| {
+                                        ui.label(body.trim());
+                                    });
+                            }
+                        }
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(self.lang.btn_download_install()).clicked() {
+                                start_download = true;
+                            }
+                            if ui.button(self.lang.btn_cancel()).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                if start_download {
+                    self.trigger_download_update_async(rel);
+                } else if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
+            UpdateDialogState::Downloading { progress } => {
+                let pct = (progress * 100.0) as u32;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(self.lang.update_downloading(pct));
+                        ui.add(egui::ProgressBar::new(*progress).show_percentage());
+                    });
+            }
+            UpdateDialogState::Success(msg) => {
+                let mut close = false;
+                let mut restart = false;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(msg.as_str());
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(self.lang.btn_restart()).clicked() {
+                                restart = true;
+                            }
+                            if ui.button(self.lang.btn_close()).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                if restart {
+                    if let Ok(exe) = std::env::current_exe() {
+                        let _ = std::process::Command::new(exe).spawn();
+                    }
+                    std::process::exit(0);
+                } else if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
+            UpdateDialogState::Error(err) => {
+                let mut close = false;
+                egui::Window::new(self.lang.dialog_update_title())
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(self.lang.update_install_error(err));
+                        ui.add_space(10.0);
+                        if ui.button(self.lang.btn_close()).clicked() {
+                            close = true;
+                        }
+                    });
+                if close {
+                    self.update_state = UpdateDialogState::None;
+                }
+            }
         }
     }
 }
