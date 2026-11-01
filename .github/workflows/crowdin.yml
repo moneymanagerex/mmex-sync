@@ -5,7 +5,9 @@ on:
     branches: [ main ]
     paths:
       - 'locales/en.json'
-  workflow_dispatch: # Permette di avviare la sincronizzazione manualmente
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *' # Esegue ogni giorno alle 02:00 UTC
 
 permissions:
   contents: write
