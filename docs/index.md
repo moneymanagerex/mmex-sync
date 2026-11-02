@@ -49,6 +49,9 @@ See the synchronization engine in action below:
 
 ---
 
+## Application Help
+See [Help](HELP.md)
+
 ## 💡 Project Pillars
 
 | Concept | Description |
