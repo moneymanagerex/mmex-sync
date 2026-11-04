@@ -49,7 +49,7 @@ cargo check
 
 ## 🧪 Running the Tests
 
-The project includes unit and integration tests covering database schema initialization, trigger management, 3-state synchronization logic, `.emb` encryption/decryption, configuration profiles, and localization (`i18n`) key parity.
+The project includes unit and integration tests covering database schema initialization, trigger management, 3-state synchronization logic, `.emb` encryption/decryption, configuration profiles, and localization (`i18n`) fallback and formatting.
 
 All tests **must pass** before opening a Pull Request:
 
@@ -101,11 +101,19 @@ If you are on Linux and want to cross-compile standalone binaries for Linux (`x8
 
 ---
 
-## 🌍 Internationalization (i18n)
+## 🌍 Internationalization (i18n) & Crowdin Localization
 
-Translation catalogs are stored in `locales/en.json` (source language) and `locales/it.json`, and are embedded directly into the binary at compile time.
-- If you add or modify any UI or CLI translation key, update both `locales/en.json` and `locales/it.json`.
-- Run `cargo test test_json_key_parity` to verify that all keys match across languages.
+Translation catalogs are stored in `locales/` as JSON files (`en.json`, `it.json`, `fr.json`, `de.json`, `es.json`) and are embedded directly into the standalone binary at compile time via `include_str!`.
+
+### Rules for Developers:
+- **`locales/en.json` is the Single Source of Truth:** If you add, modify, or delete any UI or CLI strings in code, **only edit `locales/en.json`**.
+- **Do NOT manually edit other translation files:** Translations for all other languages (`it`, `fr`, `de`, `es`, etc.) are managed collaboratively and generated automatically via **Crowdin**.
+- **Automatic Fallback:** The runtime localization engine automatically falls back to the English string from `en.json` whenever a key is missing in another language catalog, ensuring no crashes or blank labels occur if a translation is pending.
+
+### Community Translations via Crowdin:
+- Community translations are coordinated at **[crowdin.com/project/mmex-sync](https://crowdin.com/project/mmex-sync)**.
+- **Automated CI/CD Workflow:** When updates to `locales/en.json` are merged into `main`, GitHub Actions (`.github/workflows/crowdin.yml`) automatically uploads the new source strings to Crowdin. Completed translations are periodically pulled from Crowdin and submitted back as automated pull requests.
+- **Non-developer Contributors:** Anyone wishing to help translate or improve language catalogs can contribute directly on Crowdin without needing to write Rust code, install developer tools, or open manual pull requests.
 
 ---
 
