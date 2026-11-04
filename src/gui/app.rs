@@ -141,6 +141,7 @@ pub struct MmexSyncGuiApp {
     dialog_about: bool,
     dialog_help: bool,
     help_search_query: String,
+    help_scroll_anchor: Option<String>,
     update_state: UpdateDialogState,
 }
 
@@ -217,6 +218,7 @@ impl MmexSyncGuiApp {
             dialog_about: false,
             dialog_help: false,
             help_search_query: String::new(),
+            help_scroll_anchor: None,
             update_state: UpdateDialogState::None,
         };
 
@@ -2303,13 +2305,17 @@ impl MmexSyncGuiApp {
                         ui.add(
                             egui::TextEdit::singleline(&mut self.help_search_query)
                                 .hint_text(search_hint)
-                                .desired_width(ui.available_width() - 36.0),
+                                .desired_width(ui.available_width() - 72.0),
                         );
                         if ui
                             .add_enabled(!self.help_search_query.is_empty(), egui::Button::new("✖"))
                             .clicked()
                         {
                             self.help_search_query.clear();
+                        }
+                        if ui.button("⬆").on_hover_text("Table of Contents").clicked() {
+                            self.help_search_query.clear();
+                            self.help_scroll_anchor = Some("table-of-contents".to_string());
                         }
                     });
 
@@ -2324,7 +2330,8 @@ impl MmexSyncGuiApp {
                             crate::gui::help::render_help_markdown(
                                 ui,
                                 crate::gui::HELP_MARKDOWN,
-                                &self.help_search_query,
+                                &mut self.help_search_query,
+                                &mut self.help_scroll_anchor,
                             );
                         });
 
