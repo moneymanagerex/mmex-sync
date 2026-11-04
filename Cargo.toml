@@ -1,6 +1,6 @@
 [package]
 name = "mmex-sync"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Wolfsolver"]
 description = "A non-intrusive, Offline-First synchronization gateway for Money Manager Ex (MMEX) with multi-backend cloud support."
