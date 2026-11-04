@@ -1,7 +1,9 @@
 pub mod app;
+pub mod help;
 pub mod i18n;
 
 pub use app::MmexSyncGuiApp;
+pub use help::HELP_MARKDOWN;
 pub use i18n::Language;
 
 use std::sync::Arc;

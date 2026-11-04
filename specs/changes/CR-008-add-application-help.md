@@ -2,7 +2,7 @@
 
 > **CR ID:** `CR-008`  
 > **Title:** `Add In-App Application Help Viewer (docs/HELP.md)`  
-> **Status:** `Approved`  
+> **Status:** `IN_PROGRESS`  
 > **Created Date:** `2026-11-04`  
 > **Target Version:** `v0.4.0`  
 > **Affected Baseline Specs:** `specs/as-is/00-architecture-and-ui.md`
@@ -124,11 +124,11 @@ pub fn help_search_hint(&self) -> &'static str {
 
 ## 4. Impact on System Invariants (`Invarianti di Sistema`)
 
-- [ ] **3-State Loop-Prevention Protocol (`pb_is_dirty` `0`/`1`/`2`)** preserved? **Sì.** Nessun impatto sul database o sul motore di sincronizzazione.
-- [ ] **Topological `SYNC_ORDER` & Foreign Key Cascade (`FK_MAP`)** preserved? **Sì.** Nessun impatto.
-- [ ] **`.emb` Atomic Flush & WAL Checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`)** preserved? **Sì.** Nessun impatto.
-- [ ] **Compile-Time Embedded Assets & `en.json` Single Source of Truth** preserved? **Sì.** `docs/HELP.md` viene incorporato a compile-time tramite `include_str!`, mantenendo il binario 100% standalone, e le nuove chiavi di traduzione vengono aggiunte esclusivamente a `locales/en.json`.
-- [ ] **Backward Compatibility with Existing User Profiles (`~/.mmex-sync` / `%APPDATA%\mmex-sync`)** preserved? **Sì.** Nessuna modifica allo schema JSON dei profili o della configurazione globale.
+- [x] **3-State Loop-Prevention Protocol (`pb_is_dirty` `0`/`1`/`2`)** preserved? **Sì.** Nessun impatto sul database o sul motore di sincronizzazione.
+- [x] **Topological `SYNC_ORDER` & Foreign Key Cascade (`FK_MAP`)** preserved? **Sì.** Nessun impatto.
+- [x] **`.emb` Atomic Flush & WAL Checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`)** preserved? **Sì.** Nessun impatto.
+- [x] **Compile-Time Embedded Assets & `en.json` Single Source of Truth** preserved? **Sì.** `docs/HELP.md` viene incorporato a compile-time tramite `include_str!`, mantenendo il binario 100% standalone, e le nuove chiavi di traduzione vengono aggiunte esclusivamente a `locales/en.json`.
+- [x] **Backward Compatibility with Existing User Profiles (`~/.mmex-sync` / `%APPDATA%\mmex-sync`)** preserved? **Sì.** Nessuna modifica allo schema JSON dei profili o della configurazione globale.
 
 ---
 

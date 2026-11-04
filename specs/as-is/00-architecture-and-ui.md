@@ -44,6 +44,7 @@ src/
 └── gui/                    # Compiled only when feature "gui" is enabled (default = ["gui"])
     ├── mod.rs              # eframe::run_native launcher (800x640 viewport, min 640x480) + embedded PNG window icon loader
     ├── app.rs              # MmexSyncGuiApp state machine, background worker threads, and egui rendering
+    ├── help.rs             # Compile-time embedded docs/HELP.md (HELP_MARKDOWN) and searchable egui Markdown viewer
     └── i18n.rs             # Re-exports crate::i18n::*
 ```
 
@@ -225,7 +226,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
    - **Synchronization:** Full Sync (`push=true, pull=true`), Push Only (`push=true, pull=false`), Pull Only (`push=false, pull=true`), Test Connection, Force Mode checkbox.
    - **Preferences:** Language switcher (`🇮🇹 Italiano` / `🇬🇧 English`), which immediately updates `self.lang`, `CURRENT_LOCALE`, and saves `"language"` to `mmex-sync.config.json`.
    - **Tools:** Clear Local DB (confirmation modal), Clear Remote Server (confirmation modal), Check for Updates (checks GitHub Releases, displays status/release notes modal with direct download and install).
-   - **Help:** About modal.
+   - **Help:** User Guide (opens a resizable, searchable in-app Markdown viewer rendering the compile-time embedded `docs/HELP.md`, also accessible via the `F1` shortcut) and About modal.
 2. **Central Panel:**
    - Active profile heading + `[DEFAULT]` badge.
    - Collapsible **Local MMEX Database** section: DB path input + Browse button + **➕ New DB...** button (`prompt_create_new_db`: opens `rfd::FileDialog::save_file()`, defaults extension to `.mmb` if omitted; for `.mmb` immediately saves the profile and initializes the schema on a background thread via `trigger_create_db_async()`; for `.emb` clears `file_password` and opens a dedicated password modal before initializing and encrypting the new `.emb` file); if path ends with `.emb` (case-insensitive), displays password input and "Save encrypted password in profile" checkbox.
@@ -257,7 +258,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 
 ## Invarianti di Sistema
 
-1. **Zero External Runtime Asset Dependencies:** Localization catalogs (`en.json`, `it.json`), SQL schema definitions (`tables_v1_for_sync.sql`), and GUI window icons (`assets/icons/icon.png`) MUST remain embedded at compile time (`include_str!` / `include_bytes!`) so the compiled binary is 100% portable as a single file.
+1. **Zero External Runtime Asset Dependencies:** Localization catalogs (`en.json`, `it.json`, `fr.json`, `de.json`, `es.json`), application help documentation (`docs/HELP.md`), SQL schema definitions (`tables_v1_for_sync.sql`), and GUI window icons (`assets/icons/icon.png`) MUST remain embedded at compile time (`include_str!` / `include_bytes!`) so the compiled binary is 100% portable as a single file.
 2. **Strict Translation Key Parity:** `locales/en.json` and `locales/it.json` MUST contain the exact same set of keys (enforced by unit test `test_json_key_parity`).
 3. **Configuration Precedence:** Effective configuration MUST always follow `CLI Arguments / Environment Variables > Saved Profile JSON > Default Values`, unless `--ignoreProfile` is passed (which bypasses the saved Profile JSON).
 4. **Cross-Platform Configuration Path Compatibility:** Config files MUST be stored in `%APPDATA%\mmex-sync` on Windows and `~/.mmex-sync` on Linux/macOS to preserve compatibility with existing user profiles and `.key` files.

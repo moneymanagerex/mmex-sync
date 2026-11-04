@@ -139,6 +139,8 @@ pub struct MmexSyncGuiApp {
     dialog_clear_db_confirm: bool,
     dialog_clear_server_confirm: bool,
     dialog_about: bool,
+    dialog_help: bool,
+    help_search_query: String,
     update_state: UpdateDialogState,
 }
 
@@ -213,6 +215,8 @@ impl MmexSyncGuiApp {
             dialog_clear_db_confirm: false,
             dialog_clear_server_confirm: false,
             dialog_about: false,
+            dialog_help: false,
+            help_search_query: String::new(),
             update_state: UpdateDialogState::None,
         };
 
@@ -1405,6 +1409,12 @@ impl eframe::App for MmexSyncGuiApp {
             }
         }
 
+        // Scorciatoia F1 per aprire il visualizzatore della guida utente
+        if ctx.input(|i| i.key_pressed(egui::Key::F1)) {
+            self.cancel_autostart_countdown();
+            self.dialog_help = true;
+        }
+
         // Verifica scadenza countdown di 3 secondi
         if let Some(start) = self.countdown_start {
             let elapsed = start.elapsed().as_secs_f32();
@@ -1681,6 +1691,12 @@ impl eframe::App for MmexSyncGuiApp {
 
                 // MENU AIUTO
                 ui.menu_button(self.lang.menu_help(), |ui| {
+                    if ui.button(self.lang.menu_help_guide()).clicked() {
+                        self.cancel_autostart_countdown();
+                        self.dialog_help = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button(self.lang.menu_help_about()).clicked() {
                         self.cancel_autostart_countdown();
                         self.dialog_about = true;
@@ -2266,6 +2282,61 @@ impl MmexSyncGuiApp {
                         self.dialog_about = false;
                     }
                 });
+        }
+
+        // Dialog Guida Utente (Help Viewer)
+        if self.dialog_help {
+            let mut open = self.dialog_help;
+            let mut close_clicked = false;
+            let title = self.lang.help_title();
+            let search_hint = self.lang.help_search_hint();
+            let close_label = self.lang.btn_close();
+
+            egui::Window::new(title)
+                .open(&mut open)
+                .resizable(true)
+                .default_size([700.0, 520.0])
+                .min_size([480.0, 360.0])
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("🔍");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.help_search_query)
+                                .hint_text(search_hint)
+                                .desired_width(ui.available_width() - 36.0),
+                        );
+                        if ui
+                            .add_enabled(!self.help_search_query.is_empty(), egui::Button::new("✖"))
+                            .clicked()
+                        {
+                            self.help_search_query.clear();
+                        }
+                    });
+
+                    ui.separator();
+
+                    let scroll_height = (ui.available_height() - 40.0).max(160.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt("help_guide_scroll")
+                        .max_height(scroll_height)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            crate::gui::help::render_help_markdown(
+                                ui,
+                                crate::gui::HELP_MARKDOWN,
+                                &self.help_search_query,
+                            );
+                        });
+
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button(close_label).clicked() {
+                            close_clicked = true;
+                        }
+                    });
+                });
+
+            self.dialog_help = open && !close_clicked;
         }
 
         // Dialog Aggiornamento Software

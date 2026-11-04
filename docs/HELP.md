@@ -135,6 +135,7 @@ mmex-sync --cli --run
   * **Clean Local Technical Schema**: Removes all `TRG_*` triggers, `pb_*` columns, and sync metadata tables from the local database.
   * **Clean Remote Server**: Deletes all synchronized records across all collections on the remote PocketBase server.
 * **Help**
+  * **User Guide**: Opens the built-in interactive User & Reference Guide viewer with instant search/filter (shortcut: **`F1`**).
   * **About MMEX-Sync**: Displays version and architecture details.
 
 ### 3.2 Dashboard Configuration Sections

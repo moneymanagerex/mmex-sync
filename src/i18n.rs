@@ -230,6 +230,9 @@ impl Language {
     pub fn menu_help(&self) -> &'static str {
         self.t("gui.menu.help")
     }
+    pub fn menu_help_guide(&self) -> &'static str {
+        self.t("gui.menu.help.guide")
+    }
     pub fn menu_help_about(&self) -> &'static str {
         self.t("gui.menu.help.about")
     }
@@ -389,6 +392,12 @@ impl Language {
         self.t("gui.dialog.clear_server.msg")
     }
 
+    pub fn help_title(&self) -> &'static str {
+        self.t("gui.help.title")
+    }
+    pub fn help_search_hint(&self) -> &'static str {
+        self.t("gui.help.search_hint")
+    }
     pub fn about_title(&self) -> &'static str {
         self.t("gui.about.title")
     }
@@ -618,5 +627,18 @@ mod tests {
     fn test_fallback_on_missing_key() {
         let fallback_result = translate(Language::It, "chiave_fittizia_inesistente_12345");
         assert_eq!(fallback_result, "");
+    }
+
+    #[test]
+    fn test_help_i18n_keys() {
+        assert_eq!(Language::En.menu_help_guide(), "User Guide");
+        assert_eq!(Language::En.help_title(), "MMEX-Sync — User Guide");
+        assert_eq!(Language::En.help_search_hint(), "Search in guide...");
+
+        for lang in [Language::It, Language::Fr, Language::De, Language::Es] {
+            assert!(!lang.menu_help_guide().is_empty());
+            assert!(!lang.help_title().is_empty());
+            assert!(!lang.help_search_hint().is_empty());
+        }
     }
 }
