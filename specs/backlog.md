@@ -10,7 +10,3 @@ This document collects ideas, future improvements, and embryonic Change Requests
 - **Description:** Introduce an auto-close countdown (e.g., 3 seconds) that automatically terminates the application upon successful sync completion, mirroring the `autorun` startup behavior.
 - **Impact:** GUI state management (`src/gui/`), sync orchestrator (`src/sync/`), and configuration profile/CLI flags.
 
-**Add Application Help**
-- **Description:** Use `docs/HELP.md` as Help in gui under HELP menu in gui. 
-- **Impact:** GUI  management (`src/gui/`).
-
