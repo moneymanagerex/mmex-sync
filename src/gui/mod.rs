@@ -32,8 +32,48 @@ pub fn load_window_icon() -> Option<Arc<egui::IconData>> {
     }))
 }
 
+/// Determines whether the X11 backend should be preferred over Wayland on Linux
+/// (e.g., on WSLg or environments without a `/dev/dri` render node where Wayland EGL/Zink fails).
+pub fn should_prefer_x11_on_linux(
+    has_x11_display: bool,
+    has_wayland_display: bool,
+    force_wayland: bool,
+    is_wsl: bool,
+    has_dri_device: bool,
+) -> bool {
+    if !has_x11_display || !has_wayland_display || force_wayland {
+        return false;
+    }
+    is_wsl || !has_dri_device
+}
+
+#[cfg(target_os = "linux")]
+fn configure_linux_display_backend() {
+    let has_x11 = std::env::var_os("DISPLAY")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+    let has_wayland = std::env::var_os("WAYLAND_DISPLAY")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+    let force_wayland = std::env::var("MMEX_FORCE_WAYLAND")
+        .map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    let is_wsl = std::env::var_os("WSL_DISTRO_NAME").is_some()
+        || std::env::var_os("WSL_INTEROP").is_some()
+        || std::path::Path::new("/mnt/wslg").exists();
+    let has_dri = std::path::Path::new("/dev/dri/renderD128").exists()
+        || std::path::Path::new("/dev/dri/card0").exists();
+
+    if should_prefer_x11_on_linux(has_x11, has_wayland, force_wayland, is_wsl, has_dri) {
+        std::env::remove_var("WAYLAND_DISPLAY");
+    }
+}
+
 /// Avvia l'interfaccia grafica desktop nativa di MMEX-Sync
 pub fn run_gui(args: CliArgs, allow_auto_start: bool) -> Result<(), SyncError> {
+    #[cfg(target_os = "linux")]
+    configure_linux_display_backend();
+
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("MMEX-Sync - Configuration & Synchronization Gateway")
         .with_inner_size([800.0, 640.0])
@@ -71,5 +111,19 @@ mod tests {
         assert!(icon.width > 0);
         assert!(icon.height > 0);
         assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
+    }
+
+    #[test]
+    fn test_should_prefer_x11_on_linux() {
+        // WSLg (has both DISPLAY and WAYLAND_DISPLAY, is_wsl = true) -> prefer X11
+        assert!(should_prefer_x11_on_linux(true, true, false, true, true));
+        // Linux without /dev/dri (has both DISPLAY and WAYLAND_DISPLAY, has_dri = false) -> prefer X11
+        assert!(should_prefer_x11_on_linux(true, true, false, false, false));
+        // Native Linux with Wayland + /dev/dri (not WSL, has_dri = true) -> keep Wayland
+        assert!(!should_prefer_x11_on_linux(true, true, false, false, true));
+        // Explicit MMEX_FORCE_WAYLAND=1 -> keep Wayland even on WSL
+        assert!(!should_prefer_x11_on_linux(true, true, true, true, false));
+        // Pure Wayland without Xwayland DISPLAY -> keep Wayland
+        assert!(!should_prefer_x11_on_linux(false, true, false, true, false));
     }
 }

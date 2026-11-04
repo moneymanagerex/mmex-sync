@@ -208,6 +208,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 - Launched via `eframe::run_native("MMEX-Sync", ...)` with window title `"MMEX-Sync - Configuration & Synchronization Gateway"`.
 - Initial window size: `800.0 x 640.0` (minimum `640.0 x 480.0`).
 - **Window Icon (`load_window_icon`):** Embeds `assets/icons/icon.png` at compile time via `include_bytes!`, decodes it into raw RGBA8 bytes via `image::load_from_memory`, wraps it into `Arc<egui::IconData>`, and injects it into `ViewportBuilder` via `.with_icon(icon)`.
+- **Linux / WSLg Display Backend Selection (`configure_linux_display_backend`):** On Linux (`#[cfg(target_os = "linux")]`), if both `DISPLAY` and `WAYLAND_DISPLAY` are present (and `MMEX_FORCE_WAYLAND` is not set) and either WSL (`WSL_DISTRO_NAME`, `WSL_INTEROP`, `/mnt/wslg`) is detected or `/dev/dri` (`renderD128` / `card0`) is absent, `run_gui` unsets `WAYLAND_DISPLAY` before initializing `eframe` so `winit`/`glutin` uses the X11 backend (`DISPLAY`) and avoids Wayland EGL `dri2`/Zink initialization failures.
 - Uses `egui::Visuals::dark()` with `window_rounding = 8.0` and `menu_rounding = 6.0`.
 
 ### Threading & Event Architecture
@@ -226,7 +227,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
    - **Synchronization:** Full Sync (`push=true, pull=true`), Push Only (`push=true, pull=false`), Pull Only (`push=false, pull=true`), Test Connection, Force Mode checkbox.
    - **Preferences:** Language switcher (`🇮🇹 Italiano` / `🇬🇧 English`), which immediately updates `self.lang`, `CURRENT_LOCALE`, and saves `"language"` to `mmex-sync.config.json`.
    - **Tools:** Clear Local DB (confirmation modal), Clear Remote Server (confirmation modal), Check for Updates (checks GitHub Releases, displays status/release notes modal with direct download and install).
-   - **Help:** User Guide (opens a resizable, searchable in-app Markdown viewer rendering the compile-time embedded `docs/HELP.md`, also accessible via the `F1` shortcut) and About modal.
+   - **Help:** User Guide (opens a resizable, searchable in-app Markdown viewer rendering the compile-time embedded `docs/HELP.md` with clickable `#anchor` Table of Contents navigation, external link opening, and Light/Dark theme-adaptive colors; also accessible via the `F1` shortcut) and About modal.
 2. **Central Panel:**
    - Active profile heading + `[DEFAULT]` badge.
    - Collapsible **Local MMEX Database** section: DB path input + Browse button + **➕ New DB...** button (`prompt_create_new_db`: opens `rfd::FileDialog::save_file()`, defaults extension to `.mmb` if omitted; for `.mmb` immediately saves the profile and initializes the schema on a background thread via `trigger_create_db_async()`; for `.emb` clears `file_password` and opens a dedicated password modal before initializing and encrypting the new `.emb` file); if path ends with `.emb` (case-insensitive), displays password input and "Save encrypted password in profile" checkbox.

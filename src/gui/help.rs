@@ -3,6 +3,69 @@ use eframe::egui;
 /// Complete User & Reference Guide embedded at compile time from `docs/HELP.md`.
 pub const HELP_MARKDOWN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/HELP.md"));
 
+/// Theme-adaptive color palette for rendering Markdown in both Dark Mode and Light Mode (e.g. Windows default).
+#[derive(Debug, Clone, Copy)]
+pub struct HelpThemePalette {
+    pub h1: egui::Color32,
+    pub h2: egui::Color32,
+    pub h3: egui::Color32,
+    pub h4: egui::Color32,
+    pub text: egui::Color32,
+    pub bold: egui::Color32,
+    pub inline_code_fg: egui::Color32,
+    pub inline_code_bg: egui::Color32,
+    pub code_block_fg: egui::Color32,
+    pub code_block_bg: egui::Color32,
+    pub blockquote_bg: egui::Color32,
+    pub alert_fg: egui::Color32,
+    pub bullet_fg: egui::Color32,
+    pub link_fg: egui::Color32,
+}
+
+impl HelpThemePalette {
+    pub fn from_visuals(visuals: &egui::Visuals) -> Self {
+        Self::for_theme(visuals.dark_mode)
+    }
+
+    pub fn for_theme(dark_mode: bool) -> Self {
+        if dark_mode {
+            Self {
+                h1: egui::Color32::from_rgb(110, 195, 255),
+                h2: egui::Color32::from_rgb(140, 210, 255),
+                h3: egui::Color32::from_rgb(215, 232, 255),
+                h4: egui::Color32::from_rgb(195, 215, 240),
+                text: egui::Color32::from_rgb(200, 208, 218),
+                bold: egui::Color32::from_rgb(255, 255, 255),
+                inline_code_fg: egui::Color32::from_rgb(255, 210, 130),
+                inline_code_bg: egui::Color32::from_rgb(38, 44, 58),
+                code_block_fg: egui::Color32::from_rgb(210, 230, 255),
+                code_block_bg: egui::Color32::from_rgb(24, 28, 36),
+                blockquote_bg: egui::Color32::from_rgb(35, 45, 62),
+                alert_fg: egui::Color32::from_rgb(255, 210, 90),
+                bullet_fg: egui::Color32::from_rgb(120, 190, 255),
+                link_fg: egui::Color32::from_rgb(100, 185, 255),
+            }
+        } else {
+            Self {
+                h1: egui::Color32::from_rgb(0, 85, 165),
+                h2: egui::Color32::from_rgb(10, 100, 180),
+                h3: egui::Color32::from_rgb(20, 50, 95),
+                h4: egui::Color32::from_rgb(35, 65, 105),
+                text: egui::Color32::from_rgb(45, 50, 58),
+                bold: egui::Color32::from_rgb(0, 28, 75),
+                inline_code_fg: egui::Color32::from_rgb(165, 25, 55),
+                inline_code_bg: egui::Color32::from_rgb(232, 236, 242),
+                code_block_fg: egui::Color32::from_rgb(25, 35, 50),
+                code_block_bg: egui::Color32::from_rgb(240, 244, 249),
+                blockquote_bg: egui::Color32::from_rgb(232, 242, 252),
+                alert_fg: egui::Color32::from_rgb(175, 80, 0),
+                bullet_fg: egui::Color32::from_rgb(0, 95, 180),
+                link_fg: egui::Color32::from_rgb(0, 95, 195),
+            }
+        }
+    }
+}
+
 /// Logical section of the Markdown help document (split at top-level headings outside code blocks).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HelpSection {
@@ -23,6 +86,38 @@ impl HelpSection {
         }
         self.body.to_lowercase().contains(query_lower)
     }
+}
+
+/// Inline Markdown span supporting plain text, bold, inline code, and clickable links.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InlineSpan {
+    Text(String),
+    Bold(String),
+    Code(String),
+    Link { label: String, target: String },
+}
+
+/// Normalizes a heading title or Markdown `#anchor` target into a canonical GitHub-compatible slug.
+pub fn normalize_anchor_slug(raw: &str) -> String {
+    let without_links = strip_markdown_links(raw);
+    let trimmed = without_links.trim().trim_start_matches('#');
+    let mut out = String::with_capacity(trimmed.len());
+    let mut prev_dash = false;
+
+    for ch in trimmed.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            prev_dash = false;
+        } else if (ch.is_whitespace() || ch == '-') && !out.is_empty() && !prev_dash {
+            out.push('-');
+            prev_dash = true;
+        }
+    }
+
+    if out.ends_with('-') {
+        out.pop();
+    }
+    out
 }
 
 /// Parses a Markdown document into sections split by headings (`#` .. `####`),
@@ -93,35 +188,68 @@ fn parse_heading_line(trimmed: &str) -> Option<(u8, &str)> {
     None
 }
 
-/// Renders the filtered Markdown help content inside an `egui::Ui`.
-pub fn render_help_markdown(ui: &mut egui::Ui, markdown: &str, query: &str) {
+/// Renders the filtered Markdown help content inside an `egui::Ui`, supporting interactive
+/// `#anchor` navigation and external links.
+pub fn render_help_markdown(
+    ui: &mut egui::Ui,
+    markdown: &str,
+    query: &mut String,
+    scroll_anchor: &mut Option<String>,
+) {
+    let palette = HelpThemePalette::from_visuals(ui.visuals());
     let sections = filter_markdown_sections(markdown, query);
+    let mut clicked_anchor: Option<String> = None;
 
     for (idx, section) in sections.iter().enumerate() {
         if let Some((level, title)) = &section.heading {
             if idx > 0 {
                 ui.add_space(8.0);
             }
-            render_heading(ui, *level, title);
+            let resp = render_heading(ui, *level, title, &palette);
+            if let Some(target_slug) = scroll_anchor.as_deref() {
+                if normalize_anchor_slug(title) == target_slug {
+                    resp.scroll_to_me(Some(egui::Align::TOP));
+                    *scroll_anchor = None;
+                }
+            }
             ui.add_space(4.0);
         }
 
-        render_section_body(ui, &section.body, idx);
+        render_section_body(ui, &section.body, idx, &palette, &mut clicked_anchor);
+    }
+
+    if let Some(anchor) = clicked_anchor {
+        if !query.is_empty() {
+            query.clear();
+        }
+        *scroll_anchor = Some(anchor);
+        ui.ctx().request_repaint();
     }
 }
 
-fn render_heading(ui: &mut egui::Ui, level: u8, title: &str) {
-    let clean = strip_markdown_links(title);
+fn render_heading(
+    ui: &mut egui::Ui,
+    level: u8,
+    title: &str,
+    palette: &HelpThemePalette,
+) -> egui::Response {
+    let clean = strip_markdown_links(title).replace('`', "");
     let (size, color) = match level {
-        1 => (20.0, egui::Color32::from_rgb(120, 200, 255)),
-        2 => (17.0, egui::Color32::from_rgb(150, 215, 255)),
-        3 => (14.5, egui::Color32::from_rgb(220, 235, 250)),
-        _ => (13.5, egui::Color32::from_rgb(200, 215, 230)),
+        1 => (20.0, palette.h1),
+        2 => (17.0, palette.h2),
+        3 => (14.5, palette.h3),
+        _ => (13.5, palette.h4),
     };
-    ui.label(egui::RichText::new(clean).size(size).strong().color(color));
+    ui.label(egui::RichText::new(clean).size(size).strong().color(color))
 }
 
-fn render_section_body(ui: &mut egui::Ui, body: &str, section_idx: usize) {
+fn render_section_body(
+    ui: &mut egui::Ui,
+    body: &str,
+    section_idx: usize,
+    palette: &HelpThemePalette,
+    clicked_anchor: &mut Option<String>,
+) {
     let lines: Vec<&str> = body.lines().collect();
     let mut i = 0;
     let mut table_counter = 0usize;
@@ -158,7 +286,7 @@ fn render_section_body(ui: &mut egui::Ui, body: &str, section_idx: usize) {
             }
             let code_text = code_lines.join("\n");
             egui::Frame::group(ui.style())
-                .fill(egui::Color32::from_rgb(24, 28, 36))
+                .fill(palette.code_block_bg)
                 .inner_margin(egui::Margin::same(8.0))
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
@@ -166,7 +294,7 @@ fn render_section_body(ui: &mut egui::Ui, body: &str, section_idx: usize) {
                         egui::Label::new(
                             egui::RichText::new(code_text)
                                 .monospace()
-                                .color(egui::Color32::from_rgb(200, 225, 255)),
+                                .color(palette.code_block_fg),
                         )
                         .wrap(),
                     );
@@ -183,7 +311,7 @@ fn render_section_body(ui: &mut egui::Ui, body: &str, section_idx: usize) {
                 quote_lines.push(q_line);
                 i += 1;
             }
-            render_blockquote(ui, &quote_lines);
+            render_blockquote(ui, &quote_lines, palette, clicked_anchor);
             ui.add_space(4.0);
             continue;
         }
@@ -205,6 +333,8 @@ fn render_section_body(ui: &mut egui::Ui, body: &str, section_idx: usize) {
                 ui,
                 &table_lines,
                 format!("help_table_{}_{}", section_idx, table_counter),
+                palette,
+                clicked_anchor,
             );
             ui.add_space(4.0);
             continue;
@@ -220,16 +350,16 @@ fn render_section_body(ui: &mut egui::Ui, body: &str, section_idx: usize) {
                 ui.label(
                     egui::RichText::new(bullet)
                         .strong()
-                        .color(egui::Color32::from_rgb(130, 195, 255)),
+                        .color(palette.bullet_fg),
                 );
-                render_inline_markdown(ui, item_text);
+                render_inline_markdown(ui, item_text, palette, clicked_anchor);
             });
             i += 1;
             continue;
         }
 
         // Standard paragraph
-        render_inline_markdown(ui, trimmed);
+        render_inline_markdown(ui, trimmed, palette, clicked_anchor);
         ui.add_space(2.0);
         i += 1;
     }
@@ -258,9 +388,14 @@ fn parse_list_item(line: &str) -> Option<(usize, String, &str)> {
     None
 }
 
-fn render_blockquote(ui: &mut egui::Ui, quote_lines: &[&str]) {
+fn render_blockquote(
+    ui: &mut egui::Ui,
+    quote_lines: &[&str],
+    palette: &HelpThemePalette,
+    clicked_anchor: &mut Option<String>,
+) {
     egui::Frame::group(ui.style())
-        .fill(egui::Color32::from_rgb(35, 45, 62))
+        .fill(palette.blockquote_bg)
         .inner_margin(egui::Margin::same(8.0))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
@@ -273,16 +408,22 @@ fn render_blockquote(ui: &mut egui::Ui, quote_lines: &[&str]) {
                     ui.label(
                         egui::RichText::new(format!("ℹ {}", alert_tag))
                             .strong()
-                            .color(egui::Color32::from_rgb(255, 210, 90)),
+                            .color(palette.alert_fg),
                     );
                 } else {
-                    render_inline_markdown(ui, q_line);
+                    render_inline_markdown(ui, q_line, palette, clicked_anchor);
                 }
             }
         });
 }
 
-fn render_table(ui: &mut egui::Ui, table_lines: &[&str], id_salt: String) {
+fn render_table(
+    ui: &mut egui::Ui,
+    table_lines: &[&str],
+    id_salt: String,
+    palette: &HelpThemePalette,
+    clicked_anchor: &mut Option<String>,
+) {
     let mut rows: Vec<Vec<String>> = Vec::new();
     for &line in table_lines {
         let cells = split_table_row(line);
@@ -307,9 +448,9 @@ fn render_table(ui: &mut egui::Ui, table_lines: &[&str], id_salt: String) {
             for (row_idx, row) in rows.iter().enumerate() {
                 for cell in row {
                     if row_idx == 0 {
-                        ui.label(egui::RichText::new(cell).strong());
+                        ui.label(egui::RichText::new(cell).strong().color(palette.bold));
                     } else {
-                        render_inline_markdown(ui, cell);
+                        render_inline_markdown(ui, cell, palette, clicked_anchor);
                     }
                 }
                 ui.end_row();
@@ -340,106 +481,202 @@ fn split_table_row(line: &str) -> Vec<String> {
 
 fn strip_markdown_links(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
-    let chars: Vec<char> = input.chars().collect();
-    let mut i = 0;
+    let mut rest = input;
 
-    while i < chars.len() {
-        if chars[i] == '[' {
-            if let Some(close_bracket) = chars[i + 1..].iter().position(|&c| c == ']') {
-                let close_idx = i + 1 + close_bracket;
-                if close_idx + 1 < chars.len() && chars[close_idx + 1] == '(' {
-                    if let Some(close_paren) = chars[close_idx + 2..].iter().position(|&c| c == ')')
-                    {
-                        let label: String = chars[i + 1..close_idx].iter().collect();
-                        out.push_str(&label);
-                        i = close_idx + 2 + close_paren + 1;
-                        continue;
-                    }
-                }
-            }
+    while !rest.is_empty() {
+        if let Some((before, label, _target, after)) = find_next_markdown_link(rest) {
+            out.push_str(before);
+            out.push_str(label);
+            rest = after;
+        } else {
+            out.push_str(rest);
+            break;
         }
-        out.push(chars[i]);
-        i += 1;
     }
 
     out
 }
 
-fn render_inline_markdown(ui: &mut egui::Ui, text: &str) {
-    let clean = strip_markdown_links(text);
+/// Finds the first valid `[label](target)` Markdown link in `input`, returning
+/// `(before, label, target, after)`.
+fn find_next_markdown_link(input: &str) -> Option<(&str, &str, &str, &str)> {
+    let mut search_from = 0;
+    while let Some(rel_open) = input[search_from..].find('[') {
+        let open_bracket = search_from + rel_open;
+        let after_open = &input[open_bracket + 1..];
+        if let Some(close_bracket) = after_open.find(']') {
+            let label = &after_open[..close_bracket];
+            let after_close_bracket = &after_open[close_bracket + 1..];
+            if let Some(after_open_paren) = after_close_bracket.strip_prefix('(') {
+                if let Some(close_paren) = after_open_paren.find(')') {
+                    let target = &after_open_paren[..close_paren];
+                    let after_link = &after_open_paren[close_paren + 1..];
+                    return Some((&input[..open_bracket], label, target.trim(), after_link));
+                }
+            }
+        }
+        search_from = open_bracket + 1;
+    }
+    None
+}
+
+/// Parses inline Markdown text into structured spans (`Text`, `Bold`, `Code`, `Link`).
+pub fn parse_inline_spans(text: &str) -> Vec<InlineSpan> {
+    let mut spans = Vec::new();
+    let mut rest = text;
+
+    while !rest.is_empty() {
+        let next_link = find_next_markdown_link(rest);
+        let link_idx = next_link.map(|(before, _, _, _)| before.len());
+        let code_idx = rest.find('`');
+        let bold_idx = rest.find("**");
+
+        let min_idx = [link_idx, code_idx, bold_idx].into_iter().flatten().min();
+
+        let Some(earliest) = min_idx else {
+            spans.push(InlineSpan::Text(rest.to_string()));
+            break;
+        };
+
+        if Some(earliest) == link_idx {
+            if let Some((before, label, target, after)) = next_link {
+                if !before.is_empty() {
+                    spans.push(InlineSpan::Text(before.to_string()));
+                }
+                let clean_label = label.replace('`', "").replace("**", "");
+                spans.push(InlineSpan::Link {
+                    label: clean_label,
+                    target: target.to_string(),
+                });
+                rest = after;
+                continue;
+            }
+        }
+
+        if Some(earliest) == code_idx {
+            if earliest > 0 {
+                spans.push(InlineSpan::Text(rest[..earliest].to_string()));
+            }
+            let after = &rest[earliest + 1..];
+            if let Some(end_c) = after.find('`') {
+                spans.push(InlineSpan::Code(after[..end_c].to_string()));
+                rest = &after[end_c + 1..];
+            } else {
+                spans.push(InlineSpan::Text(rest[earliest..].to_string()));
+                break;
+            }
+            continue;
+        }
+
+        if Some(earliest) == bold_idx {
+            if earliest > 0 {
+                spans.push(InlineSpan::Text(rest[..earliest].to_string()));
+            }
+            let after = &rest[earliest + 2..];
+            if let Some(end_b) = after.find("**") {
+                spans.push(InlineSpan::Bold(after[..end_b].to_string()));
+                rest = &after[end_b + 2..];
+            } else {
+                spans.push(InlineSpan::Text(rest[earliest..].to_string()));
+                break;
+            }
+            continue;
+        }
+    }
+
+    spans
+}
+
+fn render_inline_markdown(
+    ui: &mut egui::Ui,
+    text: &str,
+    palette: &HelpThemePalette,
+    clicked_anchor: &mut Option<String>,
+) {
+    let spans = parse_inline_spans(text);
+    let has_links = spans.iter().any(|s| matches!(s, InlineSpan::Link { .. }));
+
+    if !has_links {
+        let job = build_layout_job(&spans, palette);
+        ui.label(job);
+        return;
+    }
+
+    ui.horizontal_wrapped(|ui| {
+        for span in spans {
+            match span {
+                InlineSpan::Text(t) => {
+                    ui.label(egui::RichText::new(t).size(13.5).color(palette.text));
+                }
+                InlineSpan::Bold(b) => {
+                    ui.label(
+                        egui::RichText::new(b)
+                            .size(14.0)
+                            .strong()
+                            .color(palette.bold),
+                    );
+                }
+                InlineSpan::Code(c) => {
+                    ui.label(
+                        egui::RichText::new(c)
+                            .size(12.5)
+                            .monospace()
+                            .color(palette.inline_code_fg)
+                            .background_color(palette.inline_code_bg),
+                    );
+                }
+                InlineSpan::Link { label, target } => {
+                    let link_text = egui::RichText::new(&label)
+                        .size(13.5)
+                        .color(palette.link_fg)
+                        .underline();
+                    if ui
+                        .add(egui::Link::new(link_text))
+                        .on_hover_text(&target)
+                        .clicked()
+                    {
+                        if target.starts_with('#') {
+                            *clicked_anchor = Some(normalize_anchor_slug(&target));
+                        } else {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(&target));
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn build_layout_job(spans: &[InlineSpan], palette: &HelpThemePalette) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
 
-    let default_color = ui.visuals().text_color();
     let regular_fmt = egui::TextFormat {
         font_id: egui::FontId::proportional(13.5),
-        color: default_color,
+        color: palette.text,
         ..Default::default()
     };
     let bold_fmt = egui::TextFormat {
-        font_id: egui::FontId::proportional(13.5),
-        color: egui::Color32::from_rgb(245, 248, 255),
+        font_id: egui::FontId::proportional(14.0),
+        color: palette.bold,
         ..Default::default()
     };
     let code_fmt = egui::TextFormat {
         font_id: egui::FontId::monospace(12.5),
-        color: egui::Color32::from_rgb(255, 210, 130),
-        background: egui::Color32::from_rgb(35, 40, 52),
+        color: palette.inline_code_fg,
+        background: palette.inline_code_bg,
         ..Default::default()
     };
 
-    let mut rest = clean.as_str();
-    while !rest.is_empty() {
-        let next_code = rest.find('`');
-        let next_bold = rest.find("**");
-
-        match (next_code, next_bold) {
-            (Some(c_idx), Some(b_idx)) if c_idx < b_idx => {
-                if c_idx > 0 {
-                    job.append(&rest[..c_idx], 0.0, regular_fmt.clone());
-                }
-                let after = &rest[c_idx + 1..];
-                if let Some(end_c) = after.find('`') {
-                    job.append(&after[..end_c], 0.0, code_fmt.clone());
-                    rest = &after[end_c + 1..];
-                } else {
-                    job.append(&rest[c_idx..], 0.0, regular_fmt.clone());
-                    break;
-                }
-            }
-            (Some(c_idx), None) => {
-                if c_idx > 0 {
-                    job.append(&rest[..c_idx], 0.0, regular_fmt.clone());
-                }
-                let after = &rest[c_idx + 1..];
-                if let Some(end_c) = after.find('`') {
-                    job.append(&after[..end_c], 0.0, code_fmt.clone());
-                    rest = &after[end_c + 1..];
-                } else {
-                    job.append(&rest[c_idx..], 0.0, regular_fmt.clone());
-                    break;
-                }
-            }
-            (_, Some(b_idx)) => {
-                if b_idx > 0 {
-                    job.append(&rest[..b_idx], 0.0, regular_fmt.clone());
-                }
-                let after = &rest[b_idx + 2..];
-                if let Some(end_b) = after.find("**") {
-                    job.append(&after[..end_b], 0.0, bold_fmt.clone());
-                    rest = &after[end_b + 2..];
-                } else {
-                    job.append(&rest[b_idx..], 0.0, regular_fmt.clone());
-                    break;
-                }
-            }
-            (None, None) => {
-                job.append(rest, 0.0, regular_fmt.clone());
-                break;
-            }
+    for span in spans {
+        match span {
+            InlineSpan::Text(t) => job.append(t, 0.0, regular_fmt.clone()),
+            InlineSpan::Bold(b) => job.append(b, 0.0, bold_fmt.clone()),
+            InlineSpan::Code(c) => job.append(c, 0.0, code_fmt.clone()),
+            InlineSpan::Link { label, .. } => job.append(label, 0.0, bold_fmt.clone()),
         }
     }
 
-    ui.label(job);
+    job
 }
 
 #[cfg(test)]
@@ -476,5 +713,88 @@ mod tests {
         let none_sections =
             filter_markdown_sections(HELP_MARKDOWN, "non_existent_keyword_xyz_98765");
         assert!(none_sections.is_empty());
+    }
+
+    #[test]
+    fn test_parse_inline_spans_with_links() {
+        let spans = parse_inline_spans(
+            "1. [Overview & Key Features](#-1-overview--key-features) with **bold** and `code`",
+        );
+        assert_eq!(
+            spans,
+            vec![
+                InlineSpan::Text("1. ".to_string()),
+                InlineSpan::Link {
+                    label: "Overview & Key Features".to_string(),
+                    target: "#-1-overview--key-features".to_string(),
+                },
+                InlineSpan::Text(" with ".to_string()),
+                InlineSpan::Bold("bold".to_string()),
+                InlineSpan::Text(" and ".to_string()),
+                InlineSpan::Code("code".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_anchor_slug_matching_all_toc_links() {
+        let sections = parse_markdown_sections(HELP_MARKDOWN);
+        let heading_slugs: Vec<String> = sections
+            .iter()
+            .filter_map(|s| {
+                s.heading
+                    .as_ref()
+                    .map(|(_, title)| normalize_anchor_slug(title))
+            })
+            .collect();
+
+        let mut link_count = 0usize;
+        for line in HELP_MARKDOWN.lines() {
+            for span in parse_inline_spans(line) {
+                if let InlineSpan::Link { target, .. } = span {
+                    if target.starts_with('#') {
+                        link_count += 1;
+                        let target_slug = normalize_anchor_slug(&target);
+                        assert!(
+                            heading_slugs.contains(&target_slug),
+                            "TOC anchor '{}' (normalized: '{}') did not match any heading slug in HELP.md",
+                            target,
+                            target_slug
+                        );
+                    }
+                }
+            }
+        }
+        assert!(link_count >= 25, "Expected at least 25 internal TOC links");
+    }
+
+    #[test]
+    fn test_theme_palette_light_and_dark_contrast() {
+        let light = HelpThemePalette::for_theme(false);
+        let dark = HelpThemePalette::for_theme(true);
+
+        // In Light Mode, bold text and headings must be dark (low RGB luminance) for readability on white
+        let light_bold_luma =
+            (light.bold.r() as u32 + light.bold.g() as u32 + light.bold.b() as u32) / 3;
+        let light_h3_luma = (light.h3.r() as u32 + light.h3.g() as u32 + light.h3.b() as u32) / 3;
+        assert!(
+            light_bold_luma < 80,
+            "Light mode bold text must be dark, got luma {}",
+            light_bold_luma
+        );
+        assert!(
+            light_h3_luma < 100,
+            "Light mode H3 heading must be dark, got luma {}",
+            light_h3_luma
+        );
+
+        // In Dark Mode, bold text and headings must be bright (high RGB luminance) for readability on dark
+        let dark_bold_luma =
+            (dark.bold.r() as u32 + dark.bold.g() as u32 + dark.bold.b() as u32) / 3;
+        assert!(
+            dark_bold_luma > 200,
+            "Dark mode bold text must be bright, got luma {}",
+            dark_bold_luma
+        );
     }
 }
