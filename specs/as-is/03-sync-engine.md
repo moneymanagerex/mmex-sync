@@ -16,16 +16,16 @@
    - Loads `<profile_name>.mmex-sync.json`, updates `profile.last_sync = Some(ts)`, and saves the profile back to disk.
 
 ### 1.2 `run` Mode — "Sandwich Sync" (`execute_run_mode`)
-1. Checks if `self.mmex_exe` is configured and `exe.exists()` is true.
-   - **Fallback:** If `mmex_exe` is `None` or the file does not exist on disk, logs a warning (`sync.mmex_not_configured_fallback`) and falls back to a single `execute_sync_mode().await`.
+1. Parses `self.mmex_exe` via `LauncherCommand::parse` and checks `launcher.is_available()` (verifying either direct file existence on disk or availability of the program token in system `$PATH`).
+   - **Fallback:** If `mmex_exe` is `None` or the executable/command is not available, logs a warning (`sync.mmex_not_configured_fallback`) and falls back to a single `execute_sync_mode().await`.
 2. **Pre-Sync:** Executes `self.execute_sync_mode().await?`.
-3. **MMEX Execution (Blocking):** Launches `Command::new(exe).arg(self.db_path).status()` and waits synchronously until the user closes Money Manager Ex.
+3. **MMEX Execution (Blocking):** Launches `launcher.build_command(self.db_path).status()` (which invokes `program` with any configured `args` such as `run org.moneymanagerex.MMEX` followed by `self.db_path`) and waits synchronously until the user closes Money Manager Ex.
 4. **Post-Sync:** Calls `self.db.reload_if_emb()?` (to re-decrypt any external changes written by MMEX to an `.emb` file) and executes `self.execute_sync_mode().await?` to push all changes made during the MMEX session.
    - *(Note: in AS-IS `execute_run_mode`, `self.last_sync` on `SyncRunner` is not updated in-memory between the pre-sync and post-sync calls, though the profile file on disk is updated after each `execute_sync_mode`.)*
 
 ### 1.3 `watch` Mode — Real-Time Polling (`execute_watch_mode`)
 1. **Initial Pre-Sync:** Executes `self.execute_sync_mode().await?`.
-2. **Detached MMEX Launch:** If `self.mmex_exe` is configured and exists, spawns MMEX in the background via `Command::new(exe).arg(self.db_path).spawn()`.
+2. **Detached MMEX Launch:** If `self.mmex_exe` parses into a valid `LauncherCommand` and `launcher.is_available()` is true, spawns MMEX in the background via `launcher.build_command(self.db_path).spawn()`.
 3. **File Modification Polling Loop:**
    - Records initial `last_modified = std::fs::metadata(self.db_path).and_then(|m| m.modified()).ok()`.
    - Loops indefinitely (`loop { sleep(Duration::from_secs(3)).await; ... }`):
@@ -36,8 +36,8 @@
 ### 1.4 GUI Execution of `sync`, `run`, and `watch` Modes (`MmexSyncGuiApp::trigger_default_mode_async`)
 When triggered via the 3-second auto-start countdown or the `▶️ Run (<MODE>)` button in the desktop GUI (`src/gui/app.rs`):
 - **`sync`**: Delegates to `trigger_sync_async(true, true)`.
-- **`run`**: Spawns a background worker thread that executes Pre-Sync (`execute_single_sync_step`), launches `mmex_exe` blocking on the worker thread (`Command::new(exe).arg(&ctx.db_path).status()`), and upon MMEX exit runs Post-Sync (`execute_single_sync_step`) and persists the updated `lastSync` timestamp. If `mmex_exe` is missing or not configured, logs `sync.mmex_not_configured_fallback` and finishes after Pre-Sync.
-- **`watch`**: Spawns a background worker thread that executes Pre-Sync, spawns `mmex_exe` in the background if configured, and polls `std::fs::metadata(&ctx.db_path).modified()` every 3 seconds (in 200ms slices checking `watch_stop_flag: Arc<AtomicBool>` so the user can stop monitoring at any time via the `⏹️ Stop Watch` button or `Esc`), running `execute_single_sync_step` whenever the database file changes.
+- **`run`**: Spawns a background worker thread that executes Pre-Sync (`execute_single_sync_step`), parses `ctx.mmex_exe` via `LauncherCommand::parse`, launches `launcher.build_command(&ctx.db_path).status()` blocking on the worker thread, and upon MMEX exit runs Post-Sync (`execute_single_sync_step`) and persists the updated `lastSync` timestamp. If `mmex_exe` is missing or unavailable, logs `sync.mmex_not_configured_fallback` and finishes after Pre-Sync.
+- **`watch`**: Spawns a background worker thread that executes Pre-Sync, spawns `launcher.build_command(&ctx.db_path).spawn()` in the background if configured and available, and polls `std::fs::metadata(&ctx.db_path).modified()` every 3 seconds (in 200ms slices checking `watch_stop_flag: Arc<AtomicBool>` so the user can stop monitoring at any time via the `⏹️ Stop Watch` button or `Esc`), running `execute_single_sync_step` whenever the database file changes.
 
 ---
 

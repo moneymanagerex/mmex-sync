@@ -148,7 +148,7 @@ mmex-sync --cli --run
    * **Email / Username**: Your PocketBase account email/identity.
    * **Remote Password**: Your account password. Used to obtain or refresh the encrypted JWT token; never stored in plaintext.
 3. **⚙️ MMEX Execution & Mode**
-   * **MMEX Executable**: Path to your Money Manager Ex desktop executable (required for `Run` and `Watch` modes).
+   * **MMEX Executable / Command**: Path to your Money Manager Ex desktop executable (e.g., `/usr/bin/mmex` or `C:\Program Files\Money Manager EX\bin\mmex.exe`) or a full launch command such as `flatpak run org.moneymanagerex.MMEX` on Linux (required for `Run` and `Watch` modes). Use **Browse...** to pick a binary or **Auto-Detect** to automatically locate your MMEX installation on Windows, Linux (including Flatpak), and macOS.
    * **Default Mode**: Choose between:
      * `Run (MMEX Launcher)` (`run`)
      * `Sync Only` (`sync`)
@@ -218,7 +218,7 @@ When `--force` is enabled:
 | `--db <PATH>` | `MMEX_DB_PATH` | Path to the local MMEX database (`.mmb` or encrypted `.emb`). |
 | `--filePassword <PASS>` | `MMEX_FILE_PASSWORD` | Password used to decrypt/encrypt a `.emb` database file. |
 | `--saveFilePassword <yes\|no>` | — | Whether to save the encrypted `.emb` password in the profile (`yes`/`no`). |
-| `--exe <PATH>` | `MMEX_EXE_PATH` | Path to the Money Manager Ex executable (`mmex` or `mmex.exe`). |
+| `--exe <PATH_OR_CMD>` | `MMEX_EXE_PATH` | Path to the Money Manager Ex executable or launch command (e.g., `/usr/bin/mmex` or `"flatpak run org.moneymanagerex.MMEX"`). |
 | `--create` | — | Create and initialize a new empty local MMEX database from the built-in SQL schema before running. |
 | `--serverType <TYPE>` | `MMEX_REMOTE_PROVIDER` | Remote backend provider (`pocketbase` by default). |
 | `--url <URL>` | `MMEX_REMOTE_URL` | Remote server URL (default: `http://127.0.0.1:8090`). |

@@ -286,6 +286,9 @@ impl Language {
     pub fn field_mmex_exe(&self) -> &'static str {
         self.t("gui.field.mmex_exe")
     }
+    pub fn hint_mmex_cmd(&self) -> &'static str {
+        self.t("gui.hint.mmex_cmd")
+    }
     pub fn field_default_mode(&self) -> &'static str {
         self.t("gui.field.default_mode")
     }
@@ -303,6 +306,9 @@ impl Language {
     // Pulsanti
     pub fn btn_browse(&self) -> &'static str {
         self.t("gui.btn.browse")
+    }
+    pub fn btn_detect_mmex(&self) -> &'static str {
+        self.t("gui.btn.detect_mmex")
     }
     pub fn btn_new_db(&self) -> &'static str {
         self.t("gui.btn.new_db")
@@ -405,6 +411,12 @@ impl Language {
     }
     pub fn msg_operation_in_progress(&self) -> &'static str {
         self.t("gui.msg.operation_in_progress")
+    }
+    pub fn msg_mmex_detected(&self, cmd: &str) -> String {
+        self.t_fmt("gui.msg.mmex_detected", &[("cmd", cmd)])
+    }
+    pub fn msg_mmex_not_found(&self) -> &'static str {
+        self.t("gui.msg.mmex_not_found")
     }
 
     // Aggiornamento Software

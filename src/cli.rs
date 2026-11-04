@@ -56,9 +56,9 @@ pub struct CliArgs {
     #[arg(long = "saveFilePassword")]
     pub save_file_password: Option<String>,
 
-    /// Percorso dell'eseguibile di Money Manager Ex (mmex)
+    /// Percorso dell'eseguibile o comando di lancio di Money Manager Ex (es. /usr/bin/mmex o "flatpak run org.moneymanagerex.MMEX")
     #[arg(long, env = "MMEX_EXE_PATH")]
-    pub exe: Option<PathBuf>,
+    pub exe: Option<String>,
 
     /// Crea un nuovo database vuoto inizializzato a partire dallo schema SQL
     #[arg(long)]

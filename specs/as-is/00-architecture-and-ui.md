@@ -38,6 +38,9 @@ src/
 │   ├── mod.rs              # Re-exports for SyncEngine and SyncRunner
 │   ├── engine.rs           # SyncEngine: atomic INIT -> PUSH (deletions + records) -> PULL orchestration
 │   └── runner.rs           # SyncRunner: execution modes ("sync", "run", "watch")
+├── util/
+│   ├── mod.rs              # Re-exports for LauncherCommand, auto_detect_mmex, which, and find_in_path
+│   └── launcher.rs         # Multi-platform MMEX launcher command parser, shell tokenizer, $PATH lookup, and heuristic auto-detection
 └── gui/                    # Compiled only when feature "gui" is enabled (default = ["gui"])
     ├── mod.rs              # eframe::run_native launcher (800x640 viewport, min 640x480) + embedded PNG window icon loader
     ├── app.rs              # MmexSyncGuiApp state machine, background worker threads, and egui rendering
@@ -125,7 +128,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 | `--db <PATH>` | `db` | `Option<PathBuf>` | `MMEX_DB_PATH` | Path to local `.mmb` or `.emb` file |
 | `--filePassword <PWD>` | `file_password` | `Option<String>` | `MMEX_FILE_PASSWORD` | Password for encrypted `.emb` database |
 | `--saveFilePassword <VAL>` | `save_file_password` | `Option<String>` | — | Whether to save `.emb` password (`yes`/`no`) |
-| `--exe <PATH>` | `exe` | `Option<PathBuf>` | `MMEX_EXE_PATH` | Path to the MMEX desktop executable |
+| `--exe <PATH_OR_CMD>` | `exe` | `Option<String>` | `MMEX_EXE_PATH` | Path or launch command for Money Manager Ex (e.g., `/usr/bin/mmex` or `"flatpak run org.moneymanagerex.MMEX"`) |
 | `--create` | `create` | `bool` | — | Creates and initializes an empty MMEX database |
 | `--serverType <TYPE>` | `server_type` | `Option<String>` | `MMEX_REMOTE_PROVIDER` | Remote backend type (default: `pocketbase`) |
 | `--url <URL>` | `url` | `Option<String>` | `MMEX_REMOTE_URL` | Remote server URL (default: `http://127.0.0.1:8090`) |
@@ -191,7 +194,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
 - `url`: `args.url` -> `profile.pb_url` -> `"http://127.0.0.1:8090"`.
 - `user`: `args.user` -> `profile.pb_user`.
 - `pass`: `args.pass` (never stored in plaintext).
-- `mmex_exe`: `args.exe` -> `profile.mmex_exe` (with `expand_tilde()`).
+- `mmex_exe`: `args.exe` -> `profile.mmex_exe` (trimmed `String`, supporting both direct executable paths and multi-token launch commands such as `flatpak run org.moneymanagerex.MMEX`, parsed via `LauncherCommand::parse()`).
 - `default_mode`: `args.set_default_mode` -> `profile.default_mode` -> `"run"`.
 - `save_file_password`: `true` unless the string value is `"no"`, `"false"`, or `"n"` (case-insensitive).
 - `file_password`: `args.file_password` (note: in CLI mode, `get_effective_config` reads `args.file_password`, whereas in GUI mode `load_profile_data` also decrypts `profile.encrypted_file_password` via `unprotect`).
@@ -227,7 +230,7 @@ All CLI flags use `clap` long options (case-sensitive as defined in `#[arg(long 
    - Active profile heading + `[DEFAULT]` badge.
    - Collapsible **Local MMEX Database** section: DB path input + Browse button + **➕ New DB...** button (`prompt_create_new_db`: opens `rfd::FileDialog::save_file()`, defaults extension to `.mmb` if omitted; for `.mmb` immediately saves the profile and initializes the schema on a background thread via `trigger_create_db_async()`; for `.emb` clears `file_password` and opens a dedicated password modal before initializing and encrypting the new `.emb` file); if path ends with `.emb` (case-insensitive), displays password input and "Save encrypted password in profile" checkbox.
    - Collapsible **Remote Server** section: Server Type combo (`PocketBase`), Server URL, User/Email, Password (masked). *(Note: `pbAuthCollection` is managed automatically in the profile and is not exposed in the UI).*
-   - Collapsible **Runner & Execution** section: MMEX Executable path + Browse, Default Mode combo (`run`, `sync`, `watch`), Auto-Start on Launch (`autoStart`) checkbox, Force Mode checkbox, Verbose checkbox.
+   - Collapsible **Runner & Execution** section: MMEX Executable / Command input (with hint placeholder) + Browse button + **Auto-Detect** button (`auto_detect_mmex()`: detects Flatpak `org.moneymanagerex.MMEX` or system binary on Linux, `%PATH%` / `%ProgramFiles%` / `%ProgramFiles(x86)%` / `%LOCALAPPDATA%` on Windows, and `/Applications` or `$PATH` on macOS), Default Mode combo (`run`, `sync`, `watch`), Auto-Start on Launch (`autoStart`) checkbox, Force Mode checkbox, Verbose checkbox.
    - **Auto-Start Countdown Banner:** When launched without `--gui` (`allow_auto_start == true`), if `autoStart == true` and the profile is ready (`dbPath` exists, `.emb` password present if `.emb`, `pbUrl` non-empty, and credentials or `encryptedToken` present), displays a 3-second animated countdown bar that can be cancelled via `Esc`, clicking `Cancel Auto-Start (Esc)`, or modifying any profile field; upon completion it launches `trigger_default_mode_async()` (`run`, `sync`, or `watch`).
    - Primary action buttons bar: `Run (<DEFAULT_MODE>)` (or `Stop Watch` while `watch` mode is active), `Full Sync`, `Push Only`, `Pull Only`, `Test Connection`, `Save Profile`.
    - Real-time Log Console with `Clear Logs` button.

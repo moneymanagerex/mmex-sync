@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
@@ -11,13 +10,14 @@ use crate::db::DatabaseService;
 use crate::error::SyncError;
 use crate::remoteserver::RemoteServer;
 use crate::sync::engine::{SyncEngine, SyncOptions};
+use crate::util::LauncherCommand;
 
 /// Configurazione per il SyncRunner
 #[derive(Debug, Clone)]
 pub struct RunnerConfig<'a> {
     pub profile_name: String,
     pub db_path: &'a Path,
-    pub mmex_exe: Option<&'a Path>,
+    pub mmex_exe: Option<&'a str>,
     pub default_mode: String,
     pub options: SyncOptions,
     pub last_sync: Option<String>,
@@ -30,7 +30,7 @@ pub struct SyncRunner<'a> {
     config_mgr: &'a ConfigManager,
     profile_name: String,
     db_path: &'a Path,
-    mmex_exe: Option<&'a Path>,
+    mmex_exe: Option<&'a str>,
     default_mode: String,
     options: SyncOptions,
     last_sync: Option<String>,
@@ -96,8 +96,8 @@ impl<'a> SyncRunner<'a> {
 
     /// Modalità RUN: Sync iniziale -> Avvia MMEX e attende chiusura -> Sync finale
     async fn execute_run_mode(&mut self) -> Result<(), SyncError> {
-        let exe = match self.mmex_exe {
-            Some(p) if p.exists() => p,
+        let launcher = match self.mmex_exe.and_then(LauncherCommand::parse) {
+            Some(cmd) if cmd.is_available() => cmd,
             _ => {
                 warn!("{}", crate::i18n::t("sync.mmex_not_configured_fallback"));
                 return self.execute_sync_mode().await;
@@ -112,13 +112,13 @@ impl<'a> SyncRunner<'a> {
             crate::i18n::t_fmt(
                 "sync.mmex_process_start",
                 &[
-                    ("exe", &exe.display().to_string()),
+                    ("exe", &launcher.display_command()),
                     ("db", &self.db_path.display().to_string())
                 ]
             )
         );
-        let status = Command::new(exe)
-            .arg(self.db_path)
+        let status = launcher
+            .build_command(self.db_path)
             .status()
             .map_err(SyncError::Io)?;
 
@@ -140,10 +140,10 @@ impl<'a> SyncRunner<'a> {
         info!("{}", crate::i18n::t("sync.watch_pre_sync_start"));
         self.execute_sync_mode().await?;
 
-        if let Some(exe) = self.mmex_exe {
-            if exe.exists() {
+        if let Some(launcher) = self.mmex_exe.and_then(LauncherCommand::parse) {
+            if launcher.is_available() {
                 info!("{}", crate::i18n::t("sync.mmex_background_start"));
-                let _ = Command::new(exe).arg(self.db_path).spawn();
+                let _ = launcher.build_command(self.db_path).spawn();
             }
         }
 

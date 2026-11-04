@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
@@ -16,6 +15,7 @@ use crate::domain::sync_order::SYNC_ORDER;
 use crate::gui::i18n::Language;
 use crate::remoteserver::create_remote_server;
 use crate::sync::engine::{SyncEngine, SyncOptions};
+use crate::util::{auto_detect_mmex, LauncherCommand};
 
 const AUTOSTART_COUNTDOWN_SECS: f32 = 3.0;
 
@@ -83,7 +83,7 @@ struct WorkerSyncContext {
     pass: Option<String>,
     encrypted_token: Option<String>,
     auth_collection: Option<String>,
-    mmex_exe: Option<PathBuf>,
+    mmex_exe: Option<String>,
     last_sync: Option<String>,
     force: bool,
     verbose: bool,
@@ -238,7 +238,7 @@ impl MmexSyncGuiApp {
             app.pb_pass = pass.clone();
         }
         if let Some(exe) = &args.exe {
-            app.mmex_exe = exe.to_string_lossy().to_string();
+            app.mmex_exe = exe.clone();
         }
 
         // Avvio eventuale del countdown di 3 secondi se allow_auto_start è true e il profilo è pronto
@@ -444,7 +444,7 @@ impl MmexSyncGuiApp {
         let mmex_exe = if self.mmex_exe.trim().is_empty() {
             None
         } else {
-            Some(expand_tilde(Path::new(self.mmex_exe.trim())))
+            Some(self.mmex_exe.trim().to_string())
         };
 
         WorkerSyncContext {
@@ -573,12 +573,12 @@ impl MmexSyncGuiApp {
                             let _ = tx.send(GuiEvent::LastSyncUpdated(ts));
                         }
 
-                        match &ctx.mmex_exe {
-                            Some(exe) if exe.exists() => {
+                        match ctx.mmex_exe.as_deref().and_then(LauncherCommand::parse) {
+                            Some(launcher) if launcher.is_available() => {
                                 let launch_msg = crate::i18n::t_fmt(
                                     "sync.mmex_process_start",
                                     &[
-                                        ("exe", &exe.display().to_string()),
+                                        ("exe", &launcher.display_command()),
                                         ("db", &ctx.db_path.display().to_string()),
                                     ],
                                 );
@@ -588,7 +588,7 @@ impl MmexSyncGuiApp {
                                     is_error: false,
                                 });
 
-                                match Command::new(exe).arg(&ctx.db_path).status() {
+                                match launcher.build_command(&ctx.db_path).status() {
                                     Ok(status) => {
                                         let fin_msg = crate::i18n::t_fmt(
                                             "sync.mmex_process_finished",
@@ -635,12 +635,14 @@ impl MmexSyncGuiApp {
                             let _ = tx.send(GuiEvent::LastSyncUpdated(ts));
                         }
 
-                        if let Some(exe) = &ctx.mmex_exe {
-                            if exe.exists() {
+                        if let Some(launcher) =
+                            ctx.mmex_exe.as_deref().and_then(LauncherCommand::parse)
+                        {
+                            if launcher.is_available() {
                                 let _ = tx.send(GuiEvent::Log(
                                     crate::i18n::t("sync.mmex_background_start").to_string(),
                                 ));
-                                let _ = Command::new(exe).arg(&ctx.db_path).spawn();
+                                let _ = launcher.build_command(&ctx.db_path).spawn();
                             }
                         }
 
@@ -1876,13 +1878,32 @@ impl eframe::App for MmexSyncGuiApp {
                 ui.collapsing(self.lang.section_runner(), |ui| {
                     ui.horizontal(|ui| {
                         ui.label(self.lang.field_mmex_exe());
-                        if ui.text_edit_singleline(&mut self.mmex_exe).changed() {
+                        if ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.mmex_exe)
+                                    .hint_text(self.lang.hint_mmex_cmd()),
+                            )
+                            .changed()
+                        {
                             self.cancel_autostart_countdown();
                         }
                         if ui.button(self.lang.btn_browse()).clicked() {
                             self.cancel_autostart_countdown();
                             if let Some(file) = rfd::FileDialog::new().pick_file() {
                                 self.mmex_exe = file.to_string_lossy().to_string();
+                            }
+                        }
+                        if ui.button(self.lang.btn_detect_mmex()).clicked() {
+                            self.cancel_autostart_countdown();
+                            if let Some(detected) = auto_detect_mmex() {
+                                let msg = self.lang.msg_mmex_detected(&detected);
+                                self.mmex_exe = detected;
+                                self.status_message = Some((msg.clone(), false));
+                                self.add_log(msg);
+                            } else {
+                                let msg = self.lang.msg_mmex_not_found().to_string();
+                                self.status_message = Some((msg.clone(), true));
+                                self.add_log(format!("⚠️ {}", msg));
                             }
                         }
                     });

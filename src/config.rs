@@ -112,7 +112,7 @@ pub struct EffectiveConfig {
     pub pass: Option<String>,
     pub token: Option<String>,
     pub auth_collection: Option<String>,
-    pub mmex_exe: Option<PathBuf>,
+    pub mmex_exe: Option<String>,
     pub default_mode: String,
     pub auto_start: bool,
     pub last_sync: Option<String>,
@@ -350,8 +350,9 @@ impl ConfigManager {
         let mmex_exe = args
             .exe
             .clone()
-            .or_else(|| profile.mmex_exe.map(PathBuf::from))
-            .map(|p| expand_tilde(&p));
+            .or(profile.mmex_exe)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
 
         let default_mode = args
             .set_default_mode
