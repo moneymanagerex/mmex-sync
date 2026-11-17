@@ -1,3 +1,9 @@
+---
+layout: default
+title: MMEX-Sync Guide
+nav_order: 5
+---
+
 # MMEX-Sync (Rust Edition) — User & Reference Guide
 
 Welcome to the comprehensive help guide for **MMEX-Sync v0.3.0 (Rust Native Gateway)**, the non-intrusive, **Offline-First** synchronization engine for **Money Manager Ex (MMEX)**.
