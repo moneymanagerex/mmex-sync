@@ -1,3 +1,9 @@
+---
+layout: default
+title: Android Sync Guide
+nav_order: 4
+---
+
 # Linee Guida per l'Implementazione della Sincronizzazione nell'App Android (AMMEX Sync)
 
 Questo documento descrive i requisiti tecnici, i casi d'uso e le regole di business che l'applicazione Android (AMMEX) deve implementare nel proprio database e nei servizi di sincronizzazione per integrarsi correttamente con il backend PocketBase e mantenere la piena coerenza dei dati con la versione Desktop.
