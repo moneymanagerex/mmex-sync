@@ -1,6 +1,7 @@
 ---
 layout: default
 title: Privacy Agreement - MMEX Sync
+nav_order: 6
 ---
 
 # MMEX Sync POC - Privacy Policy, Disclaimer & Term of Use
